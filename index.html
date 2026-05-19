@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lumina3D Frog Cubeling Tutorial</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game-canvas" aria-label="Lumina3D Frog Cubeling puzzle tutorial"></canvas>
+      <div id="hud" aria-live="polite">
+        <div id="statusStrip">
+          <div class="hud-chip">
+            <span class="label">Active</span>
+            <strong id="activeActor">Character</strong>
+          </div>
+          <div class="hud-chip">
+            <span class="label">Goal</span>
+            <strong id="goalState">Learn controls</strong>
+          </div>
+        </div>
+        <div id="tutorialBanner">
+          <span class="label" id="stepState">Step 1 / 13</span>
+          <strong id="prompt">Move up with W or ↑.</strong>
+        </div>
+        <div id="controlsDock">
+          <button id="controlsToggle" type="button" aria-expanded="false" aria-controls="controlsPanel">Controls</button>
+          <div id="controlsPanel" hidden>
+            <div class="control-row"><span>Move</span><strong>WASD / Arrows</strong></div>
+            <div class="control-row"><span>Transfer</span><strong>Shift</strong></div>
+            <div class="control-row"><span>Rotate Camera</span><strong>Q / E</strong></div>
+            <div class="control-row"><span>Frog Cubeling Jump</span><strong>Space</strong></div>
+            <div class="control-row muted"><span>Reset</span><strong>R Testing Only</strong></div>
+            <div class="control-row muted"><span>Debug Jump</span><strong>1 / 2 / 3 / 4</strong></div>
+          </div>
+
+          <button id="devEditorToggle" type="button" aria-expanded="false" aria-controls="devEditorPanel" class="dev-editor-toggle">
+            Dev Editor
+          </button>
+          <section id="devEditorPanel" class="dev-editor-panel" hidden>
+            <div class="dev-editor-section">
+              <div class="dev-editor-title">Quick Scene Jump (or use 1/2/3/4)</div>
+              <div class="dev-editor-button-row">
+                <button type="button" data-dev-scene="tutorial">Tutorial</button>
+                <button type="button" data-dev-scene="home_intro">Home</button>
+                <button type="button" data-dev-scene="level_one">Level One</button>
+                <button type="button" data-dev-scene="level_two">Level Two</button>
+              </div>
+            </div>
+
+            <div class="dev-editor-section">
+              <div class="dev-editor-title">Objects</div>
+              <div id="devEditorSelectionSummary" class="dev-editor-summary">No object selected.</div>
+              <div id="devEditorObjectList" class="dev-editor-object-list"></div>
+            </div>
+
+            <div class="dev-editor-section">
+              <div class="dev-editor-title">Nudge / Rotate</div>
+              <div class="dev-editor-controls-grid">
+                <button type="button" class="small dev-editor-step dev-editor-step-off" data-dev-step="0.25">0.25</button>
+                <button type="button" class="small dev-editor-step" data-dev-step="0.5">0.5</button>
+                <button type="button" class="small dev-editor-toggle" id="devEditorSnapToggle">Snap Grid: On</button>
+              </div>
+              <div class="dev-editor-button-row">
+                <button type="button" data-dev-move="x" data-dev-delta="-1">−X</button>
+                <button type="button" data-dev-move="x" data-dev-delta="1">+X</button>
+                <button type="button" data-dev-move="z" data-dev-delta="-1">−Z</button>
+                <button type="button" data-dev-move="z" data-dev-delta="1">+Z</button>
+                <button type="button" data-dev-move="y" data-dev-delta="-1">−Y</button>
+                <button type="button" data-dev-move="y" data-dev-delta="1">+Y</button>
+              </div>
+              <div class="dev-editor-button-row">
+                <button type="button" data-dev-rotate="-90">−90</button>
+                <button type="button" data-dev-rotate="90">+90</button>
+                <button type="button" data-dev-rotate="-15">−15</button>
+                <button type="button" data-dev-rotate="15">+15</button>
+              </div>
+            </div>
+
+            <div class="dev-editor-section">
+              <div class="dev-editor-title">Debug / Export</div>
+              <div class="dev-editor-button-row">
+                <button type="button" id="devEditorColliderToggle">Colliders: Off</button>
+                <button type="button" id="devEditorExportLayout">Copy Layout JSON</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+      <div id="speechBubble" class="speech-bubble" hidden></div>
+      <div id="speechBubbleSecondary" class="speech-bubble speech-bubble-secondary" hidden></div>
+      <div id="continuePrompt" class="continue-prompt" hidden>Press any key or click to continue</div>
+      <div id="titleCard" class="title-card" hidden>
+        <span class="label">Lumina</span>
+        <h1 id="titleCardText">Level One</h1>
+      </div>
+      <div id="doorNotePanel" class="door-note-panel" hidden>
+        <span class="label">Door Note</span>
+        <p id="doorNoteText"></p>
+      </div>
+      <div id="exitArrow" class="exit-arrow" hidden>Follow the trail</div>
+      <div id="fadeOverlay" class="fade-overlay" hidden></div>
+      <div id="exitConfirmModal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="exitConfirmTitle">
+        <div class="modal-card compact-card">
+          <span class="label">Trail</span>
+          <h1 id="exitConfirmTitle">Continue to Level One?</h1>
+          <p>You’re about to leave home and follow the trail.</p>
+          <div class="modal-actions">
+            <button id="exitStay" type="button">Stay Here</button>
+            <button id="exitContinue" type="button">Continue</button>
+          </div>
+        </div>
+      </div>
+      <div id="skipModal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="skipTitle">
+        <div class="modal-card">
+          <span class="label">Tutorial</span>
+          <h1 id="skipTitle">Skip the guided tutorial?</h1>
+          <p id="skipReason">You are trying an action before the guide reaches it.</p>
+          <div class="modal-actions">
+            <button id="skipNo" type="button">No, keep guiding me</button>
+            <button id="skipYes" type="button">Yes, skip</button>
+          </div>
+        </div>
+      </div>
+      <div id="levelCompleteModal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="completeTitle">
+        <div class="modal-card level-card">
+          <span class="label" id="completeEyebrow">Tutorial Complete</span>
+          <h1 id="completeTitle">Love Letter Found!</h1>
+          <p id="completeDescription">The tutorial is complete. You can keep testing this room, restart it, or continue to Level One.</p>
+          <div class="modal-actions modal-actions-stack">
+            <button id="nextLevel" type="button">Next Level</button>
+            <button id="resetTutorialLevel" type="button">Reset Tutorial Level</button>
+            <button id="continueFreeMode" type="button">Continue Free Mode</button>
+            <button type="button" disabled>Main Menu Coming Soon</button>
+          </div>
+        </div>
+      </div>
+      <div id="loveLetterModal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="loveLetterTitle" hidden>
+        <div class="modal-card love-letter-card">
+          <span class="label">Love Letter</span>
+          <h1 id="loveLetterTitle">Love Letter Found</h1>
+          <p id="loveLetterMessage" class="love-letter-message"></p>
+          <div class="modal-actions">
+            <button id="loveLetterContinue" type="button">Continue</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
