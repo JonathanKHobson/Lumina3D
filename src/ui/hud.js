@@ -20,6 +20,8 @@ export function createHudRefs(root = document) {
     devEditorSnapToggle: root.querySelector("#devEditorSnapToggle"),
     devEditorColliderToggle: root.querySelector("#devEditorColliderToggle"),
     devEditorExportLayout: root.querySelector("#devEditorExportLayout"),
+    devEditorCopyAiContext: root.querySelector("#devEditorCopyAiContext"),
+    devEditorExportPatchDraft: root.querySelector("#devEditorExportPatchDraft"),
     levelCompleteModal: root.querySelector("#levelCompleteModal"),
     loveLetterModal: root.querySelector("#loveLetterModal"),
     loveLetterTitle: root.querySelector("#loveLetterTitle"),

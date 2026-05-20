@@ -12,14 +12,15 @@
 
 ## Next Level Two Feature Slice
 
-After the open Home collision bug is either fixed or intentionally deferred, the next Level Two feature slice is:
+Current gate: human review the corrected Red Platform A / Elephant access slice. If it passes, the next Level Two feature slice can move to the next contained red elevator step.
 
-1. Elephant Cubeling Totem visual refinement.
-2. Elephant Echo placement/visual.
-3. Elephant unlock behavior.
-4. Elephant appearing from the Echo.
+Do next:
 
-Stop there. Do not add Elephant movement, red buttons, weight platforms, Cubeling Recall, or the final Love Letter route in that slice.
+1. Plan and implement Red Button / Elevator B as a contained slice.
+2. Keep the red continuous-cycle behavior from Red Platform A.
+3. Verify human boarding/riding only in the Elevator B slice, not on Red Platform A.
+
+Stop there. Do not add Red Button C, final Love Letter routing, Cubeling Recall, optional collectibles, or extra red-button chains until Elevator B is stable.
 
 ## Home Scene Backlog
 
@@ -31,17 +32,22 @@ Stop there. Do not add Elephant movement, red buttons, weight platforms, Cubelin
 
 - Fixed 2026-05-19 - Main-character raised-platform step-off stuck state after leaving the Elephant Totem platform without using the ramp.
 - Fixed 2026-05-19 - Blue ramp collision/lift blocker; character can walk up, probe unsupported hill edge without getting stuck, recover, and walk back down.
+- Fixed 2026-05-19 - Red Elevator A visual placement/flicker pass; removed the unwanted half-sand dock, restored a flush-enough connection to the tier-3 sand tiles, stabilized the idle red platform before Elephant activation, and kept the human off Red Platform A in the current teaching slice.
+- Fixed 2026-05-19 - Red Platform A / Elephant access blocker: Red Button A and Elephant spawn now sit near the platform edge for side possession, Red Platform A cycles while Elephant holds the button, release finishes the current direction and stops at the next endpoint, and Elephant can walk off onto adjacent ground without getting trapped.
+- P1 - Human review Red Platform A access/cycling fix before implementing Elevator B.
+- P2 - Add Elephant Totem discovery dialogue before pickup so the player understands the immediate objective, such as "That Elephant Cubeling is out of reach" or "There has to be a way up there."
 - P2 - Reduce Frog low-ledge jump arc so it reads as a small hop and does not imply Frog can jump the central mountain.
 - P3 - Make Frog low-ledge landing feel less visibly snapped while keeping reliable landing positions.
 - P2 - Investigate grass tile/player grounding mismatch where the main character appears slightly floating over some grass tiles.
 - P2 - Revisit Level Two Frog spawn so Frog is discoverable through exploration, not immediate, and remains separated from the blue-button ledge.
 - P3 - Future pacing polish: level title cards should ideally appear during character walk-in, not as a separate pre-walk delay.
+- P3 - Add a reusable Cubeling Totem pickup celebration effect for Frog, Elephant, and future Cubelings, such as sparkles, a short character animation, and a more rewarding "Cubeling Found!" beat.
 
 ## Status Notes
 
 - Level One title card timing is currently resolved. Keep the later pacing polish idea, but no immediate action is needed.
-- Level Two Frog/Totem slice is functionally in place. The raised-terrain recovery blocker is fixed; the next Level Two feature slice can start after deciding whether to clean up Home collision first.
-- The project is not currently initialized as a Git repository. See `progress.md` for the current recommendation.
+- Level Two Red Elevator A teaching assembly is implemented with continuous cycling and automated smoke coverage. The next step is human review before Elevator B.
+- Git/GitHub setup is complete; continue local-first development with intentional commits/pushes after stable slices.
 
 ## Shipped In This Pass
 
@@ -66,8 +72,8 @@ Stop there. Do not add Elephant movement, red buttons, weight platforms, Cubelin
 ## Later
 
 - Continue Level Two in phases using `docs/game-design-handbook/07_level_two_phased_implementation_plan.md`.
-- Current Level Two state: shell and Frog low-ledge / blue-ramp / Elephant Totem access are functionally present. Fix raised-terrain/ramp recovery before adding new mechanics.
-- Next feature slice after blockers: Elephant Cubeling Totem visual refinement, Elephant Echo placement/visual, Elephant unlock behavior, and Elephant appearing from Echo. Stop before Elephant movement, red buttons, elevators, Cubeling Recall, and the final Love Letter route.
+- Current Level Two state: shell, Frog low-ledge / blue-ramp / Elephant Totem access, Elephant Echo/Totem visuals, Elephant unlock/spawn/possession, and Red Elevator A teaching/access assembly are functionally present.
+- Next feature slice after Red Platform A human review: Red Button / Elevator B as a contained slice. Stop before Red Button C, Cubeling Recall, and the final Love Letter route.
 - Replace temporary Level One Love Letter copy with final writing.
 - Add a real level select/start-flow router so replaying Level One can skip the Home Space intro.
 - Move testing-only reset into a menu when the pause/menu surface exists.

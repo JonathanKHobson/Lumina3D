@@ -10,6 +10,7 @@ This is not a replacement for code, `progress.md`, or `backlog.md`.
 - `backlog.md`: current deferred work and near-term planning queue.
 - `bug_report.md`: recurring bug library and prevention notes.
 - `docs/game-design-handbook/`: slower-moving design system, mechanics, level-planning, and build rules.
+  - `15_prompting_glossary_and_space_language.md`: map vocabulary bridge between plain-language design intent and code-ready wording.
 
 ## Current Game Shape
 
@@ -102,4 +103,3 @@ For Level Two, the smallest safe next implementation slice is:
 3. Verify load, camera, movement, collision bounds, screenshots, and `render_game_to_text()`.
 
 Only after that should Frog ledge jump, Elephant unlock, red buttons, elevators, and recall be layered in.
-

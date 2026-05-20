@@ -125,3 +125,25 @@ Use `progress.md` for session history, `backlog.md` for deferred work, and `docs
 - Prevention rule: visual ramp assets need a separate walkable slope contract: bottom contact, top contact, slope height function, side blocking, and actor visual clearance.
 - Verification: inspected ramp screenshots and passed `test-output/level-two-ramp-access/smoke.mjs`.
 - Follow-up: revisit only if human visual review still sees actor/ramp clipping after the next playtest.
+
+## 2026-05-19 - Level Two Red Platform A Elephant Access Trap
+
+- Status: fixed in the 2026-05-19 Red Platform A blocker pass; needs human visual/play review before Elevator B.
+- Scene: Level Two.
+- Symptom: Red Button A was centered on Red Platform A, the human had to approach too close to the middle of the elevator to possess Elephant, Red Platform A behaved like a one-time lowering platform, and Elephant could not reliably leave the platform after possession.
+- Root cause: the first red assembly still used the earlier prototype assumptions: centered button/spawn, one-target held movement, and platform surface transitions that did not explicitly model aligned top/bottom exits.
+- Fix: moved Red Button A and Elephant Echo/spawn toward the side edge of Red Platform A, added red continuous-cycle platform state with endpoint pauses, changed release behavior to finish the current travel direction and stop at the next endpoint, added a side possession lane, and added explicit Elephant platform-exit transition rules.
+- Prevention rule: every dynamic elevator needs a written surface contract: button/spawn position, rider eligibility, top exit, bottom exit, release behavior, and a no-trap smoke test for leaving the platform.
+- Verification: `test-output/level-two-red-prototype/smoke.mjs` now checks edge spawn, human/Frog ineligible activation, held cycling, release-to-endpoint behavior, side possession without human riding Red Platform A, and Elephant walking off the platform. Build, Level Two validators, Level Two Frog/Totem and ramp smokes, and all scene smokes pass.
+- Follow-up: run human visual/play review before implementing Red Button / Elevator B.
+
+## 2026-05-19 - Level Two Red Platform A Actor Grounding And Mountain Collision
+
+- Status: fixed; needs human visual/play review before Elevator B.
+- Scene: Level Two.
+- Symptom: Red Platform A worked for Elephant's weight mechanic, but Human collision/grounding was inconsistent: the platform could pass through or ignore the Human, and the Human could not reliably stand on or ride the platform. Elephant could also enter central mountain cube footprints after leaving Red Platform A.
+- Root cause: Red Platform A was still modeled as Elephant-only walkable terrain, and rider detection used footprint overlap rather than explicit actor surface state. Elephant mountain walkability was also too broad: being inside the elevated route footprint was enough to bypass central mountain colliders, even from ground level.
+- Fix: Red Platform A now allows Human and Elephant rider surface state. Actor lift on Red Platform A only applies when the actor is actually attached to that moving platform surface. The platform shaft blocks entry while raised unless the actor already has a valid platform/top-route transition. Elephant mountain collider exceptions now require legitimate elevated route access and block higher-tier mountain cube overlaps.
+- Prevention rule: dynamic platforms need explicit rider state, boarding rules, exit rules, and shaft-blocking rules. Raised terrain collider exceptions must check both footprint and current surface/route eligibility.
+- Verification: `test-output/level-two-red-prototype/smoke.mjs` checks Human boarding the lowered platform, Human riding upward, Human exiting at ground alignment, and Elephant being blocked by central mountain cubes from ground level. Build, Level Two validators, Level Two shell/Frog/Totem/ramp smokes, Home/Level One smoke, and all scene smokes pass.
+- Follow-up: human review Red Platform A before starting Elevator B.

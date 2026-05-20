@@ -7,18 +7,26 @@ import {
   TILE
 } from "../config/constants.js";
 import { sceneGridPoint } from "../core/grid.js";
+import { applyTotemModelMaterial, applyTransparentModel } from "../core/modelMaterials.js";
 import {
   LEVEL_TWO_BLUE_RAMP,
   LEVEL_TWO_BUTTON_LEDGE_TILES,
+  LEVEL_TWO_CENTRAL_MOUNTAIN_SUPPORT_TILES,
   LEVEL_TWO_CENTRAL_MOUNTAIN_TILES,
+  LEVEL_TWO_ELEPHANT_ECHO_OPACITY,
+  LEVEL_TWO_ELEPHANT_ECHO_TOP_Y,
+  LEVEL_TWO_ELEPHANT_ECHO_TINT,
   LEVEL_TWO_ELEPHANT_TOTEM_HILL,
   LEVEL_TWO_ELEPHANT_TOTEM_HILL_TILES,
+  LEVEL_TWO_ELEPHANT_TOTEM_VISUAL_SCALE,
   LEVEL_TWO_FROG_SIDE_LEDGE_TILES,
   LEVEL_TWO_HEIGHT,
   LEVEL_TWO_PLACEHOLDER_LOVE_LETTER_Y,
   LEVEL_TWO_PATH_TILES,
   LEVEL_TWO_POINTS,
   LEVEL_TWO_PROPS,
+  LEVEL_TWO_RED_BUTTONS,
+  LEVEL_TWO_RED_PLATFORMS,
   LEVEL_TWO_RESERVED_TERRACE_TILES,
   LEVEL_TWO_WIDTH
 } from "../levels/levelTwo.js";
@@ -46,9 +54,10 @@ export function buildLevelTwoScene({
 
   function placeRaisedTile(tile, index, labelPrefix) {
     const point = sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, tile.x, tile.y, TILE);
+    const baseScale = tile.asset === "pathTile" ? 0.99 : 0.98;
     const raised = placeAsset(sceneGroups.levelTwo, tile.asset || "groundTile", point, {
       y: tile.bottomY,
-      scale: tile.asset === "pathTile" ? 0.99 : 0.98
+      scale: baseScale
     });
     raised.userData.levelTwoAsset = labelPrefix;
     raised.userData.levelTwoTier = tile.tier;
@@ -60,12 +69,54 @@ export function buildLevelTwoScene({
       point,
       FLOOR_TARGET * 0.48,
       FLOOR_TARGET * 0.48,
-      `level-two-${labelPrefix}-${index}`
+      `level-two-${labelPrefix}-${index}`,
+      {
+        levelTwoRaisedSurface: labelPrefix,
+        levelTwoTileX: tile.x,
+        levelTwoTileY: tile.y,
+        levelTwoTier: tile.tier,
+        levelTwoTierId: tile.tierId,
+        levelTwoZone: tile.zone,
+        levelTwoTopY: tile.topY,
+        levelTwoBottomY: tile.bottomY
+      }
     );
+  }
+
+  function stabilizeElevatorPlatformMaterial(object) {
+    object.traverse((child) => {
+      if (!child.isMesh && !child.isSkinnedMesh) return;
+      child.receiveShadow = false;
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      const stabilized = materials.map((material) => {
+        const next = material.clone();
+        next.polygonOffset = true;
+        next.polygonOffsetFactor = -1;
+        next.polygonOffsetUnits = -1;
+        next.depthWrite = true;
+        next.needsUpdate = true;
+        return next;
+      });
+      child.material = Array.isArray(child.material) ? stabilized : stabilized[0];
+    });
   }
 
   LEVEL_TWO_CENTRAL_MOUNTAIN_TILES.forEach((tile, index) => {
     placeRaisedTile(tile, index, "central-mountain");
+  });
+
+  LEVEL_TWO_CENTRAL_MOUNTAIN_SUPPORT_TILES.forEach((tile, index) => {
+    const point = sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, tile.x, tile.y, TILE);
+    const support = placeAsset(sceneGroups.levelTwo, tile.asset || "groundTile", point, {
+      y: tile.bottomY,
+      scale: 0.96
+    });
+    support.userData.levelTwoAsset = "central-mountain-support";
+    support.userData.levelTwoTier = tile.tier;
+    support.userData.levelTwoZone = "central_mountain_support";
+    support.userData.supportForTierId = tile.supportForTierId;
+    levelTwoMeshes.push(support);
+    levelTwoGoalMeshes.push(support);
   });
 
   LEVEL_TWO_FROG_SIDE_LEDGE_TILES.forEach((tile, index) => {
@@ -112,6 +163,26 @@ export function buildLevelTwoScene({
   levelTwoInteractiveMeshes.blueButton = buttonGroup;
   levelTwoInteractiveMeshes.blueButtonTop = buttonTop;
 
+  LEVEL_TWO_RED_BUTTONS.forEach((button) => {
+    const redButtonGroup = new THREE.Group();
+    const redButtonBase = cloneAsset(button.asset);
+    const redButtonTop = cloneAsset(button.topAsset);
+    redButtonTop.position.y = BUTTON_TOP_REST_Y;
+    redButtonGroup.position.set(
+      button.position.x,
+      button.surfaceTopY + (button.surfaceClearance || 0),
+      button.position.z
+    );
+    redButtonGroup.userData.levelTwoAsset = "red-button-a";
+    redButtonGroup.userData.redButtonId = button.id;
+    redButtonGroup.add(redButtonBase, redButtonTop);
+    redButtonGroup.visible = false;
+    sceneGroups.levelTwo.add(redButtonGroup);
+    levelTwoMeshes.push(redButtonGroup);
+    levelTwoInteractiveMeshes.redButtons[button.id] = redButtonGroup;
+    levelTwoInteractiveMeshes.redButtonTops[button.id] = redButtonTop;
+  });
+
   const blueRamp = placeAsset(sceneGroups.levelTwo, LEVEL_TWO_BLUE_RAMP.asset, LEVEL_TWO_BLUE_RAMP.position, {
     y: SURFACE_Y,
     rotationY: LEVEL_TWO_BLUE_RAMP.rotationY,
@@ -129,14 +200,64 @@ export function buildLevelTwoScene({
   levelTwoMeshes.push(blueRamp);
   levelTwoInteractiveMeshes.blueRamp = blueRamp;
 
-  const totem = createElephantTotem();
+  LEVEL_TWO_RED_PLATFORMS.forEach((platform) => {
+    const redPlatform = placeAsset(sceneGroups.levelTwo, platform.asset, platform.position, {
+      y: platform.baseY + (platform.initialProgress ?? 0) * platform.maxLift,
+      scale: 1.0
+    });
+    stabilizeElevatorPlatformMaterial(redPlatform);
+    redPlatform.userData.levelTwoAsset = "red-elevator-a";
+    redPlatform.userData.redPlatformId = platform.id;
+    redPlatform.visible = false;
+    levelTwoMeshes.push(redPlatform);
+    levelTwoInteractiveMeshes.redPlatforms[platform.id] = redPlatform;
+  });
+
+  const elephantEcho = cloneAsset("elephant");
+  elephantEcho.position.set(
+    LEVEL_TWO_POINTS.elephantEcho.x,
+    LEVEL_TWO_ELEPHANT_ECHO_TOP_Y + 0.08,
+    LEVEL_TWO_POINTS.elephantEcho.z
+  );
+  elephantEcho.userData.levelTwoAsset = "elephant-echo";
+  elephantEcho.userData.devEditorCategory = "elephant_echo";
+  elephantEcho.userData.devEditorId = "elephant_echo";
+  elephantEcho.userData.devEditorAsset = "elephant";
+  elephantEcho.name = "Elephant Echo";
+  applyTransparentModel(elephantEcho, LEVEL_TWO_ELEPHANT_ECHO_TINT, LEVEL_TWO_ELEPHANT_ECHO_OPACITY);
+  sceneGroups.levelTwo.add(elephantEcho);
+  levelTwoMeshes.push(elephantEcho);
+  levelTwoInteractiveMeshes.elephantEcho = elephantEcho;
+
+  const elephantEchoRing = new THREE.Mesh(
+    new THREE.RingGeometry(0.72, 1.06, 48),
+    new THREE.MeshBasicMaterial({ color: 0x9fad9f, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false })
+  );
+  elephantEchoRing.rotation.x = -Math.PI / 2;
+  elephantEchoRing.position.set(
+    LEVEL_TWO_POINTS.elephantEcho.x,
+    LEVEL_TWO_ELEPHANT_ECHO_TOP_Y + 0.045,
+    LEVEL_TWO_POINTS.elephantEcho.z
+  );
+  elephantEchoRing.userData.levelTwoAsset = "elephant-echo-ring";
+  sceneGroups.levelTwo.add(elephantEchoRing);
+  levelTwoMeshes.push(elephantEchoRing);
+  levelTwoInteractiveMeshes.elephantEchoRing = elephantEchoRing;
+
+  const totem = cloneAsset("elephant");
+  totem.scale.multiplyScalar(LEVEL_TWO_ELEPHANT_TOTEM_VISUAL_SCALE);
   totem.position.set(
     LEVEL_TWO_POINTS.elephantTotem.x,
     LEVEL_TWO_ELEPHANT_TOTEM_HILL.topY + 0.9,
     LEVEL_TWO_POINTS.elephantTotem.z
   );
   totem.userData.levelTwoAsset = "elephant-cubeling-totem";
+  totem.userData.devEditorCategory = "elephant_totem";
+  totem.userData.devEditorId = "elephant_totem";
+  totem.userData.devEditorAsset = "elephant";
   sceneGroups.levelTwo.add(totem);
+  totem.name = "Elephant Cubeling Totem";
+  applyTotemModelMaterial(totem);
   levelTwoMeshes.push(totem);
   levelTwoInteractiveMeshes.elephantTotem = totem;
 
@@ -169,44 +290,4 @@ export function buildLevelTwoScene({
   });
 
   sceneGroups.levelTwo.visible = false;
-}
-
-function createElephantTotem() {
-  const group = new THREE.Group();
-  const gold = new THREE.MeshStandardMaterial({
-    color: 0xffc957,
-    emissive: 0x8a4f10,
-    emissiveIntensity: 0.65,
-    roughness: 0.42,
-    metalness: 0.25
-  });
-  const darkGold = new THREE.MeshStandardMaterial({
-    color: 0xb77525,
-    emissive: 0x4a2608,
-    emissiveIntensity: 0.25,
-    roughness: 0.55,
-    metalness: 0.1
-  });
-
-  const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.36, 0), gold);
-  core.position.y = 0.48;
-  core.castShadow = true;
-  core.receiveShadow = true;
-  group.add(core);
-
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.24, 8), darkGold);
-  base.position.y = 0.1;
-  base.castShadow = true;
-  base.receiveShadow = true;
-  group.add(base);
-
-  const cap = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.12, 0.44), gold);
-  cap.position.y = 0.78;
-  cap.rotation.y = Math.PI / 4;
-  cap.castShadow = true;
-  cap.receiveShadow = true;
-  group.add(cap);
-
-  group.name = "Elephant Cubeling Totem";
-  return group;
 }

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lumina3D Level Editor</title>
+  </head>
+  <body>
+    <div id="editorApp" class="editor-app">
+      <header class="editor-topbar">
+        <div class="editor-brand">
+          <span class="editor-eyebrow">Lumina3D</span>
+          <h1>Level Editor</h1>
+        </div>
+        <div class="editor-topbar-actions">
+          <label class="editor-field editor-field-inline" for="levelSelect">
+            <span>Level</span>
+            <select id="levelSelect">
+              <option value="level_two">Level Two</option>
+            </select>
+          </label>
+          <span id="editorStatus" class="editor-status">Loading</span>
+        </div>
+      </header>
+
+      <main class="editor-shell">
+        <aside class="editor-panel editor-panel-left" aria-label="Editor object list">
+          <section class="editor-section">
+            <div class="editor-section-heading">
+              <h2>Objects</h2>
+              <span id="objectCount" class="editor-count">0</span>
+            </div>
+            <div id="objectList" class="editor-object-list"></div>
+          </section>
+        </aside>
+
+        <section class="editor-viewport-card" aria-label="Level editor viewport">
+          <canvas id="editorCanvas" aria-label="Level Two editor viewport" tabindex="0"></canvas>
+          <div id="viewportBadge" class="viewport-badge">Level Two</div>
+        </section>
+
+        <aside class="editor-panel editor-panel-right" aria-label="Editor inspector">
+          <section class="editor-section">
+            <div class="editor-section-heading">
+              <h2>Transform</h2>
+              <span id="dirtyCount" class="editor-count">0 dirty</span>
+            </div>
+            <div class="editor-toolbar" role="toolbar" aria-label="Transform mode">
+              <button id="translateMode" type="button" class="editor-button is-active" title="Translate selected object">Move</button>
+              <button id="rotateMode" type="button" class="editor-button" title="Rotate selected object">Rotate</button>
+              <button id="frameSelected" type="button" class="editor-button" title="Frame selected object">Frame</button>
+            </div>
+            <div class="editor-section-heading editor-subheading">
+              <h2>Camera</h2>
+              <span id="cameraReadout" class="editor-count editor-count-wide">zoom 1.00 / yaw 0.79</span>
+            </div>
+            <div class="editor-toolbar editor-camera-toolbar" role="toolbar" aria-label="Camera controls">
+              <button id="zoomOutCamera" type="button" class="editor-button" aria-label="Zoom camera out" title="Zoom camera out">-</button>
+              <button id="zoomInCamera" type="button" class="editor-button" aria-label="Zoom camera in" title="Zoom camera in">+</button>
+              <button id="resetCamera" type="button" class="editor-button" title="Reset camera">Reset</button>
+            </div>
+            <label class="editor-check">
+              <input id="snapToggle" type="checkbox" checked>
+              <span>Snap</span>
+            </label>
+            <div id="selectionSummary" class="selection-summary">No selection</div>
+            <div id="transformReadout" class="transform-readout"></div>
+          </section>
+
+          <section class="editor-section editor-section-fill">
+            <div class="editor-section-heading">
+              <h2>Patch</h2>
+              <button id="copyPatch" type="button" class="editor-button editor-button-primary">Copy</button>
+            </div>
+            <textarea id="patchOutput" class="patch-output" readonly spellcheck="false"></textarea>
+          </section>
+        </aside>
+      </main>
+
+      <div id="editorToast" class="editor-toast" hidden></div>
+    </div>
+    <script type="module" src="/src/editor/main.js"></script>
+  </body>
+</html>

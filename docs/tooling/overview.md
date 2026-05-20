@@ -119,3 +119,32 @@ This lane also ships a runtime editor overlay for tiny edit loops.
 - The Dev Editor is an additive runtime layer in `src/main.js` for fast manual iteration.
 - `src/levels`, `src/scenes`, and tooling scripts are still the preferred stable contract for automation and pre-checks.
 - MCP wrapping is intentionally deferred until this contract is stable across a few fixture passes.
+
+## Separate Level Editor MVP (`/editor/`)
+
+The separate editor route is the durable path for visual placement patches. It
+does not boot `src/main.js`, does not write source files, and starts with Level
+Two objects whose source mapping is clear.
+
+### Open and scope
+
+- `npm run editor`: start Vite and open `/editor/`.
+- `/editor/`: load the Level Two editor viewport.
+- Supported first objects: blue ramp, blue button, placeholder Love Letter,
+  Elephant Echo, Elephant Totem, red button, red platform, and simple props.
+- Not supported yet: collider editing, behavior fields, object creation or
+  deletion, asset palettes, patch application, and source-file writes.
+
+### Patch flow
+
+- Select an object from the list or by clicking it in the viewport.
+- Move or rotate it with Three.js TransformControls.
+- Navigate the editor camera with `W/A/S/D`, rotate it with `Q/E`, and zoom
+  with wheel, trackpad pinch over the canvas, `+`, or `-`.
+- Copy the JSON patch from the Patch panel.
+- Use `window.render_editor_to_text()` for compact QA state: selected object,
+  dirty count, camera state, and patch summary.
+
+The old F2 Dev Editor can remain useful for runtime inspection. Use `/editor/`
+when the output should become a structured transform patch that Codex can apply
+in a reviewed source edit later.

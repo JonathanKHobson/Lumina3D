@@ -130,21 +130,27 @@ Smoke:
 
 Goal:
 
-Connect red button to a readable moving platform/elevator.
+Connect red button to a readable moving platform/elevator using the current red-button grammar.
 
 Scope:
 
-- red button held activation;
-- platform moves while Elephant remains on button;
-- platform returns slowly when Elephant leaves;
+- red button heavy held activation;
+- platform/elevator continuously cycles while Elephant remains on button;
+- platform/elevator stops or returns to default/rest when Elephant leaves;
 - actor standing/riding behavior.
 
 Smoke:
 
-- platform moves when red button held;
-- platform returns when released;
+- platform cycles between endpoints while red button is held by Elephant;
+- platform stops or returns to default/rest when released;
 - platform movement is slow/readable;
 - actors do not clip or fall through.
+
+Implementation note:
+
+- Red Elevator A now establishes the physical teaching assembly: Elephant Echo -> Red Button A -> Red Elevator A -> human-accessible Elephant handoff.
+- Before adding Elevator B or connecting the final Love Letter route, implement a contained continuous-cycle red elevator prototype and verify that Elephant holding a red button can keep an elevator cycling while the main character boards/rides it.
+- Do not connect that prototype to the final route until the cycle, release/default behavior, rider grounding, and transfer timing are stable.
 
 ## Phase 7 - Cubeling Recall
 

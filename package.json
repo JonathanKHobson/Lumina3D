@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "dev:test": "vite --host 127.0.0.1 --port 5178",
+    "editor": "vite --host 127.0.0.1 --open /editor/",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "tools:list-levels": "node scripts/list-levels.js",

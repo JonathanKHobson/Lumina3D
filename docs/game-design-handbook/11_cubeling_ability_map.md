@@ -75,6 +75,24 @@ Track each Cubeling, status, likely uses, and source confidence so planning and 
   - Replaces earlier duck direction for tone fit.
 - Design meaning: water movement specialist.
 
+### Future scope idea (Level One expansion)
+
+- Status: `OPTIONAL / DEFERRED`
+- Source/Confidence: `Direct user idea`, `Needs playtest validation`
+- Objective: make Level One smoother before Level Two by introducing Axolotl as a short optional complexity ramp.
+- Proposed flow:
+  1. Frog still teaches the current jump-based gap/crossing approach.
+  2. A blue button on Frog side opens a blue crate.
+  3. Blue crate releases Axolotl Cubeling Totem; Axolotl Echo sits on main-character side.
+  4. Axolotl becomes usable after Totem collection.
+  5. Player swims Axolotl to an expanded river island.
+  6. Axolotl presses an island blue button to complete bridge.
+  7. Main character crosses and collects Love Letter.
+- Not for current slice; this is post-Elephant stabilization planning.
+- Design distinction held:
+  - Frog still does jump solutions.
+  - Axolotl introduces swim-only water access.
+
 ## 6) Tortoise
 
 - Status: `STRONG CANDIDATE / FUTURE BIOME SPECIALIST`

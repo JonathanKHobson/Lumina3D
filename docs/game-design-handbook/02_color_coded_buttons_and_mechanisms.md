@@ -9,7 +9,7 @@ This is the current handbook for button semantics in Lumina3D. It documents what
 | Color | Status | Mental model | Core behavior |
 |---|---|---|---|
 | Blue | `LOCKED / CURRENT DIRECTION` | `Press once.` | Ordinary one-and-done activation. |
-| Red | `LOCKED / CURRENT DIRECTION` | `Hold with weight.` | Held-pressure/weight activation with slow reverse when the weight leaves. |
+| Red | `LOCKED / CURRENT DIRECTION` | `Hold with weight; mechanism cycles.` | Heavy held activation that continuously cycles the connected mechanism while held. |
 | Yellow | `STRONG CANDIDATE` | `Press and hurry.` | Timed activation with quick snap/reset at timer end. |
 | Green | `LOCKED / CURRENT DIRECTION FOR DESIGN SYSTEM, not implemented` | `Press again to switch/cycle.` | Repeatable or cycle-based activation. |
 
@@ -40,34 +40,42 @@ Notes:
 
 - Source/Confidence: `Direct user idea`, `Locked current direction`, `Needs playtest validation`.
 - Already used in tutorial and Level One context.
+- Future alignment note (future scope, not current implementation):
+  - Level One can be expanded so a blue button opens a blue crate (on main-character side),
+    and that crate releases the Axolotl Cubeling Totem.
+  - That keeps blue behavior as one-time, persistent activation while adding a cleaner
+    mechanism cue for bridge completion.
 
-### Red button — Weight / held pressure activation
+### Red button — Heavy continuous cycle activation
 
 Status: `LOCKED / CURRENT DIRECTION`
 
-Player model: `Red = Hold with weight.`
+Player model: `Red = Hold with weight; mechanism cycles.`
 
 Behavior:
 
 - Red buttons require weight.
 - Elephant is the first Cubeling that can activate red buttons.
 - Main character and Frog should not activate red buttons.
-- Red buttons stay active while required weight is present.
-- When weight leaves, connected mechanisms reverse in a readable slow direction.
-- Reversal should begin shortly after weight leaves (no instant snap).
-- If connected to elevators/platforms, platform movement reverses/backtracks while the button is releasing.
+- Red buttons stay active only while required weight is present.
+- While Elephant remains on a red button, the connected mechanism continuously cycles through its movement.
+- For an elevator, that means it can rise to the top, lower to the bottom, then rise again while Elephant keeps holding the button.
+- When Elephant leaves, the mechanism stops cycling or returns to its default/rest state.
+- For early levels, prefer a readable return to default/rest unless a specific puzzle needs stop-in-place behavior.
+- Red buttons are not one-time buttons and are not latch buttons.
 
 Design examples:
 
-- Elephant stands on red button -> elevator lowers.
-- Elephant steps off -> elevator slowly rises back.
-- Elephant stands on red button -> heavy platform aligns.
-- Elephant leaves -> mechanism slowly returns.
+- Elephant stands on red button -> elevator begins cycling up and down.
+- Elephant stays on red button -> elevator keeps cycling between endpoints.
+- Elephant steps off -> elevator stops or returns to its default/rest position.
+- Elephant stands on red button -> human elevator cycles so the main character can board when it returns to ground level.
 
 Notes:
 
 - Source/Confidence: `Direct user clarification`, `Locked current direction`, `Needs playtest validation`.
 - Current plan: Level Two introduction only.
+- Level Two implementation note: Red Elevator A currently teaches Elephant weight and access. Before building Elevator B or the final route, update the red mechanism prototype so at least one red button/elevator proves the continuous-cycle behavior end to end.
 
 ### Yellow button — Timed activation
 
@@ -137,6 +145,7 @@ For each button+mechanism pairing, the level must communicate:
 ## Source mapping (compact)
 
 - `Direct user idea`: Blue, Red, Yellow=timed, Green behavior.
-- `Shared brainstorm`: Yellow as timed activation (timing strategy), red slow reverse pacing.
+- `Direct user clarification`: Red buttons are heavy continuous-cycle buttons, not latch or one-shot buttons.
+- `Shared brainstorm`: Yellow as timed activation (timing strategy), red release/default behavior per mechanism.
 - `Locked current direction`: all four colors are now in the handbook with Green held as "documented but not yet implemented."
 - `Exploratory`: Yellow=power/energy retained for history only.

@@ -1,17 +1,51 @@
 import * as THREE from "three";
+import { TransformControls } from "three/addons/controls/TransformControls.js";
+
 import { SCENES } from "../config/scenes.js";
+import {
+  collectDevEntities,
+  entityDistance2D,
+  findDevEntityById,
+  findDevEntityForObject,
+  normalizeDevEntity
+} from "./devEntityRegistry.js";
 
 const DEG_15 = Math.PI / 12;
 const COLLISION_COLORS = { default: 0x34a4c4, selected: 0x55ff99 };
+const SCALE_SNAP = 0.05;
+const NEARBY_ENTITY_LIMIT = 10;
+const NEARBY_ENTITY_RADIUS = 8;
+
 const colliderHelpers = new Map();
+const raycaster = new THREE.Raycaster();
+const pointerNdc = new THREE.Vector2();
+
 let selectedMesh = null;
 let selectionHelper = null;
+let transformControls = null;
+let transformHelper = null;
+let selectionBaseline = null;
 
-// Set by initDevEditor — holds all external references
-let _state, _scene, _hud, _getSceneMeshes, _sceneNav, _onUpdateHud, _onShowPrompt;
+// Set by initDevEditor - holds all external references.
+let _state;
+let _scene;
+let _hud;
+let _camera;
+let _renderer;
+let _getSceneMeshes;
+let _getSceneColliderDebugEntries;
+let _getRuntimeSnapshot;
+let _sceneNav;
+let _onUpdateHud;
+let _onShowPrompt;
 
 function normalizeAngle(a) {
   return Math.atan2(Math.sin(a), Math.cos(a));
+}
+
+function round(value, digits = 3) {
+  if (!Number.isFinite(value)) return 0;
+  return Number(value.toFixed(digits));
 }
 
 function directionName(vector) {
@@ -22,23 +56,173 @@ function directionName(vector) {
 }
 
 function applyGridSnap(value, step) {
-  if (!_state.devEditor.snapToGrid) return Number(value.toFixed(4));
-  return Number((Math.round(value / step) * step).toFixed(4));
+  if (!_state.devEditor.snapToGrid) return round(value, 4);
+  return round(Math.round(value / step) * step, 4);
 }
 
-export function initDevEditor({ state, scene, hud, getSceneMeshes, sceneNav, onUpdateHud, onShowPrompt }) {
+function collectEditableObjects() {
+  return collectDevEntities({
+    state: _state,
+    getSceneMeshes: _getSceneMeshes,
+    getSceneColliderDebugEntries: _getSceneColliderDebugEntries
+  });
+}
+
+function currentTransformMode() {
+  return _state.devEditor.transformMode || "translate";
+}
+
+function transformSnapshot(entity) {
+  if (!entity) return null;
+  return {
+    entityId: entity.id,
+    sourceFileHint: entity.sourceFileHint || entity.notes?.sourceFileHint || "",
+    local: {
+      position: entity.transform.local.position,
+      rotationEuler: entity.transform.local.rotationEuler,
+      rotationY: entity.transform.local.rotationY,
+      scale: entity.transform.local.scale
+    }
+  };
+}
+
+function serializableEntities(rows) {
+  return rows.map((entity) => normalizeDevEntity(entity));
+}
+
+function writeClipboardOrConsole(payload, successMessage, blockedMessage) {
+  const json = JSON.stringify(payload, null, 2);
+  console.log(json);
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+    navigator.clipboard.writeText(json)
+      .then(() => { _onShowPrompt(successMessage, 1.4); })
+      .catch(() => { _onShowPrompt(blockedMessage, 1.5); });
+    return json;
+  }
+  _onShowPrompt("Clipboard unavailable. JSON logged in console.", 1.5);
+  return json;
+}
+
+function getSelectedRow() {
+  return _state.devEditor.rows.find((r) => r.id === _state.devEditor.selectedObjectId) || null;
+}
+
+function getActorKeyForMesh(mesh) {
+  const { actorMeshes } = _getSceneMeshes();
+  if (mesh === actorMeshes?.human) return "human";
+  if (mesh === actorMeshes?.frog) return "frog";
+  if (mesh === actorMeshes?.elephant) return "elephant";
+  return "";
+}
+
+function syncActorStateFromMesh(mesh) {
+  const actorKey = getActorKeyForMesh(mesh);
+  if (!actorKey || !_state[actorKey]) return;
+  _state[actorKey].x = mesh.position.x;
+  _state[actorKey].z = mesh.position.z;
+  _state[actorKey].facing = directionName({ x: Math.sin(mesh.rotation.y), z: Math.cos(mesh.rotation.y) });
+}
+
+function markDevHelper(object) {
+  if (!object) return;
+  object.userData.devEditorHelper = true;
+  object.traverse?.((child) => {
+    child.userData.devEditorHelper = true;
+  });
+}
+
+function isDevHelper(object) {
+  let current = object;
+  while (current) {
+    if (current.userData?.devEditorHelper) return true;
+    current = current.parent;
+  }
+  return false;
+}
+
+function setupTransformControls() {
+  if (transformControls || !_camera || !_renderer?.domElement) return;
+  transformControls = new TransformControls(_camera, _renderer.domElement);
+  transformControls.setSize(0.72);
+  transformControls.addEventListener("objectChange", handleTransformObjectChange);
+  transformControls.addEventListener("dragging-changed", (event) => {
+    _state.devEditor.transformDragging = Boolean(event.value);
+  });
+  transformHelper = transformControls.getHelper();
+  transformHelper.visible = false;
+  markDevHelper(transformHelper);
+  _scene.add(transformHelper);
+}
+
+function configureTransformControls() {
+  if (!transformControls) return;
+  transformControls.setMode(currentTransformMode());
+  transformControls.setTranslationSnap(_state.devEditor.snapToGrid ? _state.devEditor.nudgeStep : null);
+  transformControls.setRotationSnap(_state.devEditor.snapToGrid ? DEG_15 : null);
+  transformControls.setScaleSnap(_state.devEditor.snapToGrid ? SCALE_SNAP : null);
+}
+
+function attachTransformControls(mesh) {
+  setupTransformControls();
+  if (!transformControls || !transformHelper) return;
+  configureTransformControls();
+  if (mesh) {
+    transformControls.attach(mesh);
+    transformHelper.visible = _state.devEditor.open;
+  } else {
+    transformControls.detach();
+    transformHelper.visible = false;
+  }
+}
+
+function detachTransformControls() {
+  if (!transformControls || !transformHelper) return;
+  transformControls.detach();
+  transformHelper.visible = false;
+}
+
+function handleTransformObjectChange() {
+  if (!selectedMesh) return;
+  syncActorStateFromMesh(selectedMesh);
+  _state.devEditor.rows = collectEditableObjects();
+  syncDevEditorSelectionToScene();
+  syncDevEditorColliderHelpers();
+  updateDevEditorPanel();
+}
+
+export function initDevEditor({
+  state,
+  scene,
+  hud,
+  camera,
+  renderer,
+  getSceneMeshes,
+  getSceneColliderDebugEntries,
+  getRuntimeSnapshot,
+  sceneNav,
+  onUpdateHud,
+  onShowPrompt
+}) {
   _state = state;
   _scene = scene;
   _hud = hud;
+  _camera = camera;
+  _renderer = renderer;
   _getSceneMeshes = getSceneMeshes;
+  _getSceneColliderDebugEntries = getSceneColliderDebugEntries;
+  _getRuntimeSnapshot = getRuntimeSnapshot;
   _sceneNav = sceneNav;
   _onUpdateHud = onUpdateHud;
   _onShowPrompt = onShowPrompt;
+  _state.devEditor.transformMode = _state.devEditor.transformMode || "translate";
 
+  setupTransformControls();
   hud.devEditorToggle?.addEventListener("click", toggleDevEditorPanel);
   hud.devEditorSnapToggle?.addEventListener("click", toggleDevEditorSnap);
   hud.devEditorColliderToggle?.addEventListener("click", toggleDevEditorColliders);
   hud.devEditorExportLayout?.addEventListener("click", handleExportClick);
+  hud.devEditorCopyAiContext?.addEventListener("click", handleCopyAiContext);
+  hud.devEditorExportPatchDraft?.addEventListener("click", handleExportPatchDraft);
   hud.devEditorPanel?.addEventListener("click", handlePanelClick);
 }
 
@@ -59,16 +243,19 @@ function setDevEditorOpen(open) {
   if (!_state.devEditor.open) {
     _state.devEditor.selectedObjectId = "";
     selectedMesh = null;
+    selectionBaseline = null;
     if (selectionHelper) {
       _scene.remove(selectionHelper);
       selectionHelper.geometry?.dispose();
       selectionHelper.material?.dispose();
       selectionHelper = null;
     }
+    detachTransformControls();
     clearColliderHelpers();
   } else {
     _state.devEditor.rows = collectEditableObjects();
     syncColliderHelpers();
+    attachTransformControls(selectedMesh);
   }
   updateDevEditorPanel();
   _onUpdateHud();
@@ -85,6 +272,7 @@ function clearColliderHelpers() {
 
 function toggleDevEditorSnap() {
   _state.devEditor.snapToGrid = !_state.devEditor.snapToGrid;
+  configureTransformControls();
   updateDevEditorPanel();
 }
 
@@ -102,27 +290,187 @@ function handleExportClick() {
       objectId: row.id,
       objectName: row.name,
       category: row.category,
-      asset: row.asset,
-      position: row.position,
-      rotationY: row.rotationY,
-      scale: row.scale,
-      collisionExpected: row.collisionExpected
+      asset: row.asset?.key || "",
+      position: {
+        x: row.transform.local.position[0],
+        y: row.transform.local.position[1],
+        z: row.transform.local.position[2]
+      },
+      rotationY: row.transform.local.rotationY,
+      scale: {
+        x: row.transform.local.scale[0],
+        y: row.transform.local.scale[1],
+        z: row.transform.local.scale[2]
+      },
+      collisionExpected: row.collision.expected,
+      sourceFileHint: row.sourceFileHint
     }))
   };
-  const compactJson = JSON.stringify(snapshot);
-  console.log(compactJson);
-  if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-    navigator.clipboard.writeText(compactJson)
-      .then(() => { _onShowPrompt("Dev layout copied to clipboard.", 1.4); })
-      .catch(() => { _onShowPrompt("Copy blocked. Layout in console.", 1.5); });
-    return;
-  }
-  _onShowPrompt("Clipboard unavailable. Layout in console.", 1.5);
+  writeClipboardOrConsole(snapshot, "Dev layout copied to clipboard.", "Copy blocked. Layout logged in console.");
+}
+
+function cameraSnapshot() {
+  if (!_camera) return null;
+  return {
+    position: [_camera.position.x, _camera.position.y, _camera.position.z].map((value) => round(value)),
+    quaternion: [_camera.quaternion.x, _camera.quaternion.y, _camera.quaternion.z, _camera.quaternion.w].map((value) => round(value, 4)),
+    zoom: round(_camera.zoom)
+  };
+}
+
+function actorSnapshot(actor) {
+  if (!actor) return null;
+  return {
+    x: round(actor.x),
+    z: round(actor.z),
+    radius: round(actor.radius),
+    speed: round(actor.speed),
+    facing: actor.facing ? { ...actor.facing } : null
+  };
+}
+
+function getNearbyEntities(rows, selected) {
+  if (!selected) return [];
+  return rows
+    .filter((entity) => entity.id !== selected.id)
+    .map((entity) => ({
+      ...entity,
+      distance2D: round(entityDistance2D(selected, entity))
+    }))
+    .filter((entity) => entity.distance2D <= NEARBY_ENTITY_RADIUS)
+    .sort((a, b) => a.distance2D - b.distance2D)
+    .slice(0, NEARBY_ENTITY_LIMIT)
+    .map((entity) => {
+      const normalized = normalizeDevEntity(entity);
+      normalized.distance2D = entity.distance2D;
+      return normalized;
+    });
+}
+
+function buildAiContextPayload() {
+  const rows = collectEditableObjects();
+  const selected = findDevEntityById(rows, _state.devEditor.selectedObjectId);
+  const runtimeSnapshot = typeof _getRuntimeSnapshot === "function" ? _getRuntimeSnapshot() : null;
+  return {
+    schema: "lumina.dev.aiContext.v1",
+    capturedAt: new Date().toISOString(),
+    project: {
+      name: "Lumina3D",
+      stack: "Vite + Three.js",
+      lane: "AI feedback/debug system",
+      sourceSaving: "browser-export-only"
+    },
+    coordinateConventions: {
+      worldUp: "+Y",
+      movementPlane: "X/Z",
+      sourceRotationUnits: "radians",
+      uiMayDisplayDegrees: true
+    },
+    scene: {
+      id: _state.scene.id,
+      phase: _state.scene.phase,
+      titleCardVisible: Boolean(_state.scene.titleCardVisible)
+    },
+    selection: selected ? normalizeDevEntity(selected) : null,
+    nearbyEntities: getNearbyEntities(rows, selected),
+    entities: {
+      count: rows.length,
+      ids: rows.map((entity) => entity.id)
+    },
+    colliders: typeof _getSceneColliderDebugEntries === "function" ? _getSceneColliderDebugEntries() : [],
+    camera: cameraSnapshot(),
+    actors: {
+      active: _state.active,
+      human: actorSnapshot(_state.human),
+      frog: actorSnapshot(_state.frog),
+      elephant: actorSnapshot(_state.elephant)
+    },
+    runtime: runtimeSnapshot,
+    issueTemplate: {
+      observed: "",
+      expected: "",
+      notes: ""
+    },
+    patchTargets: {
+      selectedEntityId: selected?.id || "",
+      sourceFileHint: selected?.sourceFileHint || selected?.notes?.sourceFileHint || "",
+      browserMayWriteSourceFiles: false
+    }
+  };
+}
+
+function handleCopyAiContext() {
+  writeClipboardOrConsole(
+    buildAiContextPayload(),
+    "AI context copied to clipboard.",
+    "Copy blocked. AI context logged in console."
+  );
+}
+
+function valuesDiffer(a, b) {
+  return JSON.stringify(a) !== JSON.stringify(b);
+}
+
+function buildPatchChanges(selected) {
+  if (!selected) return [];
+  const sourceFileHint = selected.sourceFileHint || selected.notes?.sourceFileHint || "";
+  const oldLocal = selectionBaseline?.entityId === selected.id ? selectionBaseline.local : selected.transform.local;
+  const newLocal = selected.transform.local;
+  const fields = [
+    ["transform.local.position", oldLocal.position, newLocal.position],
+    ["transform.local.rotationEuler", oldLocal.rotationEuler, newLocal.rotationEuler],
+    ["transform.local.scale", oldLocal.scale, newLocal.scale]
+  ];
+  return fields
+    .filter(([, oldValue, newValue]) => valuesDiffer(oldValue, newValue))
+    .map(([path, oldValue, newValue]) => ({
+      path,
+      oldValue,
+      newValue,
+      sourceFileHint,
+      reason: ""
+    }));
+}
+
+function buildPatchDraftPayload() {
+  const rows = collectEditableObjects();
+  const selected = findDevEntityById(rows, _state.devEditor.selectedObjectId);
+  return {
+    schema: "lumina.dev.scenePatch.v1",
+    patchId: `scene-patch-${Date.now().toString(36)}`,
+    createdAt: new Date().toISOString(),
+    sceneId: _state.scene.id,
+    issueType: "",
+    selectedEntityId: selected?.id || "",
+    changes: buildPatchChanges(selected),
+    validationCommands: [
+      "npm run build",
+      `npm run tools:run-scene-smoke -- ${_state.scene.id} --pretty`,
+      "npm run tools:validate-missing-colliders -- level_two --pretty",
+      "npm run tools:validate-float-colliders -- level_two --pretty"
+    ],
+    manualChecks: [
+      "Open Dev Editor with F2 and reselect the changed entity.",
+      "Confirm visual bounds and actual colliders still match the intended object.",
+      "Confirm normal player behavior is unchanged when Dev Editor is closed."
+    ]
+  };
+}
+
+function handleExportPatchDraft() {
+  writeClipboardOrConsole(
+    buildPatchDraftPayload(),
+    "Patch draft copied to clipboard.",
+    "Copy blocked. Patch draft logged in console."
+  );
 }
 
 function selectById(objectId) {
   _state.devEditor.selectedObjectId = objectId || "";
-  syncSelectionToScene();
+  _state.devEditor.rows = collectEditableObjects();
+  const selected = getSelectedRow();
+  selectionBaseline = transformSnapshot(selected);
+  syncDevEditorSelectionToScene();
   updateDevEditorPanel();
 }
 
@@ -149,8 +497,16 @@ function handlePanelClick(event) {
     const next = Number(button.dataset.devStep);
     if (Number.isFinite(next) && next > 0) {
       _state.devEditor.nudgeStep = next;
+      configureTransformControls();
       updateDevEditorPanel();
     }
+    return;
+  }
+  if (button.dataset.devTransformMode) {
+    event.preventDefault();
+    _state.devEditor.transformMode = button.dataset.devTransformMode;
+    configureTransformControls();
+    updateDevEditorPanel();
     return;
   }
   if (button.dataset.devMove) {
@@ -191,6 +547,10 @@ export function updateDevEditorPanel() {
       btn.classList.toggle("is-on", Number.isFinite(value) && value === _state.devEditor.nudgeStep);
       btn.classList.toggle("dev-editor-step-off", !(Number.isFinite(value) && value === _state.devEditor.nudgeStep));
     });
+    const modeButtons = _hud.devEditorPanel.querySelectorAll("[data-dev-transform-mode]");
+    modeButtons.forEach((btn) => {
+      btn.classList.toggle("is-on", btn.dataset.devTransformMode === currentTransformMode());
+    });
   }
   if (_hud.devEditorColliderToggle) {
     _hud.devEditorColliderToggle.textContent = `Colliders: ${_state.devEditor.showColliders ? "On" : "Off"}`;
@@ -201,13 +561,19 @@ export function updateDevEditorPanel() {
     const selected = currentRows.find((r) => r.id === _state.devEditor.selectedObjectId) || null;
     _state.devEditor.rows = currentRows;
 
-    if (!selected) { _state.devEditor.selectedObjectId = ""; selectedMesh = null; }
+    if (!selected) {
+      _state.devEditor.selectedObjectId = "";
+      selectedMesh = null;
+      selectionBaseline = null;
+      attachTransformControls(null);
+    }
     if (selected) {
       selectedMesh = selected.mesh;
+      attachTransformControls(selectedMesh);
       _hud.devEditorSelectionSummary.textContent =
-        `${selected.name} (${selected.id}) • ${selected.category} • ${selected.asset || "asset-missing"} • ` +
-        `x:${selected.position.x.toFixed(2)} y:${selected.position.y.toFixed(2)} z:${selected.position.z.toFixed(2)} • ` +
-        `rotY:${selected.rotationY.toFixed(2)}rad • collision:${selected.collisionExpected ? "yes" : "no"}`;
+        `${selected.name} (${selected.id}) | ${selected.category} | ${selected.asset?.key || "asset-missing"} | ` +
+        `x:${selected.transform.local.position[0].toFixed(2)} y:${selected.transform.local.position[1].toFixed(2)} z:${selected.transform.local.position[2].toFixed(2)} | ` +
+        `rotY:${selected.transform.local.rotationY.toFixed(2)}rad | collision:${selected.collision.expected ? "yes" : "no"}`;
     } else {
       _hud.devEditorSelectionSummary.textContent = "No object selected.";
     }
@@ -224,107 +590,16 @@ export function updateDevEditorPanel() {
           <span class="dev-editor-row-meta">
             <strong>ID:</strong> ${row.id}<br />
             <strong>Type:</strong> ${row.category}<br />
-            <strong>Asset:</strong> ${row.asset || "n/a"}<br />
-            <strong>Pos:</strong> (${row.position.x.toFixed(2)}, ${row.position.y.toFixed(2)}, ${row.position.z.toFixed(2)}) •
-            <strong>rotY:</strong> ${row.rotationY.toFixed(2)}rad •
-            <strong>Collision:</strong> ${row.collisionExpected ? "yes" : "no"}
+            <strong>Asset:</strong> ${row.asset?.key || "n/a"}<br />
+            <strong>Pos:</strong> (${row.transform.local.position[0].toFixed(2)}, ${row.transform.local.position[1].toFixed(2)}, ${row.transform.local.position[2].toFixed(2)}) |
+            <strong>rotY:</strong> ${row.transform.local.rotationY.toFixed(2)}rad |
+            <strong>Collision:</strong> ${row.collision.expected ? "yes" : "no"}
           </span>
         `;
         _hud.devEditorObjectList.appendChild(item);
       });
     }
   }
-}
-
-function inferAsset(mesh, scenePrefix) {
-  return mesh.userData.devEditorAsset ||
-    mesh.userData.homeAsset ||
-    mesh.userData.levelOneAsset ||
-    mesh.userData.levelTwoAsset ||
-    mesh.userData.levelTwoTier ||
-    mesh.userData.levelTwoZone ||
-    (typeof mesh.userData[`${scenePrefix}Asset`] === "string" ? mesh.userData[`${scenePrefix}Asset`] : "");
-}
-
-function inferCategory(mesh, asset) {
-  if (mesh.userData.devEditorCategory) return mesh.userData.devEditorCategory;
-  if (mesh.userData.homeAsset?.startsWith("home") || /house|home/i.test(asset)) return "house";
-  if (/button/i.test(asset)) return "button";
-  if (asset?.includes("bridge")) return "bridge";
-  if (/tree/i.test(asset)) return "tree";
-  if (/rock/i.test(asset)) return "rock";
-  if (/bush/i.test(asset)) return "bush";
-  if (/love|spellbook/i.test(asset)) return "love_letter";
-  return "prop";
-}
-
-function inferCollisionExpected(mesh, category, asset) {
-  if (mesh.userData.devEditorCollisionExpected !== undefined) return Boolean(mesh.userData.devEditorCollisionExpected);
-  if (category === "button" || category === "bridge" || category === "house" || category === "tree" || category === "rock" || category === "bush" || /love|spellbook/i.test(asset || "")) return true;
-  if (/human|frog/.test(category)) return true;
-  return false;
-}
-
-function collectEditableObjects() {
-  const sceneId = _state.scene.id;
-  const scenePrefix = sceneId === SCENES.HOME ? "home" : sceneId === SCENES.LEVEL_ONE ? "levelOne" : sceneId === SCENES.LEVEL_TWO ? "levelTwo" : "tutorial";
-  const seen = new Set();
-  const counters = {};
-  const rows = [];
-
-  const makeId = (category, mesh) => {
-    const existing = mesh.userData.devEditorId;
-    if (existing && !seen.has(`id:${existing}`)) { seen.add(`id:${existing}`); return existing; }
-    const base = `${sceneId}-${category}`;
-    counters[base] = (counters[base] || 0) + 1;
-    const next = `${base}-${counters[base]}`;
-    if (seen.has(`id:${next}`)) return `${next}-${mesh.uuid}`;
-    seen.add(`id:${next}`);
-    return next;
-  };
-
-  const push = (mesh, category, fallbackName, asset, collisionExpected) => {
-    if (!mesh) return;
-    if (mesh.userData.homeTile || mesh.userData.levelOneTile || mesh.userData.levelTwoTile || mesh.userData.levelOneWater) return;
-    const resolvedCategory = category || inferCategory(mesh, asset);
-    const objectId = makeId(resolvedCategory, mesh);
-    rows.push({
-      id: objectId,
-      mesh,
-      name: fallbackName || mesh.name || objectId,
-      category: resolvedCategory,
-      asset,
-      collisionExpected: collisionExpected === undefined
-        ? inferCollisionExpected(mesh, resolvedCategory, asset)
-        : Boolean(collisionExpected),
-      position: { x: Number(mesh.position.x.toFixed(2)), y: Number(mesh.position.y.toFixed(2)), z: Number(mesh.position.z.toFixed(2)) },
-      rotationY: Number(normalizeAngle(mesh.rotation.y).toFixed(2)),
-      scale: { x: Number(mesh.scale.x.toFixed(2)), y: Number(mesh.scale.y.toFixed(2)), z: Number(mesh.scale.z.toFixed(2)) }
-    });
-    seen.add(`mesh:${mesh.uuid}`);
-    if (!mesh.userData.devEditorId) mesh.userData.devEditorId = objectId;
-  };
-
-  const { actorMeshes: actors, markers, arrays } = _getSceneMeshes();
-
-  if (actors?.human) push(actors.human, "character", "Human Character", inferAsset(actors.human, scenePrefix), true);
-  if (actors?.frog) push(actors.frog, "frog", "Frog Cubeling", inferAsset(actors.frog, scenePrefix), true);
-  markers?.forEach((mesh) => {
-    if (!mesh) return;
-    const asset = inferAsset(mesh, scenePrefix);
-    const cat = inferCategory(mesh, asset);
-    push(mesh, cat, mesh.userData.devEditorName || mesh.name || cat, asset, inferCollisionExpected(mesh, cat, asset));
-  });
-  arrays.forEach((collection) => {
-    collection.forEach((mesh) => {
-      const asset = inferAsset(mesh, scenePrefix);
-      if (!asset && !mesh.userData.devEditorCategory) return;
-      const cat = inferCategory(mesh, asset || mesh.userData.devEditorCategory || "prop");
-      push(mesh, cat, mesh.name || cat, asset || cat);
-    });
-  });
-
-  return rows;
 }
 
 export function syncDevEditorSelectionToScene() {
@@ -334,16 +609,19 @@ export function syncDevEditorSelectionToScene() {
 
   if (!selected) {
     selectedMesh = null;
+    attachTransformControls(null);
     if (selectionHelper) { _scene.remove(selectionHelper); selectionHelper = null; }
     return;
   }
 
   selectedMesh = selected.mesh;
   if (!selectedMesh) return;
+  attachTransformControls(selectedMesh);
   if (selectionHelper?.parent !== _scene) {
     if (selectionHelper) _scene.remove(selectionHelper);
     selectionHelper = new THREE.BoxHelper(selectedMesh, COLLISION_COLORS.selected);
-    selectionHelper.userData = { type: "selection", objectId: selected.id };
+    selectionHelper.userData = { devEditorHelper: true, type: "selection", objectId: selected.id };
+    markDevHelper(selectionHelper);
     _scene.add(selectionHelper);
   } else {
     selectionHelper.update();
@@ -362,10 +640,12 @@ export function syncDevEditorColliderHelpers() {
   if (_state.devEditor.rows.length === 0) _state.devEditor.rows = collectEditableObjects();
   const want = new Set();
   _state.devEditor.rows.forEach((row) => {
-    if (!row.mesh || !row.collisionExpected) return;
+    if (!row.mesh || !row.collision.expected) return;
     want.add(row.id);
     const existing = colliderHelpers.get(row.mesh);
     const helper = existing || new THREE.BoxHelper(row.mesh, COLLISION_COLORS.default);
+    helper.userData = { devEditorHelper: true, type: "collider", objectId: row.id };
+    markDevHelper(helper);
     helper.material.color.setHex(row.mesh === selectedMesh ? COLLISION_COLORS.selected : COLLISION_COLORS.default);
     helper.setFromObject(row.mesh);
     helper.visible = true;
@@ -373,9 +653,8 @@ export function syncDevEditorColliderHelpers() {
   });
 
   colliderHelpers.forEach((helper, mesh) => {
-    if (!helper.userData) helper.userData = {};
     const row = _state.devEditor.rows.find((c) => c.mesh === mesh);
-    if (!row || !row.collisionExpected || !want.has(row.id)) {
+    if (!row || !row.collision.expected || !want.has(row.id)) {
       _scene.remove(helper);
       helper.geometry?.dispose();
       helper.material?.dispose();
@@ -388,8 +667,8 @@ export function syncDevEditorColliderHelpers() {
   syncDevEditorSelectionToScene();
 }
 
-function getSelectedRow() {
-  return _state.devEditor.rows.find((r) => r.id === _state.devEditor.selectedObjectId) || null;
+function syncColliderHelpers() {
+  syncDevEditorColliderHelpers();
 }
 
 function moveSelected(axis, delta) {
@@ -397,15 +676,7 @@ function moveSelected(axis, delta) {
   if (!row || !row.mesh) return;
   row.mesh.position[axis] += delta;
   if (_state.devEditor.snapToGrid) row.mesh.position[axis] = applyGridSnap(row.mesh.position[axis], _state.devEditor.nudgeStep);
-  const { actorMeshes } = _getSceneMeshes();
-  if (row.mesh === actorMeshes?.human) {
-    if (axis === "x") _state.human.x = row.mesh.position.x;
-    if (axis === "z") _state.human.z = row.mesh.position.z;
-  }
-  if (row.mesh === actorMeshes?.frog) {
-    if (axis === "x") _state.frog.x = row.mesh.position.x;
-    if (axis === "z") _state.frog.z = row.mesh.position.z;
-  }
+  syncActorStateFromMesh(row.mesh);
   _state.devEditor.rows = collectEditableObjects();
   syncDevEditorSelectionToScene();
   syncDevEditorColliderHelpers();
@@ -416,12 +687,45 @@ function rotateSelected(deltaRadians) {
   const row = getSelectedRow();
   if (!row || !row.mesh) return;
   row.mesh.rotation.y = normalizeAngle(row.mesh.rotation.y + deltaRadians);
-  const { actorMeshes } = _getSceneMeshes();
-  if (row.mesh === actorMeshes?.human) _state.human.facing = directionName({ x: Math.sin(row.mesh.rotation.y), z: Math.cos(row.mesh.rotation.y) });
-  if (row.mesh === actorMeshes?.frog) _state.frog.facing = directionName({ x: Math.sin(row.mesh.rotation.y), z: Math.cos(row.mesh.rotation.y) });
+  syncActorStateFromMesh(row.mesh);
   syncDevEditorSelectionToScene();
   syncDevEditorColliderHelpers();
   updateDevEditorPanel();
+}
+
+function getPointerNdc(event) {
+  const rect = _renderer.domElement.getBoundingClientRect();
+  pointerNdc.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  pointerNdc.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  return pointerNdc;
+}
+
+export function handleDevEditorPointerDown(event) {
+  if (!_state?.devEditor?.open || !_renderer?.domElement || !_camera) return false;
+  if (event.target !== _renderer.domElement) return false;
+
+  const pointer = getPointerNdc(event);
+  raycaster.setFromCamera(pointer, _camera);
+
+  if (transformHelper?.visible) {
+    const helperHits = raycaster.intersectObject(transformHelper, true);
+    if (helperHits.length > 0) {
+      event.preventDefault();
+      return true;
+    }
+  }
+
+  const rows = collectEditableObjects();
+  const roots = rows.map((row) => row.mesh).filter(Boolean);
+  const hits = raycaster.intersectObjects(roots, true);
+  const hit = hits.find((candidate) => !isDevHelper(candidate.object));
+  const entity = hit ? findDevEntityForObject(hit.object, rows) : null;
+  if (!entity) return false;
+
+  event.preventDefault();
+  selectById(entity.id);
+  _onShowPrompt(`Selected ${entity.name}.`, 1);
+  return true;
 }
 
 export function handleDevEditorKeyDown(event) {

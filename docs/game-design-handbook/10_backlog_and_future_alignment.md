@@ -45,6 +45,10 @@ Fixed before new Level Two mechanics:
 Still open:
 
 - Home house collision/doorway clipping.
+- Frog tall-ledge failure dialogue regression (priority: Low-Medium, backlog).
+  - Level Two currently no longer plays the intended “too high” Frog response when jumping at non-jumpable tall ledges/tiers or Elephant Totem hill.
+  - Expected lines include: “That’s too high for me.” / “I can’t jump that high.” / “Too tall for this hop.”
+  - Do not fix this during the red elevator correction pass unless it is a very easy win.
 
 Backlog/polish after blockers:
 
@@ -62,6 +66,11 @@ Do not implement these now:
 
 - Align tutorial barrier with blue mechanism visuals.
 - Align Level One bridge with blue mechanism visuals.
+- Consider a future Level One expansion that introduces Axolotl in a bounded water segment:
+  - keep Frog jump-to-blue-button solution as baseline,
+  - add blue crate -> Axolotl Totem release,
+  - add a small river island + secondary blue button,
+  - Axolotl swim to complete bridge before Love Letter pickup.
 - Make button-to-mechanism connections more physically readable.
 - Decide yellow button behavior.
 - Explore yellow = timed versus yellow = powered.

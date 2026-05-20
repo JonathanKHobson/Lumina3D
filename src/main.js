@@ -46,7 +46,7 @@ import {
   WORLD_BOUNDS
 } from "./config/constants.js";
 import { LEVEL_ONE_LOVE_LETTER_ID, REWARD_NAME, TUTORIAL_LOVE_LETTER_ID } from "./content/loveLetters.js";
-import { FROG_ECHO_LINES, FROG_TOTEM_LINES } from "./content/dialogue.js";
+import { ELEPHANT_ECHO_LINES, FROG_ECHO_LINES, FROG_TOTEM_LINES } from "./content/dialogue.js";
 import { actorCanPressButton, syncButtonTopVisual } from "./systems/buttonSystem.js";
 import { applyCameraUpdate, getCameraFacingDirection, stepCameraYaw } from "./systems/cameraSystem.js";
 import {
@@ -86,7 +86,7 @@ import {
   spawnTransferParticles,
   updateParticles
 } from "./systems/particleSystem.js";
-import { handleDevEditorKeyDown, initDevEditor, syncDevEditorColliderHelpers, syncDevEditorSelectionToScene, toggleDevEditorPanel, updateDevEditorPanel } from "./debug/devEditor.js";
+import { handleDevEditorKeyDown, handleDevEditorPointerDown, initDevEditor, syncDevEditorColliderHelpers, syncDevEditorSelectionToScene, toggleDevEditorPanel, updateDevEditorPanel } from "./debug/devEditor.js";
 import { installTestHooks } from "./debug/testHooks.js";
 import { currentVisibleAssetsForState } from "./debug/visibleAssets.js";
 import { SCENES } from "./config/scenes.js";
@@ -153,9 +153,23 @@ import {
   LEVEL_TWO_BLUE_RAMP,
   LEVEL_TWO_BUTTON_LEDGE_TILES,
   LEVEL_TWO_CENTRAL_MOUNTAIN_TIERS,
+  LEVEL_TWO_CENTRAL_MOUNTAIN_SUPPORT_TILES,
   LEVEL_TWO_CENTRAL_MOUNTAIN_TILES,
+  LEVEL_TWO_ELEPHANT_ECHO_HEIGHT,
+  LEVEL_TWO_ELEPHANT_ECHO_OPACITY,
+  LEVEL_TWO_ELEPHANT_ECHO_RADIUS,
+  LEVEL_TWO_ELEPHANT_ECHO_TERRACE_TIER,
+  LEVEL_TWO_ELEPHANT_ECHO_SPARKLE,
+  LEVEL_TWO_ELEPHANT_ECHO_SPEECH_COOLDOWN,
+  LEVEL_TWO_ELEPHANT_ECHO_TERRACE_TILES,
+  LEVEL_TWO_ELEPHANT_ECHO_TOP_Y,
+  LEVEL_TWO_ELEPHANT_IDLE_BOB,
+  LEVEL_TWO_ELEPHANT_RADIUS,
+  LEVEL_TWO_ELEPHANT_REVEAL_SECONDS,
+  LEVEL_TWO_ELEPHANT_SPEED,
   LEVEL_TWO_ELEPHANT_TOTEM_HILL,
   LEVEL_TWO_ELEPHANT_TOTEM_HILL_TILES,
+  LEVEL_TWO_ELEPHANT_TOTEM_VISUAL_SCALE,
   LEVEL_TWO_FROG_JUMPABLE_LEDGES,
   LEVEL_TWO_FROG_SIDE_LEDGE_TILES,
   LEVEL_TWO_FROG_SIDE_LEDGE_HEIGHT,
@@ -165,6 +179,11 @@ import {
   LEVEL_TWO_MOUNTAIN_PEAK_Y,
   LEVEL_TWO_PLACEHOLDER_LOVE_LETTER_Y,
   LEVEL_TWO_POINTS,
+  LEVEL_TWO_RED_BUTTON_INVALID_COOLDOWN,
+  LEVEL_TWO_RED_BUTTONS,
+  LEVEL_TWO_RED_ELEVATOR_SIDE_APPROACH_ZONE,
+  LEVEL_TWO_RED_ELEVATOR_TOP_EXIT_ZONE,
+  LEVEL_TWO_RED_PLATFORMS,
   LEVEL_TWO_RESERVED_TERRACE_GROUPS,
   LEVEL_TWO_RESERVED_TERRACE_TILES,
   LEVEL_TWO_TIER_BASE_Y,
@@ -300,9 +319,23 @@ const state = {
     humanSurfaceId: null,
     blueButtonPressed: false,
     blueRampActive: false,
+    elephantEchoVisible: false,
+    elephantEchoPromptIndex: 0,
+    lastElephantEchoPromptAt: -Infinity,
+    elephantEchoSparkleTimer: 0.7,
     elephantTotemVisible: false,
     elephantTotemCollected: false,
     elephantUnlockPending: false,
+    elephantAwake: false,
+    elephantSpawned: false,
+    elephantSurfaceId: null,
+    elephantRevealActive: false,
+    elephantRevealElapsed: 0,
+    elephantSpawnCount: 0,
+    lastElephantTransferPromptAt: -Infinity,
+    redButtons: {},
+    redPlatforms: {},
+    lastRedButtonInvalidPromptAt: -Infinity,
     lastFrogJumpResult: "none",
     lastFrogJumpReason: "",
     lastFrogJumpAt: -Infinity,
@@ -312,10 +345,14 @@ const state = {
   },
   human: createActorState(START.human, 0.45, 4.2),
   frog: createActorState(START.frog, 0.53, 3.45),
+  elephant: createActorState({
+    ...LEVEL_TWO_POINTS.elephantEcho,
+    facing: { x: 0, z: 1, name: "south" }
+  }, LEVEL_TWO_ELEPHANT_RADIUS, LEVEL_TWO_ELEPHANT_SPEED),
   unlocks: loadCubelingUnlocks(),
   cubelings: {
     frog: { unlocked: false, unlockedThisTutorial: false },
-    elephant: { unlocked: false, unlockedPending: false, active: false }
+    elephant: { unlocked: false, unlockedPending: false, active: false, spawned: false }
   },
   tutorialIndex: 0,
   maxTutorialIndexReached: 0,
@@ -326,6 +363,8 @@ const state = {
     selectedObjectId: "",
     nudgeStep: 0.25,
     snapToGrid: true,
+    transformMode: "translate",
+    transformDragging: false,
     showColliders: false,
     rows: []
   },
@@ -473,6 +512,7 @@ function levelTwoFlowContext() {
     showPrompt,
     directionName,
     distance2D,
+    resetLevelTwoRedMechanismState,
     updateLevelTwoInteractions
   };
 }
@@ -505,14 +545,19 @@ const levelTwoInteractiveMeshes = {
   blueButton: null,
   blueButtonTop: null,
   blueRamp: null,
+  elephantEcho: null,
+  elephantEchoRing: null,
   elephantTotem: null,
-  elephantTotemGlow: null
+  elephantTotemGlow: null,
+  redButtons: {},
+  redButtonTops: {},
+  redPlatforms: {}
 };
 const sceneObjectColliders = [];
 const barrierMeshes = new Map();
 const barrierEndCapMeshes = [];
 const barrierColliders = [];
-const actorMeshes = { human: null, frog: null };
+const actorMeshes = { human: null, frog: null, elephant: null };
 const markerMeshes = {
   active: null,
   frogEcho: null,
@@ -599,7 +644,17 @@ async function init() {
     state,
     scene,
     hud,
+    camera,
+    renderer,
     getSceneMeshes: getCurrentEditableSceneMeshes,
+    getSceneColliderDebugEntries: getCurrentSceneColliderDebugEntries,
+    getRuntimeSnapshot: () => {
+      try {
+        return JSON.parse(renderGameToText());
+      } catch {
+        return null;
+      }
+    },
     sceneNav: {
       tutorial: jumpToTutorialDebug,
       home: () => startHomeIntro(null, { debug: true }),
@@ -632,8 +687,9 @@ function placeAsset(group, key, point, options = {}) {
   return placeLoadedAsset(assetCache, group, key, point, options);
 }
 
-function addSceneCollider(sceneId, point, halfX, halfZ, label = "") {
+function addSceneCollider(sceneId, point, halfX, halfZ, label = "", metadata = {}) {
   sceneObjectColliders.push({
+    ...metadata,
     scene: sceneId,
     x: point.x,
     z: point.z,
@@ -761,23 +817,228 @@ function handleKeyDown(event) {
 
 function getCurrentEditableSceneMeshes() {
   if (state.scene.id === SCENES.TUTORIAL) {
-    return { actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog }, markers: [markerMeshes.frogEcho, markerMeshes.frogTotem, markerMeshes.button], arrays: [] };
+    return { actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant }, markers: [markerMeshes.frogEcho, markerMeshes.frogTotem, markerMeshes.button], arrays: [] };
   }
   if (state.scene.id === SCENES.HOME) {
-    return { actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog }, markers: [markerMeshes.frogEcho, markerMeshes.frogTotem], arrays: [homeMeshes] };
+    return { actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant }, markers: [markerMeshes.frogEcho, markerMeshes.frogTotem], arrays: [homeMeshes] };
   }
   if (state.scene.id === SCENES.LEVEL_ONE) {
     return {
-      actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog },
+      actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant },
       markers: [markerMeshes.frogEcho, markerMeshes.frogTotem, markerMeshes.button],
       arrays: [levelOneMeshes, levelOneBridgeMeshes.partial, levelOneBridgeMeshes.complete, levelOneBridgeDeckMeshes.partial, levelOneBridgeDeckMeshes.complete]
     };
   }
   return {
-    actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog },
-    markers: [markerMeshes.frogEcho, markerMeshes.frogTotem],
+    actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant },
+    markers: [
+      markerMeshes.frogEcho,
+      markerMeshes.frogTotem,
+      levelTwoInteractiveMeshes.elephantEcho,
+      levelTwoInteractiveMeshes.elephantTotem
+    ],
     arrays: [levelTwoMeshes, levelTwoGoalMeshes]
   };
+}
+
+function roundDebug(value, digits = 3) {
+  if (!Number.isFinite(value)) return 0;
+  return Number(value.toFixed(digits));
+}
+
+function colliderDebugEntry({
+  id,
+  label,
+  sceneId,
+  source,
+  center,
+  halfExtents,
+  active = true,
+  metadata = {},
+  sourceFileHint = "src/main.js"
+}) {
+  return {
+    id,
+    label,
+    sceneId,
+    type: "aabb2d",
+    source,
+    center: center.map((value) => roundDebug(value)),
+    halfExtents: halfExtents.map((value) => roundDebug(value)),
+    active,
+    metadata,
+    sourceFileHint
+  };
+}
+
+function meshBoundsDebugEntry(mesh, { id, label, sceneId, source, active = true, metadata = {}, sourceFileHint }) {
+  if (!mesh) return null;
+  const box = new THREE.Box3().setFromObject(mesh);
+  if (box.isEmpty()) return null;
+  const center = new THREE.Vector3();
+  const size = new THREE.Vector3();
+  box.getCenter(center);
+  box.getSize(size);
+  return colliderDebugEntry({
+    id,
+    label,
+    sceneId,
+    source,
+    center: [center.x, center.y, center.z],
+    halfExtents: [size.x * 0.5, size.y * 0.5, size.z * 0.5],
+    active,
+    metadata,
+    sourceFileHint
+  });
+}
+
+function sceneObjectColliderDebugEntries(sceneId) {
+  return sceneObjectColliders
+    .filter((collider) => collider.scene === sceneId)
+    .map((collider, index) => colliderDebugEntry({
+      id: collider.label || `${sceneId}-scene-collider-${index}`,
+      label: collider.label || `${sceneId}-scene-collider-${index}`,
+      sceneId,
+      source: "sceneObjectColliders",
+      center: [
+        collider.x,
+        Number.isFinite(collider.levelTwoTopY) ? collider.levelTwoTopY : SURFACE_Y,
+        collider.z
+      ],
+      halfExtents: [
+        collider.halfX,
+        Number.isFinite(collider.levelTwoTopY) && Number.isFinite(collider.levelTwoBottomY)
+          ? Math.max(0.05, (collider.levelTwoTopY - collider.levelTwoBottomY) * 0.5)
+          : 0,
+        collider.halfZ
+      ],
+      metadata: { ...collider, scene: undefined },
+      sourceFileHint: sceneId === SCENES.LEVEL_TWO
+        ? "src/scenes/levelTwoScene.js or src/levels/levelTwo.js"
+        : sceneId === SCENES.LEVEL_ONE
+          ? "src/scenes/levelOneScene.js or src/levels/levelOne.js"
+          : "src/scenes/homeIntroScene.js or src/levels/homeIntroLevel.js"
+    }));
+}
+
+function getCurrentSceneColliderDebugEntries() {
+  const sceneId = state.scene.id;
+  const entries = sceneObjectColliderDebugEntries(sceneId);
+
+  if (sceneId === SCENES.TUTORIAL) {
+    barrierColliders.forEach((barrier) => {
+      entries.push(colliderDebugEntry({
+        id: `tutorial-barrier-row-${barrier.row}`,
+        label: barrier.door ? `tutorial-barrier-door-row-${barrier.row}` : `tutorial-barrier-row-${barrier.row}`,
+        sceneId,
+        source: "barrierColliders",
+        center: [barrier.x, SURFACE_Y, barrier.z],
+        halfExtents: [barrier.halfX, 0, barrier.halfZ],
+        active: !(state.doorwayOpen && barrier.door),
+        metadata: { row: barrier.row, door: Boolean(barrier.door) },
+        sourceFileHint: "src/scenes/tutorialScene.js or src/levels/tutorialLevel.js"
+      }));
+    });
+  }
+
+  if (sceneId === SCENES.LEVEL_ONE) {
+    levelOneWaterColliders.forEach((water) => {
+      entries.push(colliderDebugEntry({
+        id: `level-one-water-${water.column}-${water.row}`,
+        label: `level-one-water-${water.column}-${water.row}`,
+        sceneId,
+        source: "levelOneWaterColliders",
+        center: [water.x, SURFACE_Y, water.z],
+        halfExtents: [water.halfX, 0, water.halfZ],
+        active: !state.levelOne.bridgeComplete,
+        metadata: { column: water.column, row: water.row },
+        sourceFileHint: "src/scenes/levelOneScene.js or src/levels/levelOne.js"
+      }));
+    });
+    [...levelOneBridgeDeckMeshes.partial, ...levelOneBridgeDeckMeshes.complete].forEach((mesh, index) => {
+      const entry = meshBoundsDebugEntry(mesh, {
+        id: `${mesh.name || "level-one-bridge-deck"}-${index}`,
+        label: mesh.name || `level-one-bridge-deck-${index}`,
+        sceneId,
+        source: "levelOneBridgeDeckMeshes",
+        active: mesh.visible,
+        metadata: { walkable: true },
+        sourceFileHint: "src/scenes/levelOneScene.js"
+      });
+      if (entry) entries.push(entry);
+    });
+  }
+
+  if (sceneId === SCENES.LEVEL_TWO) {
+    entries.push(colliderDebugEntry({
+      id: LEVEL_TWO_BLUE_RAMP.id,
+      label: LEVEL_TWO_BLUE_RAMP.id,
+      sceneId,
+      source: "LEVEL_TWO_BLUE_RAMP",
+      center: [
+        (LEVEL_TWO_BLUE_RAMP.minX + LEVEL_TWO_BLUE_RAMP.maxX) * 0.5,
+        SURFACE_Y + levelTwoRampLiftAt({
+          x: (LEVEL_TWO_BLUE_RAMP.minX + LEVEL_TWO_BLUE_RAMP.maxX) * 0.5,
+          z: (LEVEL_TWO_BLUE_RAMP.minZ + LEVEL_TWO_BLUE_RAMP.maxZ) * 0.5
+        }, false),
+        (LEVEL_TWO_BLUE_RAMP.minZ + LEVEL_TWO_BLUE_RAMP.maxZ) * 0.5
+      ],
+      halfExtents: [
+        (LEVEL_TWO_BLUE_RAMP.maxX - LEVEL_TWO_BLUE_RAMP.minX) * 0.5,
+        Math.max(0.05, LEVEL_TWO_BLUE_RAMP.targetLift * 0.5),
+        (LEVEL_TWO_BLUE_RAMP.maxZ - LEVEL_TWO_BLUE_RAMP.minZ) * 0.5
+      ],
+      active: state.levelTwo.blueRampActive,
+      metadata: { walkableBy: state.levelTwo.blueRampActive ? "human" : "none" },
+      sourceFileHint: "src/levels/levelTwo.js"
+    }));
+
+    LEVEL_TWO_RED_BUTTONS.forEach((button) => {
+      entries.push(colliderDebugEntry({
+        id: button.id,
+        label: button.id,
+        sceneId,
+        source: "LEVEL_TWO_RED_BUTTONS",
+        center: [button.position.x, levelTwoRedButtonSurfaceY(button), button.position.z],
+        halfExtents: [button.radius, 0.08, button.radius],
+        active: state.scene.id === SCENES.LEVEL_TWO,
+        metadata: {
+          requiredActor: button.requiredActor,
+          linkedPlatformId: button.linkedPlatformId,
+          active: Boolean(state.levelTwo.redButtons?.[button.id]?.active)
+        },
+        sourceFileHint: "src/levels/levelTwo.js"
+      }));
+    });
+
+    LEVEL_TWO_RED_PLATFORMS.forEach((platform) => {
+      entries.push(colliderDebugEntry({
+        id: platform.id,
+        label: platform.id,
+        sceneId,
+        source: "LEVEL_TWO_RED_PLATFORMS",
+        center: [
+          platform.position.x,
+          levelTwoRedButtonSurfaceY({ platformId: platform.id }),
+          platform.position.z
+        ],
+        halfExtents: [
+          platform.visualHalfFootprint || (platform.maxX - platform.minX) * 0.5,
+          Math.max(0.08, (platform.surfaceOffset || 0.2) * 0.5),
+          platform.visualHalfFootprint || (platform.maxZ - platform.minZ) * 0.5
+        ],
+        active: state.scene.id === SCENES.LEVEL_TWO,
+        metadata: {
+          progress: roundDebug(levelTwoRedPlatformProgressById(platform.id)),
+          lift: roundDebug(levelTwoRedPlatformLiftById(platform.id)),
+          walkableBy: platform.walkableBy
+        },
+        sourceFileHint: "src/levels/levelTwo.js"
+      }));
+    });
+  }
+
+  return entries;
 }
 
 function handleKeyUp(event) {
@@ -785,6 +1046,7 @@ function handleKeyUp(event) {
 }
 
 function handlePointerDown(event) {
+  if (handleDevEditorPointerDown(event)) return;
   if (!state.celebration.active) return;
   event.preventDefault();
   if (state.loveLetterMessage.visible) return;
@@ -918,8 +1180,9 @@ function updateLevelTwoScene(dt) {
   updateLevelTwoSceneFlow(levelTwoFlowContext(), dt);
 }
 
-function updateLevelTwoInteractions() {
+function updateLevelTwoInteractions(dt = 0) {
   updateLevelTwoSurfaceState();
+  updateLevelTwoRedMechanisms(dt);
 
   if (
     actorCanPressButton({
@@ -941,6 +1204,19 @@ function updateLevelTwoInteractions() {
     return;
   }
 
+  if (
+    state.levelTwo.elephantEchoVisible &&
+    !state.levelTwo.elephantTotemCollected &&
+    distance2D(getActiveActor(), LEVEL_TWO_POINTS.elephantEcho) <= LEVEL_TWO_ELEPHANT_ECHO_RADIUS
+  ) {
+    if (state.elapsed - state.levelTwo.lastElephantEchoPromptAt >= LEVEL_TWO_ELEPHANT_ECHO_SPEECH_COOLDOWN) {
+      const line = ELEPHANT_ECHO_LINES[state.levelTwo.elephantEchoPromptIndex % ELEPHANT_ECHO_LINES.length];
+      state.levelTwo.elephantEchoPromptIndex += 1;
+      state.levelTwo.lastElephantEchoPromptAt = state.elapsed;
+      showSpeech("elephantEcho", line, 2.0);
+    }
+  }
+
   if (!state.levelTwo.elephantTotemCollected && distance2D(getActiveActor(), LEVEL_TWO_POINTS.elephantTotem) <= LEVEL_TWO_ELEPHANT_TOTEM_HILL.radius) {
     if (state.active === "human") {
       collectElephantTotem();
@@ -954,15 +1230,253 @@ function updateLevelTwoInteractions() {
   }
 }
 
+function resetLevelTwoRedMechanismState() {
+  state.levelTwo.redButtons = {};
+  LEVEL_TWO_RED_BUTTONS.forEach((button) => {
+    state.levelTwo.redButtons[button.id] = {
+      id: button.id,
+      active: false,
+      heldActor: "",
+      eligibleActor: button.requiredActor,
+      ineligibleActor: "",
+      linkedPlatformId: button.linkedPlatformId,
+      activationType: button.activationType
+    };
+  });
+  state.levelTwo.redPlatforms = {};
+  LEVEL_TWO_RED_PLATFORMS.forEach((platform) => {
+    state.levelTwo.redPlatforms[platform.id] = {
+      id: platform.id,
+      progress: platform.initialProgress ?? 0,
+      lift: (platform.initialProgress ?? 0) * platform.maxLift,
+      direction: platform.initialDirection || "down",
+      pauseRemaining: 0,
+      releaseTarget: null,
+      wasActive: false,
+      moving: "idle",
+      heldBy: "",
+      linkedButtonId: platform.linkedButtonId
+    };
+  });
+  state.levelTwo.lastRedButtonInvalidPromptAt = -Infinity;
+}
+
+function ensureLevelTwoRedMechanismState() {
+  if (!state.levelTwo.redButtons || !state.levelTwo.redPlatforms) resetLevelTwoRedMechanismState();
+  LEVEL_TWO_RED_BUTTONS.forEach((button) => {
+    if (!state.levelTwo.redButtons[button.id]) {
+      state.levelTwo.redButtons[button.id] = {
+        id: button.id,
+        active: false,
+        heldActor: "",
+        eligibleActor: button.requiredActor,
+        ineligibleActor: "",
+        linkedPlatformId: button.linkedPlatformId,
+        activationType: button.activationType
+      };
+    }
+  });
+  LEVEL_TWO_RED_PLATFORMS.forEach((platform) => {
+    if (!state.levelTwo.redPlatforms[platform.id]) {
+      state.levelTwo.redPlatforms[platform.id] = {
+        id: platform.id,
+        progress: platform.initialProgress ?? 0,
+        lift: (platform.initialProgress ?? 0) * platform.maxLift,
+        direction: platform.initialDirection || "down",
+        pauseRemaining: 0,
+        releaseTarget: null,
+        wasActive: false,
+        moving: "idle",
+        heldBy: "",
+        linkedButtonId: platform.linkedButtonId
+      };
+    } else {
+      const platformState = state.levelTwo.redPlatforms[platform.id];
+      if (platform.movementRule === "cycle-while-held" && !["up", "down"].includes(platformState.direction)) {
+        platformState.direction = platform.initialDirection || "down";
+      }
+      if (!Number.isFinite(platformState.pauseRemaining)) platformState.pauseRemaining = 0;
+      if (platformState.releaseTarget !== null && !Number.isFinite(platformState.releaseTarget)) platformState.releaseTarget = null;
+      if (typeof platformState.wasActive !== "boolean") platformState.wasActive = false;
+    }
+  });
+  if (!Number.isFinite(state.levelTwo.lastRedButtonInvalidPromptAt)) {
+    state.levelTwo.lastRedButtonInvalidPromptAt = -Infinity;
+  }
+}
+
+function updateLevelTwoRedMechanisms(dt = 0) {
+  ensureLevelTwoRedMechanismState();
+  if (state.scene.id !== SCENES.LEVEL_TWO) return;
+
+  const ineligibleActor = activeIneligibleActorOnRedButton();
+
+  LEVEL_TWO_RED_BUTTONS.forEach((button) => {
+    const buttonState = state.levelTwo.redButtons[button.id];
+    const heldByElephant = state.levelTwo.elephantSpawned &&
+      (state.levelTwo.elephantSurfaceId === button.surfaceId || levelTwoRedPlatformAt(state.elephant)?.id === button.platformId) &&
+      distance2D(state.elephant, button.position) <= button.radius;
+    buttonState.active = heldByElephant;
+    buttonState.heldActor = heldByElephant ? "elephant" : "";
+    buttonState.ineligibleActor = ineligibleActor;
+  });
+
+  if (ineligibleActor && state.elapsed - state.levelTwo.lastRedButtonInvalidPromptAt >= LEVEL_TWO_RED_BUTTON_INVALID_COOLDOWN) {
+    state.levelTwo.lastRedButtonInvalidPromptAt = state.elapsed;
+    showPrompt("Only the Elephant Cubeling is heavy enough for red buttons.", 1.8);
+    showSpeech(ineligibleActor, "Only the Elephant Cubeling is heavy enough for red buttons.", 1.7);
+  }
+
+  LEVEL_TWO_RED_PLATFORMS.forEach((platform) => {
+    const platformState = state.levelTwo.redPlatforms[platform.id];
+    const buttonState = state.levelTwo.redButtons[platform.linkedButtonId];
+    const buttonActive = Boolean(buttonState?.active);
+    if (platform.movementRule === "cycle-while-held") {
+      updateLevelTwoCyclingRedPlatform(platform, platformState, buttonActive, dt);
+    } else {
+      const target = buttonState?.active
+        ? platform.activeProgress ?? 1
+        : platform.inactiveProgress ?? 0;
+      if (!buttonActive && !state.levelTwo.elephantSpawned) {
+        platformState.progress = target;
+      } else if (dt > 0 && Math.abs(platformState.progress - target) > 0.0001) {
+        moveLevelTwoRedPlatformToward(platform, platformState, target, dt);
+      }
+      platformState.moving = target > platformState.progress
+        ? "up"
+        : target < platformState.progress
+          ? "down"
+          : buttonState?.active
+            ? "held"
+            : "idle";
+    }
+    platformState.lift = platformState.progress * platform.maxLift;
+    platformState.heldBy = buttonState?.heldActor || "";
+    platformState.wasActive = buttonActive;
+  });
+}
+
+function moveLevelTwoRedPlatformToward(platform, platformState, target, dt = 0) {
+  if (dt <= 0 || Math.abs(platformState.progress - target) <= 0.0001) {
+    platformState.progress = Math.abs(platformState.progress - target) < 0.001 ? target : platformState.progress;
+    return;
+  }
+  const speed = target > platformState.progress ? platform.upSpeed : platform.downSpeed;
+  const delta = speed * dt * (target > platformState.progress ? 1 : -1);
+  platformState.progress = clamp(platformState.progress + delta, 0, 1);
+  if (Math.abs(platformState.progress - target) < 0.001) platformState.progress = target;
+}
+
+function updateLevelTwoCyclingRedPlatform(platform, platformState, buttonActive, dt = 0) {
+  if (!state.levelTwo.elephantSpawned && !buttonActive) {
+    platformState.progress = platform.inactiveProgress ?? platform.initialProgress ?? 1;
+    platformState.direction = platform.initialDirection || "down";
+    platformState.pauseRemaining = 0;
+    platformState.releaseTarget = null;
+    platformState.moving = "idle";
+    return;
+  }
+
+  if (buttonActive) {
+    platformState.releaseTarget = null;
+    if (!["up", "down"].includes(platformState.direction)) platformState.direction = platform.initialDirection || "down";
+    updateLevelTwoRedPlatformCycle(platform, platformState, dt);
+    return;
+  }
+
+  if (platformState.wasActive && platformState.releaseTarget === null) {
+    if (platformState.moving === "pause-bottom" || platformState.progress <= 0.001) {
+      platformState.releaseTarget = 0;
+    } else if (platformState.moving === "pause-top" || platformState.progress >= 0.999) {
+      platformState.releaseTarget = 1;
+    } else {
+      platformState.releaseTarget = platformState.direction === "up" ? 1 : 0;
+    }
+  }
+
+  platformState.pauseRemaining = 0;
+  const target = platformState.releaseTarget ?? platform.inactiveProgress ?? platform.initialProgress ?? 1;
+  if (Math.abs(platformState.progress - target) > 0.001) {
+    moveLevelTwoRedPlatformToward(platform, platformState, target, dt);
+    platformState.moving = target > platformState.progress ? "up" : target < platformState.progress ? "down" : "idle";
+  } else {
+    platformState.progress = target;
+    platformState.releaseTarget = null;
+    platformState.moving = "idle";
+  }
+}
+
+function updateLevelTwoRedPlatformCycle(platform, platformState, dt = 0) {
+  const pauseSeconds = platform.endpointPauseSeconds ?? 0.6;
+  if (platformState.pauseRemaining > 0) {
+    platformState.pauseRemaining = Math.max(0, platformState.pauseRemaining - dt);
+    platformState.moving = platformState.progress <= 0.001 ? "pause-bottom" : "pause-top";
+    if (platformState.pauseRemaining <= 0) {
+      platformState.direction = platformState.progress <= 0.001 ? "up" : "down";
+    }
+    return;
+  }
+
+  const target = platformState.direction === "up" ? 1 : 0;
+  if (Math.abs(platformState.progress - target) <= 0.001) {
+    platformState.progress = target;
+    platformState.pauseRemaining = pauseSeconds;
+    platformState.moving = target <= 0 ? "pause-bottom" : "pause-top";
+    return;
+  }
+
+  moveLevelTwoRedPlatformToward(platform, platformState, target, dt);
+  platformState.moving = platformState.direction;
+  if (Math.abs(platformState.progress - target) <= 0.001) {
+    platformState.progress = target;
+    platformState.pauseRemaining = pauseSeconds;
+    platformState.moving = target <= 0 ? "pause-bottom" : "pause-top";
+  }
+}
+
+function activeIneligibleActorOnRedButton() {
+  if (state.active !== "human" && state.active !== "frog") return "";
+  const actor = getActiveActor();
+  const button = LEVEL_TWO_RED_BUTTONS.find((candidate) =>
+    distance2D(actor, candidate.position) <= candidate.radius
+  );
+  return button ? state.active : "";
+}
+
 function collectElephantTotem() {
   if (state.levelTwo.elephantTotemCollected) return;
   state.levelTwo.elephantTotemCollected = true;
   state.levelTwo.elephantTotemVisible = false;
-  state.levelTwo.elephantUnlockPending = true;
-  state.cubelings.elephant = { unlocked: true, unlockedPending: true, active: false };
+  state.levelTwo.elephantUnlockPending = false;
+  awakenElephantCubeling();
   showPrompt("Elephant Cubeling Found!", 2.5);
   showSpeech("human", "Elephant Cubeling Found!", 2.2);
   spawnRevealSparkles(particleContext, LEVEL_TWO_POINTS.elephantTotem.x, LEVEL_TWO_POINTS.elephantTotem.z, 0xffd66a, 24);
+}
+
+function awakenElephantCubeling() {
+  state.levelTwo.elephantAwake = true;
+  state.levelTwo.elephantSpawned = true;
+  state.levelTwo.elephantEchoVisible = true;
+  state.levelTwo.elephantSurfaceId = LEVEL_TWO_RED_PLATFORMS[0]?.id || "red-elevator-a";
+  state.levelTwo.elephantRevealActive = true;
+  state.levelTwo.elephantRevealElapsed = 0;
+  state.levelTwo.elephantSpawnCount += 1;
+  state.elephant = createActorState({
+    ...LEVEL_TWO_POINTS.elephantEcho,
+    facing: { x: 0, z: 1, name: "south" }
+  }, LEVEL_TWO_ELEPHANT_RADIUS, LEVEL_TWO_ELEPHANT_SPEED);
+  state.cubelings.elephant = {
+    unlocked: true,
+    unlockedPending: false,
+    active: false,
+    spawned: true
+  };
+  const spawnEffectY = levelTwoRedButtonSurfaceY(LEVEL_TWO_RED_BUTTONS[0]);
+  state.levelTwo.lastElephantSpawnEffectY = spawnEffectY;
+  spawnRevealSparkles(particleContext, LEVEL_TWO_POINTS.elephantEcho.x, LEVEL_TWO_POINTS.elephantEcho.z, LEVEL_TWO_ELEPHANT_ECHO_SPARKLE, 26, {
+    y: spawnEffectY
+  });
 }
 
 function updateLevelOneHints(dt) {
@@ -1002,8 +1516,9 @@ function update(dt) {
   updateSceneFlow(dt);
   updateActiveMovement(dt);
   updateFrogAi(dt);
+  updateElephantIdle(dt);
   updateFrogJump(dt);
-  updateInteractions();
+  updateInteractions(dt);
   updateTutorialProximity();
   maybeRevealLoveLetterFromBarrierApproach();
   updateVisualEffects(dt);
@@ -1083,6 +1598,29 @@ function updateCelebratingFrog(dt) {
   updateCelebratingFrogSystem(frogAiContext(), dt);
 }
 
+function updateElephantIdle(dt) {
+  if (state.scene.id !== SCENES.LEVEL_TWO || !state.levelTwo.elephantSpawned || state.active === "elephant") return;
+  if (!sceneAllowsInput() || state.levelTwo.elephantRevealActive) return;
+  const button = LEVEL_TWO_RED_BUTTONS[0];
+  if (!button) return;
+  const distanceToButton = distance2D(state.elephant, button.position);
+  if (distanceToButton <= 0.08) return;
+  const platformProgress = levelTwoRedPlatformProgressById(button.platformId || button.linkedPlatformId);
+  const onButtonPlatform = levelTwoRedPlatformAt(state.elephant)?.id === button.platformId;
+  const onTopRoute = state.levelTwo.elephantSurfaceId === "tier-3-elephant-route" && platformProgress >= 0.92;
+  const canReachFromGround = platformProgress <= 0.08 && distanceToButton <= 3.2;
+  if (!onButtonPlatform && !onTopRoute && !canReachFromGround) return;
+  const dx = button.position.x - state.elephant.x;
+  const dz = button.position.z - state.elephant.z;
+  const length = Math.hypot(dx, dz);
+  if (length <= 0.001) return;
+  const speed = Math.min(state.elephant.speed * 0.42, 0.95);
+  const step = Math.min(length, speed * dt);
+  const vector = { x: dx / length, z: dz / length };
+  state.elephant.facing = directionName(vector);
+  moveActor(state.elephant, vector.x * step, vector.z * step);
+}
+
 function chooseFrogPatrolTarget(side = frogCurrentSide()) {
   return chooseFrogPatrolTargetSystem(frogAiContext(), side);
 }
@@ -1152,14 +1690,14 @@ function updateFrogJump(dt) {
   }
 }
 
-function updateInteractions() {
+function updateInteractions(dt = 0) {
   if (state.scene.id === SCENES.HOME) return;
   if (state.scene.id === SCENES.LEVEL_ONE) {
     updateLevelOneInteractions();
     return;
   }
   if (state.scene.id === SCENES.LEVEL_TWO) {
-    updateLevelTwoInteractions();
+    updateLevelTwoInteractions(dt);
     return;
   }
   if (state.active === "human" && state.reveals.frogEcho && !state.reveals.frog && distance2D(state.human, START.frog) <= FROG_ECHO_RADIUS) {
@@ -1273,6 +1811,12 @@ function updateVisualEffects(dt) {
     state.frogReveal.elapsed += dt;
     if (state.frogReveal.elapsed >= FROG_REVEAL_SECONDS) state.frogReveal.active = false;
   }
+  if (state.levelTwo.elephantRevealActive) {
+    state.levelTwo.elephantRevealElapsed += dt;
+    if (state.levelTwo.elephantRevealElapsed >= LEVEL_TWO_ELEPHANT_REVEAL_SECONDS) {
+      state.levelTwo.elephantRevealActive = false;
+    }
+  }
   updateFrogUnlockVisuals(dt);
   updateRightFloorReveal(dt);
   updateBarrierReveal(dt);
@@ -1296,6 +1840,60 @@ function updateVisualEffects(dt) {
       : 0;
     levelTwoInteractiveMeshes.elephantTotemGlow.scale.setScalar(0.92 + pulse * 0.08);
   }
+  if (levelTwoInteractiveMeshes.elephantEcho) {
+    const pulse = 0.5 + Math.sin(state.elapsed * 3.2) * 0.5;
+    const echoSurfaceY = levelTwoRedButtonSurfaceY(LEVEL_TWO_RED_BUTTONS[0]);
+    levelTwoInteractiveMeshes.elephantEcho.position.set(
+      LEVEL_TWO_POINTS.elephantEcho.x,
+      echoSurfaceY + 0.08 + Math.sin(state.elapsed * 2.6) * 0.05,
+      LEVEL_TWO_POINTS.elephantEcho.z
+    );
+    levelTwoInteractiveMeshes.elephantEcho.rotation.y += dt * 0.55;
+    if (levelTwoInteractiveMeshes.elephantEchoRing?.material) {
+      levelTwoInteractiveMeshes.elephantEchoRing.position.set(
+        LEVEL_TWO_POINTS.elephantEcho.x,
+        echoSurfaceY + 0.045,
+        LEVEL_TWO_POINTS.elephantEcho.z
+      );
+      levelTwoInteractiveMeshes.elephantEchoRing.material.opacity = state.scene.id === SCENES.LEVEL_TWO && state.levelTwo.elephantEchoVisible
+        ? state.levelTwo.elephantAwake ? 0.32 + pulse * 0.14 : 0.22 + pulse * 0.1
+        : 0;
+      levelTwoInteractiveMeshes.elephantEchoRing.scale.setScalar((state.levelTwo.elephantAwake ? 1.08 : 1) + pulse * 0.08);
+    }
+    if (state.scene.id === SCENES.LEVEL_TWO && state.levelTwo.elephantEchoVisible && !state.levelTwo.elephantAwake) {
+    state.levelTwo.elephantEchoSparkleTimer -= dt;
+    if (state.levelTwo.elephantEchoSparkleTimer <= 0) {
+      state.levelTwo.elephantEchoSparkleTimer = 1.1;
+        spawnRevealSparkles(particleContext, LEVEL_TWO_POINTS.elephantEcho.x, LEVEL_TWO_POINTS.elephantEcho.z, LEVEL_TWO_ELEPHANT_ECHO_SPARKLE, 4, {
+          y: echoSurfaceY
+        });
+      }
+    }
+  }
+  LEVEL_TWO_RED_PLATFORMS.forEach((platform) => {
+    const mesh = levelTwoInteractiveMeshes.redPlatforms?.[platform.id];
+    if (!mesh) return;
+    const platformState = state.levelTwo.redPlatforms?.[platform.id];
+    const nextY = Number((platform.baseY + (platformState?.lift || 0)).toFixed(4));
+    if (!Number.isFinite(mesh.userData.lastY) || Math.abs(mesh.userData.lastY - nextY) > 0.0005) {
+      mesh.position.y = nextY;
+      mesh.userData.lastY = nextY;
+    }
+  });
+  LEVEL_TWO_RED_BUTTONS.forEach((button) => {
+    const mesh = levelTwoInteractiveMeshes.redButtons?.[button.id];
+    if (!mesh) return;
+    const nextY = Number((levelTwoRedButtonSurfaceY(button) + (button.surfaceClearance || 0)).toFixed(4));
+    if (
+      !Number.isFinite(mesh.userData.lastY) ||
+      Math.abs(mesh.userData.lastY - nextY) > 0.0005 ||
+      mesh.position.x !== button.position.x ||
+      mesh.position.z !== button.position.z
+    ) {
+      mesh.position.set(button.position.x, nextY, button.position.z);
+      mesh.userData.lastY = nextY;
+    }
+  });
   const loveLetterBob = Math.sin(state.elapsed * 2.7) * 0.12;
   if (state.reveals.spellbook && !state.spellbookCollected) {
     const revealT = state.loveLetterReveal.active
@@ -1475,17 +2073,22 @@ function switchActor() {
 
 function switchActorFree() {
   if (!sceneAllowsInput()) return;
-  if (!state.reveals.frog) {
+  if (!state.reveals.frog && !canUseElephantCubeling()) {
     showPrompt("No Cubeling is available here.", 1.4);
     return;
   }
-  if (state.active === "frog") {
+  if (state.active === "frog" || state.active === "elephant") {
+    const returningActor = getActiveActor();
+    const returningKey = state.active;
     state.active = "human";
-    state.frogAi.timer = 0;
-    state.frogAi.currentSide = frogCurrentSide();
-    state.frogAi.targetSource = "patrol";
-    state.frogAi.usesHumanAsTarget = false;
-    spawnTransferParticles(particleContext, state.frog, state.human);
+    if (returningKey === "frog") {
+      state.frogAi.timer = 0;
+      state.frogAi.currentSide = frogCurrentSide();
+      state.frogAi.targetSource = "patrol";
+      state.frogAi.usesHumanAsTarget = false;
+    }
+    if (returningKey === "elephant") state.cubelings.elephant.active = false;
+    spawnTransferParticles(particleContext, returningActor, state.human);
     if (state.scene.id === SCENES.LEVEL_ONE && state.buttonPressed && !state.spellbookCollected) {
       showPrompt("Bring your character across the bridge to the Love Letter.", 2.2);
       showSpeech("human", "There we go. Now I can cross.", 2.0);
@@ -1494,19 +2097,29 @@ function switchActorFree() {
     }
     return;
   }
-  if (!canTransferToFrog(TRANSFER_INPUT_GRACE_RADIUS)) {
-    showPrompt("Come a little closer to the Frog Cubeling.", 1.4);
-    showSpeech("frog", "Come a little closer to the Frog Cubeling.", 1.5);
+
+  const transferTarget = nearestTransferTarget(TRANSFER_INPUT_GRACE_RADIUS);
+  if (!transferTarget) {
+    const nearest = nearestAvailableCubeling();
+    if (nearest?.key === "elephant") {
+      showPrompt("Come a little closer to the Elephant Cubeling.", 1.4);
+      showSpeech("elephant", "Come a little closer to the Elephant Cubeling.", 1.5);
+    } else {
+      showPrompt("Come a little closer to the Frog Cubeling.", 1.4);
+      showSpeech("frog", "Come a little closer to the Frog Cubeling.", 1.5);
+    }
     return;
   }
-  state.active = "frog";
-  state.frogAi.everPossessed = true;
-  state.frogAi.timer = 0;
-  state.frogAi.currentSide = frogCurrentSide();
-  state.frogAi.targetSource = "patrol";
-  state.frogAi.usesHumanAsTarget = false;
-  spawnTransferParticles(particleContext, state.human, state.frog);
-  showSpeech("frog", "You are the Frog Cubeling now.", 1.2);
+  if (transferTarget.key === "elephant") {
+    state.active = "elephant";
+    state.cubelings.elephant.active = true;
+    spawnTransferParticles(particleContext, state.human, state.elephant);
+    clearHumanFromElephantExitLane();
+    showPrompt("You are the Elephant Cubeling now.", 1.6);
+    showSpeech("elephant", "You are the Elephant Cubeling now.", 1.4);
+    return;
+  }
+  possessFrogCubeling();
 }
 
 function registerFrogLoveLetterBlock() {
@@ -1526,6 +2139,17 @@ function showFrogLoveLetterLesson() {
     { anchor: "frog", text: "I can't pick this up.", seconds: 2.1 },
     { anchor: "loveLetter", text: "Come back as yourself and collect me!", seconds: 2.4 }
   ]);
+}
+
+function possessFrogCubeling() {
+  state.active = "frog";
+  state.frogAi.everPossessed = true;
+  state.frogAi.timer = 0;
+  state.frogAi.currentSide = frogCurrentSide();
+  state.frogAi.targetSource = "patrol";
+  state.frogAi.usesHumanAsTarget = false;
+  spawnTransferParticles(particleContext, state.human, state.frog);
+  showSpeech("frog", "You are the Frog Cubeling now.", 1.2);
 }
 
 function registerFrogWaterBlock() {
@@ -1850,10 +2474,13 @@ function collidesAt(actor, x, z, options = {}) {
   if (x < bounds.minX + actor.radius || x > bounds.maxX - actor.radius) return true;
   if (z < bounds.minZ + actor.radius || z > bounds.maxZ - actor.radius) return true;
   if (levelTwoRaisedSurfaceBlocksTransition(actor, x, z)) return true;
-  const otherActor = actor === state.human ? state.frog : state.human;
-  if (!options.ignoreActor && (actor === state.human ? state.reveals.frog : state.scene.id !== SCENES.HOME) && distance2D({ x, z }, otherActor) < actor.radius + otherActor.radius + ACTOR_BLOCK_PADDING) {
-    state.actorCollisionBlocked = true;
-    return true;
+  if (!options.ignoreActor) {
+    for (const otherActor of activeActorCollisionCandidates(actor)) {
+      if (!actorsShareBlockingHeight(actor, otherActor, { x, z, radius: actor.radius })) continue;
+      if (distance2D({ x, z }, otherActor) >= actor.radius + otherActor.radius + ACTOR_BLOCK_PADDING) continue;
+      state.actorCollisionBlocked = true;
+      return true;
+    }
   }
   if (actor === state.frog && loveLetterBlocksFrogAt(x, z)) {
     if (state.active === "frog") registerFrogLoveLetterBlock();
@@ -1861,6 +2488,19 @@ function collidesAt(actor, x, z, options = {}) {
   }
   if (sceneColliderBlocks(actor, x, z)) return true;
   return activeBarrierColliders().some((barrier) => circleIntersectsAabb(x, z, actor.radius, barrier));
+}
+
+function activeActorCollisionCandidates(actor) {
+  const candidates = [];
+  if (actor !== state.human) candidates.push(state.human);
+  if (actor !== state.frog && state.scene.id !== SCENES.HOME && state.reveals.frog) candidates.push(state.frog);
+  if (actor !== state.elephant && canUseElephantCubeling()) candidates.push(state.elephant);
+  return candidates;
+}
+
+function actorsShareBlockingHeight(a, b, targetPoint = a) {
+  if (state.scene.id !== SCENES.LEVEL_TWO) return true;
+  return Math.abs(levelTwoActorLiftAt(a, targetPoint) - levelTwoActorLiftAt(b)) < 1.05;
 }
 
 function sceneColliderBlocks(actor, x, z) {
@@ -1906,7 +2546,27 @@ function levelTwoWalkableSurfaceAllows(actor, x, z, collider) {
   if (actor === state.human && state.levelTwo.blueRampActive && collider.label.startsWith("level-two-elephant-totem-hill")) {
     return levelTwoTotemHillWalkableAt({ x, z }, actor.radius);
   }
+  if (actor === state.elephant && collider.label.startsWith("level-two-central-mountain")) {
+    return levelTwoElephantCanUseMountainCollider({ x, z }, collider);
+  }
+  if (actor === state.elephant && collider.label.startsWith("level-two-reserved-red-elevator-a-top-connector")) {
+    return levelTwoElephantHasTopRouteAccess() &&
+      levelTwoElephantEchoTerraceSafeAt({ x, z }, actor.radius);
+  }
   return false;
+}
+
+function levelTwoElephantHasTopRouteAccess() {
+  if (state.levelTwo.elephantSurfaceId === "tier-3-elephant-route") return true;
+  if (state.levelTwo.elephantSurfaceId !== "red-elevator-a") return false;
+  return levelTwoRedPlatformProgressById("red-elevator-a") >= 0.92;
+}
+
+function levelTwoElephantCanUseMountainCollider(point, collider) {
+  if (!levelTwoElephantHasTopRouteAccess()) return false;
+  if (!levelTwoElephantEchoTerraceSafeAt(point, state.elephant.radius)) return false;
+  if (Number.isFinite(collider.levelTwoTier) && collider.levelTwoTier > LEVEL_TWO_ELEPHANT_ECHO_TERRACE_TIER) return false;
+  return true;
 }
 
 function levelTwoLedgeForCollider(collider) {
@@ -1949,6 +2609,86 @@ function pointInLevelTwoRamp(point) {
     point.z <= LEVEL_TWO_BLUE_RAMP.maxZ;
 }
 
+function levelTwoRedPlatformAt(point) {
+  if (state.scene.id !== SCENES.LEVEL_TWO) return null;
+  return LEVEL_TWO_RED_PLATFORMS.find((platform) =>
+    point.x >= platform.minX &&
+    point.x <= platform.maxX &&
+    point.z >= platform.minZ &&
+    point.z <= platform.maxZ
+  ) || null;
+}
+
+function levelTwoActorSurfaceId(actor) {
+  if (actor === state.human) return state.levelTwo.humanSurfaceId;
+  if (actor === state.frog) return state.levelTwo.frogSurfaceId;
+  if (actor === state.elephant) return state.levelTwo.elephantSurfaceId;
+  return null;
+}
+
+function levelTwoRedPlatformProgressById(id) {
+  const platform = LEVEL_TWO_RED_PLATFORMS.find((candidate) => candidate.id === id);
+  if (!platform) return 0;
+  const platformState = state.levelTwo.redPlatforms?.[platform.id];
+  if (Number.isFinite(platformState?.progress)) return platformState.progress;
+  return platform.initialProgress ?? 0;
+}
+
+function levelTwoRedPlatformLiftById(id) {
+  const platform = LEVEL_TWO_RED_PLATFORMS.find((candidate) => candidate.id === id);
+  if (!platform) return 0;
+  const platformState = state.levelTwo.redPlatforms?.[platform.id];
+  if (Number.isFinite(platformState?.lift)) return platformState.lift;
+  return (platform.initialProgress ?? 0) * platform.maxLift;
+}
+
+function levelTwoRedButtonSurfaceY(button) {
+  const platform = LEVEL_TWO_RED_PLATFORMS.find((candidate) =>
+    candidate.id === (button?.platformId || button?.linkedPlatformId)
+  );
+  return SURFACE_Y + levelTwoRedPlatformLiftById(platform?.id) + (platform?.surfaceOffset || 0);
+}
+
+function levelTwoActorCanRideRedPlatform(actor, platform) {
+  if (!platform) return false;
+  if (platform.walkableBy === "all") return true;
+  if (platform.walkableBy === "elephant") return actor === state.elephant;
+  if (Array.isArray(platform.walkableBy)) {
+    const actorKey = actor === state.elephant ? "elephant" : actor === state.frog ? "frog" : "human";
+    return platform.walkableBy.includes(actorKey);
+  }
+  return false;
+}
+
+function levelTwoActorIsOnRedPlatformSurface(actor, platform) {
+  return Boolean(platform && levelTwoActorSurfaceId(actor) === platform.id);
+}
+
+function levelTwoRedPlatformIsGroundAligned(platform) {
+  return levelTwoRedPlatformProgressById(platform.id) <= 0.06;
+}
+
+function levelTwoRedPlatformIsTopAligned(platform) {
+  return levelTwoRedPlatformProgressById(platform.id) >= 0.92;
+}
+
+function levelTwoRedPlatformCanAttachActor(actor, platform) {
+  if (!levelTwoActorCanRideRedPlatform(actor, platform)) return false;
+  if (levelTwoActorIsOnRedPlatformSurface(actor, platform)) return true;
+  if (levelTwoRedPlatformIsGroundAligned(platform)) return true;
+  return actor === state.elephant &&
+    state.levelTwo.elephantSurfaceId === "tier-3-elephant-route" &&
+    levelTwoRedPlatformIsTopAligned(platform);
+}
+
+function levelTwoRedPlatformLiftAt(point, actor = null) {
+  const platform = levelTwoRedPlatformAt(point);
+  if (!platform) return 0;
+  if (actor && !levelTwoActorCanRideRedPlatform(actor, platform)) return 0;
+  if (actor && !levelTwoActorIsOnRedPlatformSurface(actor, platform)) return 0;
+  return (state.levelTwo.redPlatforms?.[platform.id]?.lift || 0) + (platform.surfaceOffset || 0);
+}
+
 function levelTwoRampProgressAt(point) {
   if (!pointInLevelTwoRamp(point)) return 0;
   return clamp((point.x - LEVEL_TWO_BLUE_RAMP.minX) / Math.max(0.001, LEVEL_TWO_BLUE_RAMP.maxX - LEVEL_TWO_BLUE_RAMP.minX), 0, 1);
@@ -1965,8 +2705,39 @@ function levelTwoHumanHillSafeAt(point, actorRadius = 0) {
   return pointInLevelTwoTiles(point, LEVEL_TWO_ELEPHANT_TOTEM_HILL_TILES, safePadding);
 }
 
+function levelTwoElephantEchoTerraceSafeAt(point, actorRadius = 0) {
+  const safePadding = -Math.max(0, actorRadius * 0.45);
+  return pointInLevelTwoTiles(point, LEVEL_TWO_ELEPHANT_ECHO_TERRACE_TILES, safePadding) ||
+    levelTwoRedElevatorTopExitSafeAt(point, actorRadius);
+}
+
+function levelTwoRedElevatorTopExitSafeAt(point, actorRadius = 0) {
+  if (levelTwoRedPlatformProgressById("red-elevator-a") < 0.92) return false;
+  const padding = Math.max(0, actorRadius * 0.2);
+  return point.x >= LEVEL_TWO_RED_ELEVATOR_TOP_EXIT_ZONE.minX - padding &&
+    point.x <= LEVEL_TWO_RED_ELEVATOR_TOP_EXIT_ZONE.maxX + padding &&
+    point.z >= LEVEL_TWO_RED_ELEVATOR_TOP_EXIT_ZONE.minZ - padding &&
+    point.z <= LEVEL_TWO_RED_ELEVATOR_TOP_EXIT_ZONE.maxZ + padding;
+}
+
+function levelTwoRedElevatorSideApproachSafeAt(point, actorRadius = 0) {
+  const padding = Math.max(0, actorRadius * 0.25);
+  return point.x >= LEVEL_TWO_RED_ELEVATOR_SIDE_APPROACH_ZONE.minX - padding &&
+    point.x <= LEVEL_TWO_RED_ELEVATOR_SIDE_APPROACH_ZONE.maxX + padding &&
+    point.z >= LEVEL_TWO_RED_ELEVATOR_SIDE_APPROACH_ZONE.minZ - padding &&
+    point.z <= LEVEL_TWO_RED_ELEVATOR_SIDE_APPROACH_ZONE.maxZ + padding;
+}
+
 function levelTwoRaisedSurfaceBlocksTransition(actor, x, z) {
-  if (state.scene.id !== SCENES.LEVEL_TWO || actor !== state.human || !state.levelTwo.blueRampActive) return false;
+  if (state.scene.id !== SCENES.LEVEL_TWO) return false;
+  const redPlatformTransition = levelTwoRedPlatformBlocksTransition(actor, { x, z });
+  if (redPlatformTransition !== null) return redPlatformTransition;
+  if (actor === state.elephant && state.levelTwo.elephantSpawned) {
+    const target = { x, z };
+    return state.levelTwo.elephantSurfaceId === "tier-3-elephant-route" &&
+      !levelTwoElephantEchoTerraceSafeAt(target, actor.radius);
+  }
+  if (actor !== state.human || !state.levelTwo.blueRampActive) return false;
   const target = { x, z };
   const currentSurface = state.levelTwo.humanSurfaceId;
   if (currentSurface === "elephant-totem-hill") {
@@ -1977,6 +2748,39 @@ function levelTwoRaisedSurfaceBlocksTransition(actor, x, z) {
     return levelTwoRampProgressAt(actor) > (LEVEL_TWO_BLUE_RAMP.groundExitProgress || 0.18);
   }
   return false;
+}
+
+function levelTwoRedPlatformBlocksTransition(actor, target) {
+  if (!state.levelTwo?.redPlatforms) return null;
+  const targetPlatform = levelTwoRedPlatformAt(target);
+  const currentPlatform = LEVEL_TWO_RED_PLATFORMS.find((platform) =>
+    platform.id === levelTwoActorSurfaceId(actor) &&
+    levelTwoActorCanRideRedPlatform(actor, platform)
+  );
+
+  if (currentPlatform) {
+    if (targetPlatform?.id === currentPlatform.id) return false;
+    if (levelTwoRedPlatformIsGroundAligned(currentPlatform)) return false;
+    if (
+      actor === state.elephant &&
+      levelTwoRedPlatformIsTopAligned(currentPlatform) &&
+      levelTwoElephantEchoTerraceSafeAt(target, actor.radius)
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  if (!targetPlatform || !levelTwoActorCanRideRedPlatform(actor, targetPlatform)) return null;
+  if (levelTwoRedPlatformIsGroundAligned(targetPlatform)) return false;
+  if (
+    actor === state.elephant &&
+    state.levelTwo.elephantSurfaceId === "tier-3-elephant-route" &&
+    levelTwoRedPlatformIsTopAligned(targetPlatform)
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function levelTwoTotemHillWalkableAt(point, actorRadius = 0) {
@@ -1992,22 +2796,29 @@ function levelTwoTotemHillWalkableAt(point, actorRadius = 0) {
 
 function levelTwoActorLiftAt(actor, point = actor) {
   if (state.scene.id !== SCENES.LEVEL_TWO) return 0;
+  const redPlatformLift = levelTwoRedPlatformLiftAt(point, actor);
   if (actor === state.frog && state.levelTwo.frogSurfaceId) {
     const ledge = LEVEL_TWO_FROG_JUMPABLE_LEDGES.find((item) => item.id === state.levelTwo.frogSurfaceId);
-    if (ledge && pointInLevelTwoTiles(point, ledge.tiles, 0.08)) return ledge.heightAboveGround;
+    if (ledge && pointInLevelTwoTiles(point, ledge.tiles, 0.08)) return Math.max(ledge.heightAboveGround, redPlatformLift);
   }
   if (actor === state.human && state.levelTwo.blueRampActive) {
     if (pointInLevelTwoRamp(point)) {
       return Math.max(
+        redPlatformLift,
         levelTwoRampLiftAt(point, true),
         levelTwoHumanHillSafeAt(point, actor.radius)
           ? LEVEL_TWO_ELEPHANT_TOTEM_HILL.heightAboveGround
           : 0
       );
     }
-    if (levelTwoHumanHillSafeAt(point, actor.radius)) return LEVEL_TWO_ELEPHANT_TOTEM_HILL.heightAboveGround;
+    if (levelTwoHumanHillSafeAt(point, actor.radius)) return Math.max(LEVEL_TWO_ELEPHANT_TOTEM_HILL.heightAboveGround, redPlatformLift);
   }
-  return 0;
+  if (actor === state.elephant && state.levelTwo.elephantSpawned) {
+    if (levelTwoElephantHasTopRouteAccess() && levelTwoElephantEchoTerraceSafeAt(point, actor.radius + 0.04)) {
+      return Math.max(LEVEL_TWO_ELEPHANT_ECHO_HEIGHT, redPlatformLift);
+    }
+  }
+  return redPlatformLift;
 }
 
 function updateLevelTwoSurfaceState() {
@@ -2018,7 +2829,10 @@ function updateLevelTwoSurfaceState() {
       state.levelTwo.frogSurfaceId = null;
     }
   }
-  if (state.levelTwo.blueRampActive) {
+  const humanRedPlatform = levelTwoRedPlatformAt(state.human);
+  if (humanRedPlatform && levelTwoRedPlatformCanAttachActor(state.human, humanRedPlatform)) {
+    state.levelTwo.humanSurfaceId = humanRedPlatform.id;
+  } else if (state.levelTwo.blueRampActive) {
     if (levelTwoHumanHillSafeAt(state.human, state.human.radius)) {
       state.levelTwo.humanSurfaceId = "elephant-totem-hill";
     } else if (pointInLevelTwoRamp(state.human)) {
@@ -2036,6 +2850,31 @@ function updateLevelTwoSurfaceState() {
     }
   } else {
     state.levelTwo.humanSurfaceId = null;
+  }
+  if (state.levelTwo.elephantSpawned) {
+    const previousElephantSurfaceId = state.levelTwo.elephantSurfaceId;
+    const redPlatform = levelTwoRedPlatformAt(state.elephant);
+    if (redPlatform && levelTwoRedPlatformCanAttachActor(state.elephant, redPlatform)) {
+      state.levelTwo.elephantSurfaceId = redPlatform.id;
+    } else if (levelTwoElephantEchoTerraceSafeAt(state.elephant, state.elephant.radius + 0.08)) {
+      const previousPlatform = LEVEL_TWO_RED_PLATFORMS.find((platform) => platform.id === previousElephantSurfaceId);
+      if (
+        previousElephantSurfaceId === "tier-3-elephant-route" ||
+        (previousPlatform && levelTwoRedPlatformIsTopAligned(previousPlatform))
+      ) {
+        state.levelTwo.elephantSurfaceId = "tier-3-elephant-route";
+      } else {
+        state.levelTwo.elephantSurfaceId = null;
+      }
+    } else if (state.levelTwo.elephantSurfaceId === "tier-3-elephant-route") {
+      const safeBounds = levelTwoTileBounds(LEVEL_TWO_ELEPHANT_ECHO_TERRACE_TILES, -state.elephant.radius * 0.45);
+      state.elephant.x = clamp(state.elephant.x, safeBounds.minX, safeBounds.maxX);
+      state.elephant.z = clamp(state.elephant.z, safeBounds.minZ, safeBounds.maxZ);
+    } else {
+      state.levelTwo.elephantSurfaceId = null;
+    }
+  } else {
+    state.levelTwo.elephantSurfaceId = null;
   }
 }
 
@@ -2320,7 +3159,7 @@ function resize() {
 function updateHud() {
   const stepId = currentStepId();
   renderHudBase(hud, {
-    activeLabel: state.active === "frog" ? "Frog Cubeling" : "Character",
+    activeLabel: activeActorLabel(),
     goalLabel: currentGoalLabel(),
     stepLabel: currentStepLabel(),
     prompt: currentPrompt(stepId)
@@ -2333,6 +3172,12 @@ function updateHud() {
   updateContinuePrompt();
   updateSpeechBubble();
   updateSceneOverlays();
+}
+
+function activeActorLabel() {
+  if (state.active === "frog") return "Frog Cubeling";
+  if (state.active === "elephant") return "Elephant Cubeling";
+  return "Character";
 }
 
 function currentPrompt(stepId = currentStepId()) {
@@ -2904,8 +3749,11 @@ function getSecondarySpeechBubble() {
 
 function getSpeechAnchorPoint(anchor) {
   if (anchor === "frog") return { x: state.frog.x, y: SURFACE_Y + 2.0, z: state.frog.z };
+  if (anchor === "elephant") return { x: state.elephant.x, y: LEVEL_TWO_ELEPHANT_ECHO_TOP_Y + 2.0, z: state.elephant.z };
   if (anchor === "frogEcho") return { x: START.frog.x, y: SURFACE_Y + 2.0, z: START.frog.z };
   if (anchor === "frogTotem") return { x: FROG_TOTEM.x, y: SURFACE_Y + 2.0, z: FROG_TOTEM.z };
+  if (anchor === "elephantEcho") return { x: LEVEL_TWO_POINTS.elephantEcho.x, y: LEVEL_TWO_ELEPHANT_ECHO_TOP_Y + 2.0, z: LEVEL_TWO_POINTS.elephantEcho.z };
+  if (anchor === "elephantTotem") return { x: LEVEL_TWO_POINTS.elephantTotem.x, y: LEVEL_TWO_ELEPHANT_TOTEM_HILL.topY + 1.4, z: LEVEL_TWO_POINTS.elephantTotem.z };
   if (anchor === "button") {
     const button = buttonPoint();
     return { x: button.x, y: SURFACE_Y + 1.05, z: button.z };
@@ -2915,7 +3763,9 @@ function getSpeechAnchorPoint(anchor) {
 }
 
 function getActiveActor() {
-  return state.active === "frog" ? state.frog : state.human;
+  if (state.active === "frog") return state.frog;
+  if (state.active === "elephant") return state.elephant;
+  return state.human;
 }
 
 function buttonPoint() {
@@ -2971,6 +3821,52 @@ function canTransferToFrog(graceRadius = 0) {
   return distance2D(state.human, state.frog) <= POSSESSION_RADIUS + graceRadius;
 }
 
+function canUseElephantCubeling() {
+  return state.scene.id === SCENES.LEVEL_TWO &&
+    state.levelTwo.elephantSpawned &&
+    Boolean(state.cubelings.elephant?.unlocked);
+}
+
+function clearHumanFromElephantExitLane() {
+  if (state.scene.id !== SCENES.LEVEL_TWO || !state.levelTwo.elephantSpawned) return;
+  if (!levelTwoRedPlatformAt(state.elephant) && state.levelTwo.elephantSurfaceId !== "red-elevator-a") return;
+  const targetX = LEVEL_TWO_RED_ELEVATOR_SIDE_APPROACH_ZONE.maxX - state.human.radius;
+  const targetZ = clamp(
+    state.human.z,
+    LEVEL_TWO_RED_ELEVATOR_SIDE_APPROACH_ZONE.minZ + state.human.radius,
+    LEVEL_TWO_RED_ELEVATOR_SIDE_APPROACH_ZONE.maxZ - state.human.radius
+  );
+  if (!collidesAt(state.human, targetX, targetZ, { ignoreActor: true })) {
+    state.human.x = targetX;
+    state.human.z = targetZ;
+    state.levelTwo.humanSurfaceId = null;
+  }
+}
+
+function canTransferToElephant(graceRadius = 0) {
+  return canUseElephantCubeling() &&
+    distance2D(state.human, state.elephant) <= POSSESSION_RADIUS + graceRadius;
+}
+
+function availableTransferTargets() {
+  const targets = [];
+  if (state.reveals.frog) {
+    targets.push({ key: "frog", actor: state.frog, distance: distance2D(state.human, state.frog) });
+  }
+  if (canUseElephantCubeling()) {
+    targets.push({ key: "elephant", actor: state.elephant, distance: distance2D(state.human, state.elephant) });
+  }
+  return targets.sort((a, b) => a.distance - b.distance);
+}
+
+function nearestTransferTarget(graceRadius = 0) {
+  return availableTransferTargets().find((target) => target.distance <= POSSESSION_RADIUS + graceRadius) || null;
+}
+
+function nearestAvailableCubeling() {
+  return availableTransferTargets()[0] || null;
+}
+
 function easeOutCubic(value) {
   return 1 - Math.pow(1 - value, 3);
 }
@@ -3011,6 +3907,7 @@ function renderGameToText() {
   },
   human: roundedPoint(state.human),
   frog: roundedPoint(state.frog),
+  elephant: roundedPoint(state.elephant),
   tutorial: {
     stepIndex: state.tutorialIndex,
     stepId: currentStepId(),
@@ -3054,8 +3951,10 @@ function renderGameToText() {
       name: "Elephant Cubeling",
       unlocked: Boolean(state.cubelings.elephant?.unlocked),
       unlockedPending: Boolean(state.cubelings.elephant?.unlockedPending),
-      active: false,
-      spawned: false
+      active: state.active === "elephant",
+      spawned: Boolean(state.cubelings.elephant?.spawned),
+      speed: LEVEL_TWO_ELEPHANT_SPEED,
+      behavior: "slow grounded actor after Totem unlock; stationary when unpossessed; heavy enough for red buttons"
     }
   },
   persistentUnlocks: {
@@ -3337,7 +4236,10 @@ function renderGameToText() {
       firstTierBottomY: Number(LEVEL_TWO_TIER_BASE_Y.toFixed(2)),
       groundContactGap: Number(Math.max(0, LEVEL_TWO_TIER_BASE_Y - SURFACE_Y).toFixed(2)),
       tierStepY: Number(LEVEL_TWO_TIER_STEP_Y.toFixed(2)),
+      lowerTiersSupported: true,
+      upperTiersMayFloat: true,
       tileCount: LEVEL_TWO_CENTRAL_MOUNTAIN_TILES.length,
+      supportTileCount: LEVEL_TWO_CENTRAL_MOUNTAIN_SUPPORT_TILES.length,
       terraces: LEVEL_TWO_CENTRAL_MOUNTAIN_TIERS.map((tier) => ({
         id: tier.id,
         name: tier.name,
@@ -3422,7 +4324,145 @@ function renderGameToText() {
       x: Number(LEVEL_TWO_POINTS.elephantTotem.x.toFixed(2)),
       z: Number(LEVEL_TWO_POINTS.elephantTotem.z.toFixed(2)),
       radius: LEVEL_TWO_ELEPHANT_TOTEM_HILL.radius,
+      asset: "voxel-elephant",
+      visualScale: LEVEL_TWO_ELEPHANT_TOTEM_VISUAL_SCALE,
+      visualStyle: "small warm-gold floating elephant charm with glow ring",
       unlockMessage: "Elephant Cubeling Found!"
+    },
+    elephantEcho: {
+      name: "Elephant Echo",
+      visible: state.scene.id === SCENES.LEVEL_TWO && state.levelTwo.elephantEchoVisible && !state.levelTwo.elephantAwake,
+      awake: state.levelTwo.elephantAwake,
+      active: state.levelTwo.elephantAwake,
+      solid: false,
+      x: Number(LEVEL_TWO_POINTS.elephantEcho.x.toFixed(2)),
+      y: Number(levelTwoRedButtonSurfaceY(LEVEL_TWO_RED_BUTTONS[0]).toFixed(2)),
+      z: Number(LEVEL_TWO_POINTS.elephantEcho.z.toFixed(2)),
+      radius: LEVEL_TWO_ELEPHANT_ECHO_RADIUS,
+      asset: "voxel-elephant",
+      elevated: LEVEL_TWO_ELEPHANT_ECHO_TOP_Y > SURFACE_Y + 0.5,
+      heightAboveGround: Number((LEVEL_TWO_ELEPHANT_ECHO_TOP_Y - SURFACE_Y).toFixed(2)),
+      surfaceId: LEVEL_TWO_RED_PLATFORMS[0]?.id || "red-elevator-a",
+      tint: "muted grey-green",
+      opacity: LEVEL_TWO_ELEPHANT_ECHO_OPACITY,
+      homeAnchor: true,
+      spawnsUsableActorThisSlice: true,
+      dormantVisualReplacedByElephant: state.levelTwo.elephantAwake,
+      nextDialogueIndex: state.levelTwo.elephantEchoPromptIndex % ELEPHANT_ECHO_LINES.length,
+      lastSpawnEffectY: Number((state.levelTwo.lastElephantSpawnEffectY || 0).toFixed(2)),
+      accessibility: "transparent grey elephant silhouette plus muted ground ring, sparkles, speech label, and render text name"
+    },
+    elephantCubeling: {
+      name: "Elephant Cubeling",
+      visible: state.scene.id === SCENES.LEVEL_TWO && state.levelTwo.elephantSpawned,
+      spawned: state.levelTwo.elephantSpawned,
+      unlocked: Boolean(state.cubelings.elephant?.unlocked),
+      active: state.active === "elephant",
+      x: Number(state.elephant.x.toFixed(2)),
+      z: Number(state.elephant.z.toFixed(2)),
+      radius: LEVEL_TWO_ELEPHANT_RADIUS,
+      speed: LEVEL_TWO_ELEPHANT_SPEED,
+      spawnSurfaceId: LEVEL_TWO_RED_PLATFORMS[0]?.id || "red-elevator-a",
+      surfaceId: state.levelTwo.elephantSurfaceId,
+      surfaceLift: Number(levelTwoActorLiftAt(state.elephant).toFixed(2)),
+      mostlyStationaryWhenUnpossessed: state.active !== "elephant",
+      behavior: "slow grounded movement; seeks nearest accessible red button when unpossessed; no hop or patrol; activates red weight buttons; no recall or final route yet"
+    },
+    redButtons: LEVEL_TWO_RED_BUTTONS.map((button) => {
+      const buttonState = state.levelTwo.redButtons?.[button.id] || {};
+      return {
+        id: button.id,
+        visible: state.scene.id === SCENES.LEVEL_TWO,
+        color: "red",
+        activationType: button.activationType,
+        active: Boolean(buttonState.active),
+        heldActor: buttonState.heldActor || "",
+        ineligibleActor: buttonState.ineligibleActor || "",
+        requiredActor: button.requiredActor,
+        linkedPlatformId: button.linkedPlatformId,
+        x: Number(button.position.x.toFixed(2)),
+        y: Number((levelTwoRedButtonSurfaceY(button) + (button.surfaceClearance || 0)).toFixed(2)),
+        surfaceY: Number(levelTwoRedButtonSurfaceY(button).toFixed(2)),
+        z: Number(button.position.z.toFixed(2)),
+        radius: button.radius,
+        surfaceId: button.surfaceId,
+        actorEligibility: {
+          human: false,
+          frog: false,
+          elephant: true
+        }
+      };
+    }),
+    redPlatforms: LEVEL_TWO_RED_PLATFORMS.map((platform) => {
+      const platformState = state.levelTwo.redPlatforms?.[platform.id] || {};
+      return {
+        id: platform.id,
+        visible: state.scene.id === SCENES.LEVEL_TWO,
+        color: "red",
+        asset: "kaykit-platformer-red-platform-4x4x1",
+        linkedButtonId: platform.linkedButtonId,
+        progress: Number((platformState.progress || 0).toFixed(2)),
+        lift: Number((platformState.lift || 0).toFixed(2)),
+        moving: platformState.moving || "idle",
+        direction: platformState.direction || platform.initialDirection || "",
+        pauseRemaining: Number((platformState.pauseRemaining || 0).toFixed(2)),
+        releaseTarget: Number.isFinite(platformState.releaseTarget) ? Number(platformState.releaseTarget.toFixed(2)) : null,
+        heldBy: platformState.heldBy || "",
+        walkableBy: platform.walkableBy,
+        x: Number(platform.position.x.toFixed(2)),
+        y: Number((platform.baseY + (platformState.lift || 0)).toFixed(2)),
+        z: Number(platform.position.z.toFixed(2)),
+        minX: Number(platform.minX.toFixed(2)),
+        maxX: Number(platform.maxX.toFixed(2)),
+        minZ: Number(platform.minZ.toFixed(2)),
+        maxZ: Number(platform.maxZ.toFixed(2)),
+        maxLift: platform.maxLift,
+        surfaceOffset: platform.surfaceOffset || 0,
+        topSurfaceY: Number(levelTwoRedButtonSurfaceY({ platformId: platform.id }).toFixed(2)),
+        movementRule: platform.movementRule,
+        releaseBehavior: platform.releaseBehavior || "",
+        endpointPauseSeconds: platform.endpointPauseSeconds || 0,
+        riderActors: ["human", "frog", "elephant"].filter((actorKey) =>
+          levelTwoActorIsOnRedPlatformSurface(state[actorKey], platform)
+        )
+      };
+    }),
+    redElevatorA: {
+      visible: state.scene.id === SCENES.LEVEL_TWO,
+      teachingSequence: "Elephant Echo, Red Button A, and Red Elevator A are stacked into one wake-up elevator assembly.",
+      startsRaised: true,
+      upperDockTier: 3,
+      upperDockSurfaceY: Number(LEVEL_TWO_ELEPHANT_ECHO_TOP_Y.toFixed(2)),
+      topConnection: "red-elevator-a-top-connector-to-tier-3-elephant-route",
+      verticalShaftClearance: "outside-central-mountain-column",
+      mountainClearanceX: Number((
+        (LEVEL_TWO_RED_PLATFORMS[0].position.x - (LEVEL_TWO_RED_PLATFORMS[0].visualHalfFootprint || 0)) -
+        (levelTwoTileBounds(LEVEL_TWO_CENTRAL_MOUNTAIN_TIERS[0].tiles).maxX)
+      ).toFixed(2)),
+      buttonNearEdge: true,
+      buttonOffsetFromPlatformCenter: Number(distance2D(LEVEL_TWO_RED_BUTTONS[0].position, LEVEL_TWO_RED_PLATFORMS[0].position).toFixed(2)),
+      cyclesWhileHeldByElephant: LEVEL_TWO_RED_PLATFORMS[0].movementRule === "cycle-while-held",
+      releaseBehavior: LEVEL_TWO_RED_PLATFORMS[0].releaseBehavior,
+      lowersWhenHeldByElephant: true,
+      humanRidesThisSlice: false,
+      supportsHumanCollision: true,
+      supportsHumanRidingIfPlayerBoards: true,
+      sideApproachZone: {
+        minX: Number(LEVEL_TWO_RED_ELEVATOR_SIDE_APPROACH_ZONE.minX.toFixed(2)),
+        maxX: Number(LEVEL_TWO_RED_ELEVATOR_SIDE_APPROACH_ZONE.maxX.toFixed(2)),
+        minZ: Number(LEVEL_TWO_RED_ELEVATOR_SIDE_APPROACH_ZONE.minZ.toFixed(2)),
+        maxZ: Number(LEVEL_TWO_RED_ELEVATOR_SIDE_APPROACH_ZONE.maxZ.toFixed(2))
+      },
+      topExitZone: {
+        minX: Number(LEVEL_TWO_RED_ELEVATOR_TOP_EXIT_ZONE.minX.toFixed(2)),
+        maxX: Number(LEVEL_TWO_RED_ELEVATOR_TOP_EXIT_ZONE.maxX.toFixed(2)),
+        minZ: Number(LEVEL_TWO_RED_ELEVATOR_TOP_EXIT_ZONE.minZ.toFixed(2)),
+        maxZ: Number(LEVEL_TWO_RED_ELEVATOR_TOP_EXIT_ZONE.maxZ.toFixed(2)),
+        visual: LEVEL_TWO_RED_ELEVATOR_TOP_EXIT_ZONE.visual
+      },
+      isolated: false,
+      connectedToLoveLetterRoute: false,
+      invalidFeedback: "Only the Elephant Cubeling is heavy enough for red buttons."
     },
     reservedPlatformStations: LEVEL_TWO_RESERVED_TERRACE_GROUPS.map((station) => ({
       id: station.id,
@@ -3431,9 +4471,9 @@ function renderGameToText() {
       tileCount: station.tiles.length
     })),
     reservedTerraceTileCount: LEVEL_TWO_RESERVED_TERRACE_TILES.length,
-    hasElephantEcho: false,
+    hasElephantEcho: state.scene.id === SCENES.LEVEL_TWO && state.levelTwo.elephantEchoVisible,
     hasElephantTotem: state.scene.id === SCENES.LEVEL_TWO && state.levelTwo.elephantTotemVisible && !state.levelTwo.elephantTotemCollected,
-    redButtonsPresent: false,
+    redButtonsPresent: state.scene.id === SCENES.LEVEL_TWO,
     recallAvailable: false,
     bounds: {
       minX: LEVEL_TWO_BOUNDS.minX,
@@ -3464,7 +4504,7 @@ function renderGameToText() {
   },
   controls: {
     move: "WASD/arrows camera-relative",
-    transfer: "Shift near Frog Cubeling or from Frog Cubeling",
+    transfer: "Shift near an unlocked Cubeling, or from a Cubeling back to your character",
     camera: "Q/E rotate 45 degrees",
     frogJump: "Space",
     resetTesting: "R"
@@ -3477,11 +4517,14 @@ function renderGameToText() {
   },
   actorCollision: {
     distance: Number(distance2D(state.human, state.frog).toFixed(2)),
+    humanToElephant: Number(distance2D(state.human, state.elephant).toFixed(2)),
     blockDistance: Number((state.human.radius + state.frog.radius + ACTOR_BLOCK_PADDING).toFixed(2)),
     blockedLastFrame: state.actorCollisionBlocked
   },
   distances: {
     humanToFrog: Number(distance2D(state.human, state.frog).toFixed(2)),
+    humanToElephant: Number(distance2D(state.human, state.elephant).toFixed(2)),
+    elephantToEcho: Number(distance2D(state.elephant, LEVEL_TWO_POINTS.elephantEcho).toFixed(2)),
     humanToFrogEcho: Number(distance2D(state.human, START.frog).toFixed(2)),
     humanToFrogTotem: Number(distance2D(state.human, FROG_TOTEM).toFixed(2)),
     frogToButton: Number(distance2D(state.frog, buttonPoint()).toFixed(2)),
@@ -3505,7 +4548,9 @@ installTestHooks({
   update,
   renderFrame,
   startLevelTwo,
+  levelTwoRedButtonSurfaceY,
   updateLevelTwoSurfaceState,
+  resetLevelTwoRedMechanismState,
   syncAll,
   updateCamera,
   updateHud,

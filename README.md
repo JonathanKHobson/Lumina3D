@@ -39,6 +39,8 @@ More detail: `docs/github-workflow.md`.
 
 ## Where Things Live
 
+- AI/project handoff guide: `AGENTS.md`
+- Project structure map: `docs/project-map.md`
 - Assets served by Vite: `public/assets/`
 - Asset registry: `src/config/assets.js`
 - Shared constants and tutorial copy: `src/config/constants.js`

@@ -40,6 +40,7 @@ export function currentVisibleAssetsForState(state, sceneIds) {
       "kaykit-blockbits-sand-with-grass",
       "kaykit-blockbits-sand-a-path",
       "kaykit-blockbits-multi-tier-central-mountain",
+      "kaykit-blockbits-central-mountain-support-layers",
       "kaykit-blockbits-frog-side-ledge",
       "kaykit-blockbits-blue-button-ledge",
       "kaykit-blockbits-elephant-totem-hill",
@@ -51,9 +52,14 @@ export function currentVisibleAssetsForState(state, sceneIds) {
       "kaykit-platformer-character",
       "voxel-frog",
       "frog-cubeling",
+      state.levelTwo.elephantSpawned ? "elephant-cubeling-real-awake-actor" : null,
       "kaykit-platformer-button-blue-level-two",
       state.levelTwo.blueRampActive ? "kaykit-platformer-blue-ramp" : null,
-      state.levelTwo.elephantTotemVisible && !state.levelTwo.elephantTotemCollected ? "generated-elephant-cubeling-totem-temporary" : null,
+      state.levelTwo.elephantEchoVisible && !state.levelTwo.elephantAwake ? "elephant-echo-transparent-spawn-marker" : null,
+      state.levelTwo.elephantEchoVisible ? "elephant-echo-muted-grey-ground-circle" : null,
+      state.levelTwo.elephantTotemVisible && !state.levelTwo.elephantTotemCollected ? "elephant-cubeling-totem-small-gold-floating-elephant" : null,
+      "kaykit-platformer-button-red-weight-elevator-a",
+      "kaykit-platformer-red-elevator-a",
       "kaykit-love-letter-closed-placeholder-noncollectable",
       "animals-farm-background-clouds-under-scene"
     ].filter(Boolean);

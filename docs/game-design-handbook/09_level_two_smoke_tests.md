@@ -88,12 +88,14 @@ Use WebGL-safe Chromium flags already proven in this project:
 ## Phase 6 - Red Platform/Elevator
 
 - Does red button move the intended platform/elevator?
-- Does movement happen while Elephant holds the button?
-- Does platform/elevator return when Elephant leaves?
-- Is return slow/readable enough?
-- Can the main character stand on and ride the platform if required?
+- Does movement continuously cycle while Elephant holds the button?
+- Does platform/elevator reach both endpoints and reverse direction cleanly while held?
+- Does platform/elevator stop or return to default/rest when Elephant leaves?
+- Is cycle speed readable enough for the player to board/exit intentionally?
+- Can the main character stand on and ride the cycling platform if required?
 - Can Elephant stand on and ride the platform if required?
 - Does platform align at both endpoints?
+- Does the main character avoid clipping, falling through, or getting stuck after riding?
 - Screenshot: platform start.
 - Screenshot: platform moving.
 - Screenshot: platform aligned at endpoint.

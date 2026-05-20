@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { applyTotemModelMaterial, applyTransparentModel } from "./modelMaterials.js";
 
 export function buildActorMeshes({
   scene,
@@ -27,6 +28,13 @@ export function buildActorMeshes({
   actorMeshes.frog.userData.devEditorAsset = "frog";
   actorMeshes.frog.name = "Frog Cubeling";
 
+  actorMeshes.elephant = cloneAsset("elephant");
+  actorMeshes.elephant.userData.devEditorCategory = "elephant";
+  actorMeshes.elephant.userData.devEditorId = "elephant";
+  actorMeshes.elephant.userData.devEditorAsset = "elephant";
+  actorMeshes.elephant.name = "Elephant Cubeling";
+  actorMeshes.elephant.visible = false;
+
   markerMeshes.frogEcho = cloneAsset("frog");
   markerMeshes.frogEcho.userData.devEditorCategory = "frog_echo";
   markerMeshes.frogEcho.userData.devEditorId = "frog_echo";
@@ -42,46 +50,11 @@ export function buildActorMeshes({
   markerMeshes.frogTotem.scale.multiplyScalar(frogTotemVisualScale);
   applyTotemModelMaterial(markerMeshes.frogTotem);
 
-  scene.add(actorMeshes.human, actorMeshes.frog, markerMeshes.frogEcho, markerMeshes.frogTotem);
+  scene.add(actorMeshes.human, actorMeshes.frog, actorMeshes.elephant, markerMeshes.frogEcho, markerMeshes.frogTotem);
 
   animation.humanMixer = new THREE.AnimationMixer(actorMeshes.human);
   player.animations.forEach((clip) => {
     animation.actions[clip.name] = animation.humanMixer.clipAction(clip);
   });
   onPlayIdle();
-}
-
-function applyTransparentModel(object, color, opacity) {
-  object.traverse((child) => {
-    if (!child.isMesh && !child.isSkinnedMesh) return;
-    child.castShadow = false;
-    child.receiveShadow = false;
-    child.material = new THREE.MeshStandardMaterial({
-      color,
-      emissive: color,
-      emissiveIntensity: 0.04,
-      transparent: true,
-      opacity,
-      roughness: 0.9,
-      metalness: 0,
-      depthWrite: false
-    });
-  });
-}
-
-function applyTotemModelMaterial(object) {
-  object.traverse((child) => {
-    if (!child.isMesh && !child.isSkinnedMesh) return;
-    child.castShadow = true;
-    child.receiveShadow = false;
-    const materials = Array.isArray(child.material) ? child.material : [child.material];
-    const cloned = materials.map((material) => {
-      const next = material.clone();
-      if (next.color) next.color.lerp(new THREE.Color(0xffe486), 0.48);
-      if (next.emissive) next.emissive.set(0xffd05c).multiplyScalar(0.28);
-      next.needsUpdate = true;
-      return next;
-    });
-    child.material = Array.isArray(child.material) ? cloned : cloned[0];
-  });
 }

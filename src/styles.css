@@ -139,6 +139,7 @@ body,
   position: absolute;
   top: 0;
   right: 0;
+  --controls-dock-width: 178px;
   width: 178px;
   pointer-events: auto;
 }
@@ -209,6 +210,7 @@ body,
 
 .dev-editor-toggle.is-on,
 .dev-editor-controls-grid .dev-editor-step.is-on,
+[data-dev-transform-mode].is-on,
 #devEditorSnapToggle.is-on,
 #devEditorColliderToggle.is-on {
   border-color: rgba(46, 118, 54, 0.4);
@@ -225,8 +227,9 @@ body,
   backdrop-filter: blur(10px);
   display: grid;
   gap: 8px;
-  min-width: 268px;
-  max-width: 360px;
+  width: min(360px, calc(100vw - 28px));
+  min-width: 0;
+  transform: translateX(calc(var(--controls-dock-width) - 100%));
 }
 
 #devEditorPanel[hidden] {
@@ -344,6 +347,7 @@ body,
 }
 
 #controlsDock {
+  --controls-dock-width: 186px;
   width: 186px;
 }
 
@@ -679,11 +683,12 @@ body,
   }
 
   #controlsDock {
+    --controls-dock-width: 164px;
     width: 164px;
   }
 
   #devEditorPanel {
-    max-width: 320px;
+    width: min(320px, calc(100vw - 28px));
   }
 
   .dev-editor-button-row,

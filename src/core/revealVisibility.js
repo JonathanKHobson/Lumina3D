@@ -31,6 +31,7 @@ export function applySceneRevealVisibility({
     mesh.position.y = (1 - progress) * 2.35;
   });
   if (actorMeshes.frog) actorMeshes.frog.visible = state.scene.id !== sceneIds.HOME && state.reveals.frog;
+  if (actorMeshes.elephant) actorMeshes.elephant.visible = state.scene.id === sceneIds.LEVEL_TWO && state.levelTwo.elephantSpawned;
   if (markerMeshes.frogEcho) markerMeshes.frogEcho.visible = state.scene.id === sceneIds.TUTORIAL && state.reveals.frogEcho && !state.reveals.frog;
   if (markerMeshes.frogEchoCircle) markerMeshes.frogEchoCircle.visible = state.scene.id === sceneIds.TUTORIAL && state.reveals.frogEcho && !state.reveals.frog;
   if (markerMeshes.frogTotem) markerMeshes.frogTotem.visible = state.scene.id === sceneIds.TUTORIAL && state.reveals.frogTotem && !state.frogTotem.collected;
@@ -74,10 +75,22 @@ export function applySceneRevealVisibility({
   if (levelTwoInteractiveMeshes.blueRamp) {
     levelTwoInteractiveMeshes.blueRamp.visible = state.scene.id === sceneIds.LEVEL_TWO && state.levelTwo.blueRampActive;
   }
+  if (levelTwoInteractiveMeshes.elephantEcho) {
+    levelTwoInteractiveMeshes.elephantEcho.visible = state.scene.id === sceneIds.LEVEL_TWO && state.levelTwo.elephantEchoVisible && !state.levelTwo.elephantAwake;
+  }
+  if (levelTwoInteractiveMeshes.elephantEchoRing) {
+    levelTwoInteractiveMeshes.elephantEchoRing.visible = state.scene.id === sceneIds.LEVEL_TWO && state.levelTwo.elephantEchoVisible;
+  }
   if (levelTwoInteractiveMeshes.elephantTotem) {
     levelTwoInteractiveMeshes.elephantTotem.visible = state.scene.id === sceneIds.LEVEL_TWO && state.levelTwo.elephantTotemVisible && !state.levelTwo.elephantTotemCollected;
   }
   if (levelTwoInteractiveMeshes.elephantTotemGlow) {
     levelTwoInteractiveMeshes.elephantTotemGlow.visible = state.scene.id === sceneIds.LEVEL_TWO && state.levelTwo.elephantTotemVisible && !state.levelTwo.elephantTotemCollected;
   }
+  Object.values(levelTwoInteractiveMeshes.redButtons || {}).forEach((mesh) => {
+    mesh.visible = state.scene.id === sceneIds.LEVEL_TWO;
+  });
+  Object.values(levelTwoInteractiveMeshes.redPlatforms || {}).forEach((mesh) => {
+    mesh.visible = state.scene.id === sceneIds.LEVEL_TWO;
+  });
 }

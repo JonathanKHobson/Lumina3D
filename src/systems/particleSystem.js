@@ -156,8 +156,9 @@ export function spawnTransferParticles({ state, scene }, from, to) {
   }
 }
 
-export function spawnRevealSparkles({ state, scene }, x, z, color = 0xffffff, count = 18) {
+export function spawnRevealSparkles({ state, scene }, x, z, color = 0xffffff, count = 18, options = {}) {
   const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+  const baseY = Number.isFinite(options.y) ? options.y : SURFACE_Y;
   for (let i = 0; i < count; i++) {
     const material = new THREE.MeshBasicMaterial({
       color,
@@ -168,7 +169,7 @@ export function spawnRevealSparkles({ state, scene }, x, z, color = 0xffffff, co
     const angle = (i / count) * Math.PI * 2;
     sparkle.position.set(
       x + Math.cos(angle) * (0.18 + Math.random() * 0.25),
-      SURFACE_Y + 0.45 + Math.random() * 0.9,
+      baseY + 0.45 + Math.random() * 0.9,
       z + Math.sin(angle) * (0.18 + Math.random() * 0.25)
     );
     scene.add(sparkle);

@@ -37,6 +37,20 @@ export function syncActorMeshPositions({
     ? (1 - clamp(state.frogReveal.elapsed / frogRevealSeconds, 0, 1)) * 2.4
     : 0;
   actorMeshes.frog.position.y = surfaceY + frogSurfaceLift + jumpLift + aiHop + playerHop + revealDrop;
+
+  if (actorMeshes.elephant) {
+    const elephantSurfaceLift = levelTwoActorLiftAt(state.elephant);
+    const revealDrop = state.levelTwo.elephantRevealActive
+      ? (1 - clamp(state.levelTwo.elephantRevealElapsed / Math.max(0.001, state.levelTwo.elephantRevealSeconds || 0.7), 0, 1)) * 1.8
+      : 0;
+    const idleBob = state.levelTwo.elephantSpawned ? Math.sin(state.elapsed * 2.2) * (state.levelTwo.elephantIdleBob || 0.025) : 0;
+    actorMeshes.elephant.position.set(
+      state.elephant.x,
+      surfaceY + elephantSurfaceLift + revealDrop + idleBob,
+      state.elephant.z
+    );
+    actorMeshes.elephant.rotation.y = directionToRotation(state.elephant.facing);
+  }
 }
 
 export function syncMarkerMeshes({
@@ -64,6 +78,9 @@ export function syncMarkerMeshes({
   }
   syncButtonTopVisual(markerMeshes.buttonTop, state.buttonPressed, buttonTopRestY, buttonTopPressedY);
   syncButtonTopVisual(levelTwoInteractiveMeshes.blueButtonTop, state.levelTwo.blueButtonPressed, buttonTopRestY, buttonTopPressedY);
+  Object.entries(levelTwoInteractiveMeshes.redButtonTops || {}).forEach(([id, buttonTop]) => {
+    syncButtonTopVisual(buttonTop, Boolean(state.levelTwo.redButtons?.[id]?.active), buttonTopRestY, buttonTopPressedY);
+  });
   const isJumping = Boolean(state.frogJump);
   markerMeshes.jumpShadow.visible = isJumping;
   markerMeshes.jumpShadow.position.set(state.frog.x, surfaceY + 0.035, state.frog.z);

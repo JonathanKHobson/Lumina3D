@@ -11,16 +11,50 @@ export const LEVEL_TWO_TITLE_SECONDS = 1.65;
 export const LEVEL_TWO_CINEMATIC_SPEED = 2.0;
 export const LEVEL_TWO_MOUNTAIN_LAYER_COUNT = 4;
 export const LEVEL_TWO_TIER_BASE_Y = SURFACE_Y - 0.04;
-export const LEVEL_TWO_TIER_STEP_Y = 2.58;
+export const LEVEL_TWO_TIER_STEP_Y = 2.9;
 export const LEVEL_TWO_FROG_SIDE_LEDGE_HEIGHT = 0.72;
 export const LEVEL_TWO_BUTTON_LEDGE_HEIGHT = 0.72;
 export const LEVEL_TWO_ELEPHANT_TOTEM_HILL_HEIGHT = 1.85;
 export const LEVEL_TWO_LOVE_LETTER_CLEARANCE = 0.72;
 export const LEVEL_TWO_ELEPHANT_TOTEM_RADIUS = 0.82;
+export const LEVEL_TWO_ELEPHANT_TOTEM_VISUAL_SCALE = 0.38;
+export const LEVEL_TWO_ELEPHANT_ECHO_RADIUS = 1.35;
+export const LEVEL_TWO_ELEPHANT_ECHO_TINT = 0xd1d5d1;
+export const LEVEL_TWO_ELEPHANT_ECHO_OPACITY = 0.36;
+export const LEVEL_TWO_ELEPHANT_ECHO_SPARKLE = 0xc7d1c9;
+export const LEVEL_TWO_ELEPHANT_ECHO_SPEECH_COOLDOWN = 2.1;
+export const LEVEL_TWO_ELEPHANT_RADIUS = 0.68;
+export const LEVEL_TWO_ELEPHANT_SPEED = 2.25;
+export const LEVEL_TWO_ELEPHANT_REVEAL_SECONDS = 0.7;
+export const LEVEL_TWO_ELEPHANT_IDLE_BOB = 0.025;
+export const LEVEL_TWO_RED_BUTTON_RADIUS = 0.92;
+export const LEVEL_TWO_RED_BUTTON_INVALID_COOLDOWN = 1.5;
+export const LEVEL_TWO_RED_PLATFORM_UP_SPEED = 0.16;
+export const LEVEL_TWO_RED_PLATFORM_DOWN_SPEED = 0.2;
+export const LEVEL_TWO_RED_PLATFORM_ENDPOINT_PAUSE_SECONDS = 1.25;
+export const LEVEL_TWO_RED_PLATFORM_VISUAL_HEIGHT = 1.18;
+export const LEVEL_TWO_RED_PLATFORM_SURFACE_OFFSET = 0.16;
+export const LEVEL_TWO_RED_BUTTON_SURFACE_CLEARANCE = 0.08;
+export const LEVEL_TWO_RED_PLATFORM_VISUAL_FOOTPRINT = TILE * 2.35;
+export const LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_X = LEVEL_TWO_RED_PLATFORM_VISUAL_FOOTPRINT * 0.5 - 0.12;
+export const LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_Z = LEVEL_TWO_RED_PLATFORM_VISUAL_FOOTPRINT * 0.5 - 0.12;
+
+export const LEVEL_TWO_TIER_BOTTOM_Y = {
+  1: LEVEL_TWO_TIER_BASE_Y,
+  2: LEVEL_TWO_TIER_BASE_Y + SURFACE_Y - 0.04,
+  3: LEVEL_TWO_TIER_BASE_Y + SURFACE_Y * 2 + 1.14,
+  4: LEVEL_TWO_TIER_BASE_Y + SURFACE_Y * 3 + 2.44
+};
 
 function tierBottomY(tier) {
-  return LEVEL_TWO_TIER_BASE_Y + (tier - 1) * LEVEL_TWO_TIER_STEP_Y;
+  return LEVEL_TWO_TIER_BOTTOM_Y[tier] ?? LEVEL_TWO_TIER_BASE_Y + (tier - 1) * LEVEL_TWO_TIER_STEP_Y;
 }
+
+export const LEVEL_TWO_ELEPHANT_ECHO_TERRACE_TIER = 3;
+export const LEVEL_TWO_ELEPHANT_ECHO_TOP_Y = tierBottomY(LEVEL_TWO_ELEPHANT_ECHO_TERRACE_TIER) + SURFACE_Y;
+export const LEVEL_TWO_ELEPHANT_ECHO_HEIGHT = LEVEL_TWO_ELEPHANT_ECHO_TOP_Y - SURFACE_Y;
+export const LEVEL_TWO_RED_PLATFORM_MAX_LIFT = LEVEL_TWO_ELEPHANT_ECHO_HEIGHT - LEVEL_TWO_RED_PLATFORM_SURFACE_OFFSET;
+export const LEVEL_TWO_RED_PLATFORM_BASE_Y = SURFACE_Y - LEVEL_TWO_RED_PLATFORM_VISUAL_HEIGHT + LEVEL_TWO_RED_PLATFORM_SURFACE_OFFSET;
 
 function rectTiles(minX, maxX, minY, maxY, tier, zone, asset = "groundTile") {
   const tiles = [];
@@ -49,7 +83,10 @@ export const LEVEL_TWO_POINTS = {
   placeholderLoveLetter: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 9.5, 9.5, TILE),
   blueButton: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 16.85, 16.0, TILE),
   elephantTotem: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 17.0, 3.0, TILE),
-  blueRamp: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 14.1, 3.05, TILE)
+  elephantEcho: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 16.2, 10.0, TILE),
+  blueRamp: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 14.1, 3.05, TILE),
+  redElevatorA: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 15.7, 10.0, TILE),
+  redButtonA: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 16.2, 10.0, TILE)
 };
 
 export const LEVEL_TWO_PATH_TILES = [
@@ -116,6 +153,20 @@ export const LEVEL_TWO_CENTRAL_MOUNTAIN_TILES = LEVEL_TWO_CENTRAL_MOUNTAIN_TIERS
     frogJumpable: false
   }))
 );
+
+export const LEVEL_TWO_CENTRAL_MOUNTAIN_SUPPORT_TILES = LEVEL_TWO_CENTRAL_MOUNTAIN_TIERS
+  .filter((tier) => tier.tier >= 3)
+  .flatMap((tier) =>
+    tier.tiles.map((tile) => ({
+      ...tile,
+      asset: "groundTile",
+      bottomY: tier.bottomY - SURFACE_Y + 0.04,
+      topY: tier.bottomY + 0.04,
+      tierId: `${tier.id}-support`,
+      supportForTierId: tier.id,
+      frogJumpable: false
+    }))
+  );
 
 export const LEVEL_TWO_FROG_SIDE_LEDGE_TILES = rectTiles(3, 5, 7, 9, 1, "frog_side_ledge")
   .map((tile) => ({
@@ -193,6 +244,53 @@ export const LEVEL_TWO_NON_JUMPABLE_HEIGHT_TARGETS = [
   }
 ];
 
+export const LEVEL_TWO_RED_ELEVATOR_TOP_CONNECTOR_TILES = rectTiles(12, 14, 9, 10, 3, "red_elevator_a_top_connector", "pathTile")
+  .map((tile) => ({
+    ...tile,
+    asset: "pathTile",
+    bottomY: tierBottomY(LEVEL_TWO_ELEPHANT_ECHO_TERRACE_TIER),
+    topY: LEVEL_TWO_ELEPHANT_ECHO_TOP_Y,
+    tierId: "tier-3-elephant-route",
+    stationId: "red-elevator-a-top-connector",
+    role: "walkable top connection from Red Elevator A to the tier-3 Elephant route",
+    frogJumpable: false
+  }));
+
+export const LEVEL_TWO_RED_ELEVATOR_TOP_EXIT_ZONE = {
+  id: "red-elevator-a-top-exit-zone",
+  minX: LEVEL_TWO_POINTS.redElevatorA.x - LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_X - 0.35,
+  maxX: LEVEL_TWO_POINTS.redElevatorA.x - LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_X + 1.05,
+  minZ: LEVEL_TWO_POINTS.redElevatorA.z - LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_Z + 0.25,
+  maxZ: LEVEL_TWO_POINTS.redElevatorA.z + LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_Z - 0.25,
+  surfaceId: "tier-3-elephant-route",
+  visual: "logical transition only; no extra dock mesh"
+};
+
+export const LEVEL_TWO_RED_ELEVATOR_SIDE_APPROACH_ZONE = {
+  id: "red-elevator-a-side-approach-zone",
+  minX: LEVEL_TWO_POINTS.redElevatorA.x + LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_X + 0.08,
+  maxX: LEVEL_TWO_POINTS.redElevatorA.x + LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_X + 1.9,
+  minZ: LEVEL_TWO_POINTS.redElevatorA.z - 1.35,
+  maxZ: LEVEL_TWO_POINTS.redElevatorA.z + 1.35,
+  purpose: "human side possession lane beside Red Elevator A"
+};
+
+export const LEVEL_TWO_ELEPHANT_ROUTE_TILES = [
+  ...LEVEL_TWO_RED_ELEVATOR_TOP_CONNECTOR_TILES,
+  ...LEVEL_TWO_CENTRAL_MOUNTAIN_TIERS
+    .find((tier) => tier.id === "tier-3-elephant-traverse-terrace")
+    .tiles.map((tile) => ({
+      ...tile,
+      asset: "groundTile",
+      bottomY: tierBottomY(3),
+      topY: tierBottomY(3) + SURFACE_Y,
+      tierId: "tier-3-elephant-route",
+      frogJumpable: false
+    }))
+];
+
+export const LEVEL_TWO_ELEPHANT_ECHO_TERRACE_TILES = LEVEL_TWO_ELEPHANT_ROUTE_TILES;
+
 export const LEVEL_TWO_BLUE_RAMP = {
   id: "blue-ramp-to-elephant-totem",
   asset: "blueRamp",
@@ -228,12 +326,6 @@ export const LEVEL_TWO_RESERVED_TERRACE_GROUPS = [
     tiles: rectTiles(8, 11, 14, 15, 1, "reserved_elevator_terrace", "pathTile")
   },
   {
-    id: "elephant-echo-start-terrace",
-    role: "future Elephant Echo and start area",
-    tier: 1,
-    tiles: rectTiles(14, 16, 9, 11, 1, "reserved_elephant_terrace", "pathTile")
-  },
-  {
     id: "middle-elephant-platform-station",
     role: "future Elephant platform station",
     tier: 2,
@@ -255,7 +347,7 @@ export const LEVEL_TWO_RESERVED_TERRACE_TILES = LEVEL_TWO_RESERVED_TERRACE_GROUP
     stationId: group.id,
     role: group.role
   }))
-);
+).concat(LEVEL_TWO_RED_ELEVATOR_TOP_CONNECTOR_TILES);
 
 export const LEVEL_TWO_MOUNTAIN_PEAK_Y = LEVEL_TWO_CENTRAL_MOUNTAIN_TIERS[LEVEL_TWO_CENTRAL_MOUNTAIN_TIERS.length - 1].topY;
 export const LEVEL_TWO_PLACEHOLDER_LOVE_LETTER_Y = LEVEL_TWO_MOUNTAIN_PEAK_Y + LEVEL_TWO_LOVE_LETTER_CLEARANCE;
@@ -277,6 +369,52 @@ export const LEVEL_TWO_PROPS = [
   ["forestGrass", 2.4, 5.6, 0.45]
 ];
 
+export const LEVEL_TWO_RED_BUTTONS = [
+  {
+    id: "red-button-a",
+    asset: "buttonBaseRed",
+    topAsset: "buttonTopRed",
+    position: LEVEL_TWO_POINTS.redButtonA,
+    surfaceId: "red-elevator-a",
+    platformId: "red-elevator-a",
+    surfaceTopY: SURFACE_Y + LEVEL_TWO_RED_PLATFORM_MAX_LIFT,
+    radius: LEVEL_TWO_RED_BUTTON_RADIUS,
+    surfaceClearance: LEVEL_TWO_RED_BUTTON_SURFACE_CLEARANCE,
+    requiredActor: "elephant",
+    activationType: "held-weight",
+    linkedPlatformId: "red-elevator-a",
+    visibleFromStart: true
+  }
+];
+
+export const LEVEL_TWO_RED_PLATFORMS = [
+  {
+    id: "red-elevator-a",
+    asset: "redPlatform4x4",
+    position: LEVEL_TWO_POINTS.redElevatorA,
+    baseY: LEVEL_TWO_RED_PLATFORM_BASE_Y,
+    minX: LEVEL_TWO_POINTS.redElevatorA.x - LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_X,
+    maxX: LEVEL_TWO_POINTS.redElevatorA.x + LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_X,
+    minZ: LEVEL_TWO_POINTS.redElevatorA.z - LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_Z,
+    maxZ: LEVEL_TWO_POINTS.redElevatorA.z + LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_Z,
+    maxLift: LEVEL_TWO_RED_PLATFORM_MAX_LIFT,
+    surfaceOffset: LEVEL_TWO_RED_PLATFORM_SURFACE_OFFSET,
+    visualHalfFootprint: LEVEL_TWO_RED_PLATFORM_VISUAL_FOOTPRINT * 0.5,
+    upSpeed: LEVEL_TWO_RED_PLATFORM_UP_SPEED,
+    downSpeed: LEVEL_TWO_RED_PLATFORM_DOWN_SPEED,
+    endpointPauseSeconds: LEVEL_TWO_RED_PLATFORM_ENDPOINT_PAUSE_SECONDS,
+    initialProgress: 1,
+    inactiveProgress: 1,
+    activeProgress: 0,
+    initialDirection: "down",
+    releaseBehavior: "finish-current-direction",
+    movementRule: "cycle-while-held",
+    walkableBy: ["human", "elephant"],
+    linkedButtonId: "red-button-a",
+    visibleFromStart: true
+  }
+];
+
 export const LEVEL_TWO = {
   width: LEVEL_TWO_WIDTH,
   height: LEVEL_TWO_HEIGHT,
@@ -286,12 +424,17 @@ export const LEVEL_TWO = {
   placeholderLoveLetter: LEVEL_TWO_POINTS.placeholderLoveLetter,
   blueButton: LEVEL_TWO_POINTS.blueButton,
   elephantTotem: LEVEL_TWO_POINTS.elephantTotem,
+  elephantEcho: LEVEL_TWO_POINTS.elephantEcho,
   mapShape: "square",
   mountain: {
     layerCount: LEVEL_TWO_MOUNTAIN_LAYER_COUNT,
     peakY: LEVEL_TWO_MOUNTAIN_PEAK_Y
   },
+  centralMountainSupportTiles: LEVEL_TWO_CENTRAL_MOUNTAIN_SUPPORT_TILES,
   frogJumpableLedges: LEVEL_TWO_FROG_JUMPABLE_LEDGES,
   elephantTotemHill: LEVEL_TWO_ELEPHANT_TOTEM_HILL,
-  blueRamp: LEVEL_TWO_BLUE_RAMP
+  elephantEchoTerraceTiles: LEVEL_TWO_ELEPHANT_ECHO_TERRACE_TILES,
+  blueRamp: LEVEL_TWO_BLUE_RAMP,
+  redButtons: LEVEL_TWO_RED_BUTTONS,
+  redPlatforms: LEVEL_TWO_RED_PLATFORMS
 };
