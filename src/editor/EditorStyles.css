@@ -22,6 +22,12 @@ textarea {
   font: inherit;
 }
 
+button:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .editor-app {
   display: grid;
   grid-template-rows: 64px minmax(0, 1fr);
@@ -222,6 +228,22 @@ select {
   font-weight: 800;
 }
 
+.editor-object-row.is-noted {
+  border-left: 3px solid #8ec7df;
+}
+
+.editor-object-row.is-delete {
+  border-color: #e9806d;
+  background: #322520;
+}
+
+.editor-object-row.is-delete .object-name::after {
+  content: " delete";
+  color: #f0a08f;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
 .object-name {
   min-width: 0;
   overflow: hidden;
@@ -277,7 +299,7 @@ select {
 }
 
 .editor-camera-toolbar {
-  grid-template-columns: 44px 44px minmax(0, 1fr);
+  grid-template-columns: 44px 44px minmax(58px, 0.7fr) minmax(58px, 0.7fr) minmax(0, 1fr);
 }
 
 .editor-subheading {
@@ -305,6 +327,23 @@ select {
   background: #d7c77d;
   color: #121816;
   font-weight: 800;
+}
+
+.editor-button.is-active#markDelete {
+  border-color: #f0a08f;
+  background: #e9806d;
+  color: #1f1110;
+}
+
+.editor-state-toolbar,
+.editor-export-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.editor-export-actions {
+  min-width: 188px;
 }
 
 .editor-count-wide {
@@ -339,6 +378,48 @@ select {
   background: #202924;
   font-size: 0.86rem;
   font-weight: 760;
+}
+
+.object-note {
+  width: 100%;
+  min-height: 86px;
+  resize: vertical;
+  border: 1px solid rgba(216, 226, 214, 0.14);
+  border-radius: 7px;
+  background: #101513;
+  color: #e9efdd;
+  padding: 9px;
+  font-size: 0.78rem;
+  line-height: 1.42;
+}
+
+.object-note:focus-visible {
+  border-color: #d7c77d;
+  outline: none;
+}
+
+.note-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.note-chip {
+  min-height: 28px;
+  border: 1px solid rgba(142, 199, 223, 0.35);
+  border-radius: 999px;
+  background: rgba(142, 199, 223, 0.12);
+  color: #e6f6fb;
+  padding: 0 8px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.note-chip:hover,
+.note-chip:focus-visible {
+  border-color: #8ec7df;
+  outline: none;
 }
 
 .transform-readout {

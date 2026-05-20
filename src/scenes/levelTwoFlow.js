@@ -1,4 +1,5 @@
 import { SCENES } from "../config/scenes.js";
+import { LEVEL_TWO_LOVE_LETTER_ID } from "../content/loveLetters.js";
 import { clearParticles } from "../systems/particleSystem.js";
 import {
   createActorState,
@@ -79,7 +80,7 @@ export function startLevelTwoScene(context, options = {}) {
   };
   state.loveLetterAttention = createLoveLetterAttentionState();
   state.loveLetterReveal = { active: false, elapsed: 0 };
-  state.loveLetterMessage = createLoveLetterMessageState();
+  state.loveLetterMessage = createLoveLetterMessageState(LEVEL_TWO_LOVE_LETTER_ID);
   resetFrogAiForScene();
   clearParticles(particleContext);
   clearSpeechQueue();

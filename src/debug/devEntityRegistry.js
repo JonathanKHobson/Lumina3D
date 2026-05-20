@@ -24,6 +24,44 @@ const ACTOR_SOURCE_HINTS = {
   elephant_totem: "src/scenes/levelTwoScene.js"
 };
 
+const LEVEL_TWO_TERRAIN_ASSETS = new Set([
+  "central-mountain",
+  "central-mountain-support",
+  "frog-side-ledge",
+  "blue-button-ledge",
+  "elephant-totem-hill",
+  "red-elevator-a-top-connector",
+  "human-love-letter-route"
+]);
+
+const DISPLAY_NAMES_BY_CATEGORY = {
+  character: "Human",
+  frog: "Frog",
+  elephant: "Elephant",
+  frog_echo: "Frog Echo",
+  frog_totem: "Frog Totem",
+  elephant_echo: "Elephant Echo",
+  elephant_totem: "Elephant Totem"
+};
+
+const DISPLAY_NAMES_BY_ASSET = {
+  "blue-button": "Blue Button",
+  "blue-ramp": "Blue Ramp",
+  "red-button-a": "Red Button A",
+  "red-button-b": "Red Button B",
+  "red-elevator-a": "Red Elevator A",
+  "red-elevator-b": "Red Elevator B",
+  "placeholder-love-letter": "Love Letter",
+  "elephant-echo": "Elephant Echo",
+  "elephant-echo-ring": "Elephant Echo Ring",
+  "elephant-cubeling-totem": "Elephant Totem",
+  "elephant-cubeling-totem-glow": "Elephant Totem Glow",
+  "partial-bridge": "Partial Bridge",
+  "complete-bridge": "Complete Bridge",
+  "generated-door-note": "Door Note",
+  "building_home_A_blue": "Home"
+};
+
 function round(value, digits = 3) {
   if (!Number.isFinite(value)) return 0;
   return Number(value.toFixed(digits));
@@ -35,6 +73,21 @@ function slug(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "") || "object";
+}
+
+function titleCaseToken(value) {
+  if (!value) return "";
+  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}
+
+function humanizeKey(value) {
+  return String(value || "")
+    .replace(/^[a-z]+[_-][a-z]+[_-]/i, "")
+    .replace(/[_-]+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) => token.length === 1 ? token.toUpperCase() : titleCaseToken(token))
+    .join(" ");
 }
 
 function scenePrefixFor(sceneId) {
@@ -128,7 +181,11 @@ function shouldSkipObject(object) {
     object.userData.homeTile ||
     object.userData.levelOneTile ||
     object.userData.levelTwoTile ||
-    object.userData.levelOneWater
+    object.userData.levelOneWater ||
+    object.userData.levelTwoTier !== undefined ||
+    object.userData.levelTwoTileX !== undefined ||
+    LEVEL_TWO_TERRAIN_ASSETS.has(object.userData.levelTwoAsset) ||
+    String(object.userData.levelTwoAsset || "").startsWith("reserved-")
   );
 }
 
@@ -197,6 +254,19 @@ function sourceHintFor(sceneId, object, category) {
     "src/main.js";
 }
 
+function displayNameFor(object, name, category, assetKey) {
+  if (object.userData.devEditorDisplayName) return object.userData.devEditorDisplayName;
+  if (DISPLAY_NAMES_BY_CATEGORY[category]) return DISPLAY_NAMES_BY_CATEGORY[category];
+  if (DISPLAY_NAMES_BY_ASSET[assetKey]) return DISPLAY_NAMES_BY_ASSET[assetKey];
+  if (/tree/i.test(category) || /tree/i.test(assetKey)) return "Tree";
+  if (/bush/i.test(category) || /bush/i.test(assetKey)) return "Bush";
+  if (/rock/i.test(category) || /rock/i.test(assetKey)) return "Rock";
+  if (/grass/i.test(category) || /grass/i.test(assetKey)) return "Grass";
+  const candidate = String(name || "").trim();
+  if (candidate && candidate.length <= 32 && !candidate.includes(".")) return candidate;
+  return humanizeKey(assetKey || candidate || category || "Object") || "Object";
+}
+
 function colliderCenterX(collider) {
   return Array.isArray(collider.center) ? collider.center[0] : collider.x;
 }
@@ -250,6 +320,7 @@ function makeEntity({ sceneId, object, category, fallbackName, asset, collisionE
   const resolvedAsset = asset || inferAsset(object, scenePrefixFor(sceneId));
   const name = object.userData.devEditorName || fallbackName || object.name || id;
   const resolvedCategory = category || inferCategory(object, resolvedAsset.key);
+  const displayName = displayNameFor(object, name, resolvedCategory, resolvedAsset.key);
   const collision = collisionExpected === undefined
     ? inferCollisionExpected(object, resolvedCategory, resolvedAsset.key)
     : Boolean(collisionExpected);
@@ -258,6 +329,7 @@ function makeEntity({ sceneId, object, category, fallbackName, asset, collisionE
     id,
     sceneId,
     name,
+    displayName,
     type: inferType(object, resolvedCategory),
     category: resolvedCategory,
     asset: resolvedAsset,

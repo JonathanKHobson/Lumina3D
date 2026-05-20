@@ -1,6 +1,6 @@
 # Lumina3D Project Map
 
-Last updated: 2026-05-19
+Last updated: 2026-05-20
 
 ## Purpose
 
@@ -40,7 +40,7 @@ Use the current structure this way:
 | `src/state/` | State factories and local persistence | Rendering or input handling |
 | `src/ui/` | HUD refs, labels, modals, overlays, speech placement | Game physics or level layouts |
 | `src/debug/` | Dev editor, AI context capture, dev entity registry, debug shortcuts, render-text/test hooks, visible asset summaries | Player-facing gameplay logic |
-| `src/editor/` | Separate browser level-editor app, editor adapters, transform patch export | Gameplay orchestration or direct source-file writes |
+| `src/editor/` | Separate browser level-editor app, editor adapters, transform patch/state export, editor-only metadata | Gameplay orchestration or direct source-file writes |
 | `scripts/` | Deterministic CLI checks and level inspection tooling | Runtime gameplay code |
 | `docs/game-design-handbook/` | Design intent, mechanic backlog, level plans, smoke-test notes | Source-of-truth runtime logic |
 
@@ -153,6 +153,22 @@ npm run tools:list-levels -- --pretty
 npm run tools:run-scene-smoke -- level_two --pretty
 ```
 
+Runtime Dev Editor or AI-context debug change:
+
+```bash
+npm run build
+npm run tools:list-levels -- --pretty
+npm run tools:run-scene-smoke -- level_two --pretty
+```
+
+- In local dev/test runs, `window.__luminaDevEditor` exposes browser-safe
+  context helpers for `lumina3d.dev.aiContext.v1`,
+  `lumina3d.dev.selectionDelta.v1`, and `lumina3d.dev.scenePatch.v1`.
+- The F2 Dev Editor collider toggle should show actual runtime collider
+  proxies separately from the selected visual bounds helper.
+- While the F2 Dev Editor is open, debug-camera input owns `W/A/S/D`, `Q/E`,
+  `R/F`, and zoom so gameplay actors do not move during inspection.
+
 Level Two layout or asset change:
 
 ```bash
@@ -180,11 +196,15 @@ npm run tools:list-level-objects -- level_two --pretty
 npm run tools:run-scene-smoke -- level_two --pretty
 npm run tools:validate-missing-colliders -- level_two --pretty
 npm run tools:validate-float-colliders -- level_two --pretty
+npm run tools:run-editor-smoke -- --pretty
 ```
 
 - Open `/editor/` with `npm run editor` or a normal Vite dev server.
 - Confirm `window.render_editor_to_text()` reports the selected object, camera state, and dirty patch summary.
-- Confirm editor camera pan, yaw, and zoom work before relying on a placement screenshot.
+- Confirm editor transform patches use `lumina3d.editor.transformPatch.v1`.
+- Confirm editor state exports use `lumina3d.editor.stateExport.v1`.
+- Confirm editor camera pan, yaw, pitch, and zoom work before relying on a placement screenshot.
+- Confirm object notes, delete marks, reset selected, and play-in-game handoff still work.
 - Inspect an editor screenshot before calling the tool usable.
 
 ## Current Non-Goals

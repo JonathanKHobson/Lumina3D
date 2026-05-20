@@ -11,7 +11,12 @@ import {
 } from "./devEntityRegistry.js";
 
 const DEG_15 = Math.PI / 12;
-const COLLISION_COLORS = { default: 0x34a4c4, selected: 0x55ff99 };
+const AI_CONTEXT_SCHEMA = "lumina3d.dev.aiContext.v1";
+const SCENE_PATCH_SCHEMA = "lumina3d.dev.scenePatch.v1";
+const SELECTION_DELTA_SCHEMA = "lumina3d.dev.selectionDelta.v1";
+const SELECTION_BOUND_COLOR = 0xffd166;
+const COLLISION_COLORS = { default: 0x26d6ff, selected: 0xff4f8b, inactive: 0x7d8991 };
+const COLLIDER_MIN_VISIBLE_SIZE_Y = 0.1;
 const SCALE_SNAP = 0.05;
 const NEARBY_ENTITY_LIMIT = 10;
 const NEARBY_ENTITY_RADIUS = 8;
@@ -25,6 +30,11 @@ let selectionHelper = null;
 let transformControls = null;
 let transformHelper = null;
 let selectionBaseline = null;
+let rowsCache = [];
+let rowsCacheSceneId = "";
+let rowsCacheVersion = 0;
+let objectListSignature = "";
+let colliderSyncSignature = "";
 
 // Set by initDevEditor - holds all external references.
 let _state;
@@ -37,6 +47,7 @@ let _getSceneColliderDebugEntries;
 let _getRuntimeSnapshot;
 let _sceneNav;
 let _onUpdateHud;
+let _onOpenChange;
 let _onShowPrompt;
 
 function normalizeAngle(a) {
@@ -60,12 +71,28 @@ function applyGridSnap(value, step) {
   return round(Math.round(value / step) * step, 4);
 }
 
-function collectEditableObjects() {
-  return collectDevEntities({
+function invalidateEditableRows() {
+  rowsCache = [];
+  rowsCacheSceneId = "";
+  rowsCacheVersion += 1;
+  objectListSignature = "";
+  colliderSyncSignature = "";
+}
+
+function collectEditableObjects({ force = false } = {}) {
+  const sceneId = _state?.scene?.id || "";
+  if (!force && rowsCacheSceneId === sceneId && rowsCache.length > 0) {
+    _state.devEditor.rows = rowsCache;
+    return rowsCache;
+  }
+  rowsCache = collectDevEntities({
     state: _state,
     getSceneMeshes: _getSceneMeshes,
     getSceneColliderDebugEntries: _getSceneColliderDebugEntries
   });
+  rowsCacheSceneId = sceneId;
+  _state.devEditor.rows = rowsCache;
+  return rowsCache;
 }
 
 function currentTransformMode() {
@@ -121,6 +148,92 @@ function syncActorStateFromMesh(mesh) {
   _state[actorKey].x = mesh.position.x;
   _state[actorKey].z = mesh.position.z;
   _state[actorKey].facing = directionName({ x: Math.sin(mesh.rotation.y), z: Math.cos(mesh.rotation.y) });
+}
+
+function colliderKey(collider, index) {
+  return String(collider?.id || collider?.label || `runtime-collider-${index}`);
+}
+
+function colliderCenter(collider) {
+  const center = Array.isArray(collider?.center)
+    ? collider.center
+    : [collider?.x, collider?.y || 0, collider?.z];
+  return {
+    x: Number(center[0]),
+    y: Number(center[1]),
+    z: Number(center[2])
+  };
+}
+
+function colliderSize(collider) {
+  const halfExtents = Array.isArray(collider?.halfExtents)
+    ? collider.halfExtents
+    : [collider?.halfX, collider?.halfY || 0, collider?.halfZ];
+  const x = Math.max(0.02, Math.abs(Number(halfExtents[0]) || 0) * 2);
+  const y = Math.max(COLLIDER_MIN_VISIBLE_SIZE_Y, Math.abs(Number(halfExtents[1]) || 0) * 2);
+  const z = Math.max(0.02, Math.abs(Number(halfExtents[2]) || 0) * 2);
+  return { x, y, z };
+}
+
+function colliderSignature(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function selectedColliderSignatures(selected) {
+  const signatures = new Set();
+  (selected?.collision?.colliders || []).forEach((collider) => {
+    const id = colliderSignature(collider.id);
+    const label = colliderSignature(collider.label);
+    if (id) signatures.add(id);
+    if (label) signatures.add(label);
+  });
+  return signatures;
+}
+
+function colliderIsSelected(collider, signatures) {
+  if (!signatures.size) return false;
+  return signatures.has(colliderSignature(collider?.id)) || signatures.has(colliderSignature(collider?.label));
+}
+
+function createActualColliderHelper(key) {
+  const box = new THREE.BoxGeometry(1, 1, 1);
+  const geometry = new THREE.EdgesGeometry(box);
+  box.dispose();
+  const material = new THREE.LineBasicMaterial({
+    color: COLLISION_COLORS.default,
+    transparent: true,
+    opacity: 0.78,
+    depthTest: false,
+    depthWrite: false
+  });
+  const helper = new THREE.LineSegments(geometry, material);
+  helper.name = `Dev Actual Collider: ${key}`;
+  helper.renderOrder = 1000;
+  markDevHelper(helper);
+  return helper;
+}
+
+function updateActualColliderHelper(helper, collider, selected) {
+  const center = colliderCenter(collider);
+  const size = colliderSize(collider);
+  helper.position.set(center.x, center.y, center.z);
+  helper.scale.set(size.x, size.y, size.z);
+  if (Array.isArray(collider?.rotationEuler)) {
+    helper.rotation.set(
+      Number(collider.rotationEuler[0]) || 0,
+      Number(collider.rotationEuler[1]) || 0,
+      Number(collider.rotationEuler[2]) || 0
+    );
+  } else {
+    helper.rotation.set(0, 0, 0);
+  }
+  helper.visible = true;
+  helper.userData.colliderId = collider?.id || "";
+  helper.userData.colliderLabel = collider?.label || "";
+  helper.userData.colliderSource = collider?.source || "";
+  helper.userData.type = "actualCollider";
+  helper.material.color.setHex(selected ? COLLISION_COLORS.selected : collider?.active === false ? COLLISION_COLORS.inactive : COLLISION_COLORS.default);
+  helper.material.opacity = selected ? 0.95 : collider?.active === false ? 0.38 : 0.72;
 }
 
 function markDevHelper(object) {
@@ -184,7 +297,7 @@ function detachTransformControls() {
 function handleTransformObjectChange() {
   if (!selectedMesh) return;
   syncActorStateFromMesh(selectedMesh);
-  _state.devEditor.rows = collectEditableObjects();
+  _state.devEditor.rows = collectEditableObjects({ force: true });
   syncDevEditorSelectionToScene();
   syncDevEditorColliderHelpers();
   updateDevEditorPanel();
@@ -201,6 +314,7 @@ export function initDevEditor({
   getRuntimeSnapshot,
   sceneNav,
   onUpdateHud,
+  onOpenChange,
   onShowPrompt
 }) {
   _state = state;
@@ -213,6 +327,7 @@ export function initDevEditor({
   _getRuntimeSnapshot = getRuntimeSnapshot;
   _sceneNav = sceneNav;
   _onUpdateHud = onUpdateHud;
+  _onOpenChange = onOpenChange || (() => {});
   _onShowPrompt = onShowPrompt;
   _state.devEditor.transformMode = _state.devEditor.transformMode || "translate";
 
@@ -221,9 +336,11 @@ export function initDevEditor({
   hud.devEditorSnapToggle?.addEventListener("click", toggleDevEditorSnap);
   hud.devEditorColliderToggle?.addEventListener("click", toggleDevEditorColliders);
   hud.devEditorExportLayout?.addEventListener("click", handleExportClick);
+  hud.devEditorCopySelectionDelta?.addEventListener("click", handleCopySelectionDelta);
   hud.devEditorCopyAiContext?.addEventListener("click", handleCopyAiContext);
   hud.devEditorExportPatchDraft?.addEventListener("click", handleExportPatchDraft);
   hud.devEditorPanel?.addEventListener("click", handlePanelClick);
+  installDevEditorTestHooks();
 }
 
 export function toggleDevEditorPanel() {
@@ -244,6 +361,7 @@ function setDevEditorOpen(open) {
     _state.devEditor.selectedObjectId = "";
     selectedMesh = null;
     selectionBaseline = null;
+    invalidateEditableRows();
     if (selectionHelper) {
       _scene.remove(selectionHelper);
       selectionHelper.geometry?.dispose();
@@ -253,10 +371,11 @@ function setDevEditorOpen(open) {
     detachTransformControls();
     clearColliderHelpers();
   } else {
-    _state.devEditor.rows = collectEditableObjects();
+    _state.devEditor.rows = collectEditableObjects({ force: true });
     syncColliderHelpers();
     attachTransformControls(selectedMesh);
   }
+  _onOpenChange(_state.devEditor.open);
   updateDevEditorPanel();
   _onUpdateHud();
 }
@@ -268,6 +387,7 @@ function clearColliderHelpers() {
     helper.material?.dispose();
   });
   colliderHelpers.clear();
+  colliderSyncSignature = "";
 }
 
 function toggleDevEditorSnap() {
@@ -283,12 +403,13 @@ function toggleDevEditorColliders() {
 }
 
 function handleExportClick() {
-  const rows = collectEditableObjects();
+  const rows = collectEditableObjects({ force: true });
   const snapshot = {
     levelId: _state.scene.id,
     objects: rows.map((row) => ({
       objectId: row.id,
       objectName: row.name,
+      displayName: row.displayName || row.name,
       category: row.category,
       asset: row.asset?.key || "",
       position: {
@@ -314,7 +435,13 @@ function cameraSnapshot() {
   return {
     position: [_camera.position.x, _camera.position.y, _camera.position.z].map((value) => round(value)),
     quaternion: [_camera.quaternion.x, _camera.quaternion.y, _camera.quaternion.z, _camera.quaternion.w].map((value) => round(value, 4)),
-    zoom: round(_camera.zoom)
+    zoom: round(_camera.zoom),
+    devEditor: _state.devEditor.debugCamera ? {
+      active: Boolean(_state.devEditor.debugCamera.active),
+      target: _state.devEditor.debugCamera.target || null,
+      yaw: round(_state.devEditor.debugCamera.yaw),
+      pitch: round(_state.devEditor.debugCamera.pitch)
+    } : null
   };
 }
 
@@ -348,11 +475,11 @@ function getNearbyEntities(rows, selected) {
 }
 
 function buildAiContextPayload() {
-  const rows = collectEditableObjects();
+  const rows = collectEditableObjects({ force: true });
   const selected = findDevEntityById(rows, _state.devEditor.selectedObjectId);
   const runtimeSnapshot = typeof _getRuntimeSnapshot === "function" ? _getRuntimeSnapshot() : null;
   return {
-    schema: "lumina.dev.aiContext.v1",
+    schema: AI_CONTEXT_SCHEMA,
     capturedAt: new Date().toISOString(),
     project: {
       name: "Lumina3D",
@@ -411,11 +538,72 @@ function valuesDiffer(a, b) {
   return JSON.stringify(a) !== JSON.stringify(b);
 }
 
+function deltaArray(oldValue = [], newValue = [], digits = 3) {
+  return newValue.map((value, index) => round(Number(value) - Number(oldValue[index] || 0), digits));
+}
+
+function localTransformForDelta(entity) {
+  return {
+    position: entity?.transform?.local?.position || [0, 0, 0],
+    rotationEuler: entity?.transform?.local?.rotationEuler || [0, 0, 0],
+    rotationY: entity?.transform?.local?.rotationY || 0,
+    scale: entity?.transform?.local?.scale || [1, 1, 1]
+  };
+}
+
+function baselineForSelected(selected) {
+  if (!selected) return null;
+  if (selectionBaseline?.entityId === selected.id) return selectionBaseline.local;
+  return localTransformForDelta(selected);
+}
+
+function buildSelectionDeltaPayload() {
+  const rows = collectEditableObjects({ force: true });
+  const selected = findDevEntityById(rows, _state.devEditor.selectedObjectId);
+  const original = baselineForSelected(selected);
+  const current = selected ? localTransformForDelta(selected) : null;
+  const changed = Boolean(selected && original && current && (
+    valuesDiffer(original.position, current.position) ||
+    valuesDiffer(original.rotationEuler, current.rotationEuler) ||
+    valuesDiffer(original.scale, current.scale)
+  ));
+
+  return {
+    schema: SELECTION_DELTA_SCHEMA,
+    capturedAt: new Date().toISOString(),
+    sceneId: _state.scene.id,
+    selectedEntityId: selected?.id || "",
+    displayName: selected?.displayName || selected?.name || "",
+    name: selected?.name || "",
+    category: selected?.category || "",
+    asset: selected?.asset || null,
+    sourceFileHint: selected?.sourceFileHint || selected?.notes?.sourceFileHint || "",
+    changed,
+    original,
+    current,
+    delta: selected && original && current ? {
+      position: deltaArray(original.position, current.position),
+      rotationEuler: deltaArray(original.rotationEuler, current.rotationEuler),
+      rotationY: round((current.rotationY || 0) - (original.rotationY || 0)),
+      scale: deltaArray(original.scale, current.scale)
+    } : null,
+    browserMayWriteSourceFiles: false
+  };
+}
+
+function handleCopySelectionDelta() {
+  writeClipboardOrConsole(
+    buildSelectionDeltaPayload(),
+    "Selection delta copied to clipboard.",
+    "Copy blocked. Selection delta logged in console."
+  );
+}
+
 function buildPatchChanges(selected) {
   if (!selected) return [];
   const sourceFileHint = selected.sourceFileHint || selected.notes?.sourceFileHint || "";
-  const oldLocal = selectionBaseline?.entityId === selected.id ? selectionBaseline.local : selected.transform.local;
-  const newLocal = selected.transform.local;
+  const oldLocal = baselineForSelected(selected);
+  const newLocal = localTransformForDelta(selected);
   const fields = [
     ["transform.local.position", oldLocal.position, newLocal.position],
     ["transform.local.rotationEuler", oldLocal.rotationEuler, newLocal.rotationEuler],
@@ -433,10 +621,10 @@ function buildPatchChanges(selected) {
 }
 
 function buildPatchDraftPayload() {
-  const rows = collectEditableObjects();
+  const rows = collectEditableObjects({ force: true });
   const selected = findDevEntityById(rows, _state.devEditor.selectedObjectId);
   return {
-    schema: "lumina.dev.scenePatch.v1",
+    schema: SCENE_PATCH_SCHEMA,
     patchId: `scene-patch-${Date.now().toString(36)}`,
     createdAt: new Date().toISOString(),
     sceneId: _state.scene.id,
@@ -467,11 +655,25 @@ function handleExportPatchDraft() {
 
 function selectById(objectId) {
   _state.devEditor.selectedObjectId = objectId || "";
-  _state.devEditor.rows = collectEditableObjects();
+  _state.devEditor.rows = collectEditableObjects({ force: true });
   const selected = getSelectedRow();
   selectionBaseline = transformSnapshot(selected);
   syncDevEditorSelectionToScene();
   updateDevEditorPanel();
+}
+
+function installDevEditorTestHooks() {
+  if (typeof window === "undefined" || !import.meta.env.DEV) return;
+  window.__luminaDevEditor = {
+    buildAiContextPayload,
+    buildPatchDraftPayload,
+    buildSelectionDeltaPayload,
+    listEntities: () => serializableEntities(collectEditableObjects({ force: true })),
+    selectEntityById: (objectId) => {
+      selectById(objectId);
+      return normalizeDevEntity(getSelectedRow());
+    }
+  };
 }
 
 function handlePanelClick(event) {
@@ -486,6 +688,11 @@ function handlePanelClick(event) {
   if (!button) return;
   if (button.dataset.devScene) {
     const targetScene = button.dataset.devScene;
+    invalidateEditableRows();
+    _state.devEditor.selectedObjectId = "";
+    selectedMesh = null;
+    selectionBaseline = null;
+    attachTransformControls(null);
     if (targetScene === SCENES.TUTORIAL) _sceneNav.tutorial();
     if (targetScene === SCENES.HOME) _sceneNav.home();
     if (targetScene === SCENES.LEVEL_ONE) _sceneNav.levelOne();
@@ -528,6 +735,33 @@ function handlePanelClick(event) {
   }
 }
 
+function formatVec(values, digits = 2) {
+  return `(${(values || []).map((value) => Number(value || 0).toFixed(digits)).join(", ")})`;
+}
+
+function selectionDeltaSummary(selected) {
+  const original = baselineForSelected(selected);
+  const current = selected ? localTransformForDelta(selected) : null;
+  if (!selected || !original || !current) return "";
+  const positionDelta = deltaArray(original.position, current.position, 3);
+  const rotationDelta = deltaArray(original.rotationEuler, current.rotationEuler, 3);
+  const scaleDelta = deltaArray(original.scale, current.scale, 3);
+  const changed = valuesDiffer(original.position, current.position) ||
+    valuesDiffer(original.rotationEuler, current.rotationEuler) ||
+    valuesDiffer(original.scale, current.scale);
+  if (!changed) return "Delta: none yet";
+  return `Start ${formatVec(original.position)} -> Now ${formatVec(current.position)} | dPos ${formatVec(positionDelta, 3)} | dRot ${formatVec(rotationDelta, 3)} | dScale ${formatVec(scaleDelta, 3)}`;
+}
+
+function objectListCacheSignature(rows) {
+  return [
+    _state.scene.id,
+    _state.devEditor.selectedObjectId,
+    rowsCacheVersion,
+    rows.map((row) => `${row.id}:${row.displayName || row.name}:${row.category}`).join("|")
+  ].join("::");
+}
+
 export function updateDevEditorPanel() {
   if (!_hud || !_hud.devEditorPanel || !_hud.devEditorToggle) return;
   const open = _state.devEditor.open;
@@ -556,6 +790,7 @@ export function updateDevEditorPanel() {
     _hud.devEditorColliderToggle.textContent = `Colliders: ${_state.devEditor.showColliders ? "On" : "Off"}`;
     _hud.devEditorColliderToggle.classList.toggle("is-on", _state.devEditor.showColliders);
   }
+  if (!open) return;
   if (_hud.devEditorSelectionSummary) {
     const currentRows = collectEditableObjects();
     const selected = currentRows.find((r) => r.id === _state.devEditor.selectedObjectId) || null;
@@ -571,14 +806,18 @@ export function updateDevEditorPanel() {
       selectedMesh = selected.mesh;
       attachTransformControls(selectedMesh);
       _hud.devEditorSelectionSummary.textContent =
-        `${selected.name} (${selected.id}) | ${selected.category} | ${selected.asset?.key || "asset-missing"} | ` +
+        `${selected.displayName || selected.name} (${selected.id}) | ${selected.category} | ${selected.asset?.key || "asset-missing"} | ` +
         `x:${selected.transform.local.position[0].toFixed(2)} y:${selected.transform.local.position[1].toFixed(2)} z:${selected.transform.local.position[2].toFixed(2)} | ` +
-        `rotY:${selected.transform.local.rotationY.toFixed(2)}rad | collision:${selected.collision.expected ? "yes" : "no"}`;
+        `rotY:${selected.transform.local.rotationY.toFixed(2)}rad | collision:${selected.collision.expected ? "yes" : "no"} | ` +
+        selectionDeltaSummary(selected);
     } else {
       _hud.devEditorSelectionSummary.textContent = "No object selected.";
     }
 
     if (_hud.devEditorObjectList) {
+      const signature = objectListCacheSignature(currentRows);
+      if (signature === objectListSignature) return;
+      objectListSignature = signature;
       _hud.devEditorObjectList.innerHTML = "";
       currentRows.forEach((row) => {
         const item = document.createElement("button");
@@ -586,13 +825,11 @@ export function updateDevEditorPanel() {
         item.className = `dev-editor-row${row.id === _state.devEditor.selectedObjectId ? " is-selected" : ""}`;
         item.dataset.devObjectId = row.id;
         item.innerHTML = `
-          <span class="dev-editor-row-name">${row.name}</span>
+          <span class="dev-editor-row-name">${row.displayName || row.name}</span>
           <span class="dev-editor-row-meta">
             <strong>ID:</strong> ${row.id}<br />
             <strong>Type:</strong> ${row.category}<br />
             <strong>Asset:</strong> ${row.asset?.key || "n/a"}<br />
-            <strong>Pos:</strong> (${row.transform.local.position[0].toFixed(2)}, ${row.transform.local.position[1].toFixed(2)}, ${row.transform.local.position[2].toFixed(2)}) |
-            <strong>rotY:</strong> ${row.transform.local.rotationY.toFixed(2)}rad |
             <strong>Collision:</strong> ${row.collision.expected ? "yes" : "no"}
           </span>
         `;
@@ -604,8 +841,8 @@ export function updateDevEditorPanel() {
 
 export function syncDevEditorSelectionToScene() {
   if (!_state.devEditor.open) return;
-  if (_state.devEditor.rows.length === 0) _state.devEditor.rows = collectEditableObjects();
-  const selected = _state.devEditor.rows.find((r) => r.id === _state.devEditor.selectedObjectId) || null;
+  const rows = collectEditableObjects();
+  const selected = rows.find((r) => r.id === _state.devEditor.selectedObjectId) || null;
 
   if (!selected) {
     selectedMesh = null;
@@ -619,13 +856,13 @@ export function syncDevEditorSelectionToScene() {
   attachTransformControls(selectedMesh);
   if (selectionHelper?.parent !== _scene) {
     if (selectionHelper) _scene.remove(selectionHelper);
-    selectionHelper = new THREE.BoxHelper(selectedMesh, COLLISION_COLORS.selected);
+    selectionHelper = new THREE.BoxHelper(selectedMesh, SELECTION_BOUND_COLOR);
     selectionHelper.userData = { devEditorHelper: true, type: "selection", objectId: selected.id };
     markDevHelper(selectionHelper);
     _scene.add(selectionHelper);
   } else {
     selectionHelper.update();
-    selectionHelper.material.color.setHex(COLLISION_COLORS.selected);
+    selectionHelper.material.color.setHex(SELECTION_BOUND_COLOR);
   }
   if (selectionHelper) selectionHelper.setFromObject(selectedMesh);
 }
@@ -637,31 +874,50 @@ export function syncDevEditorColliderHelpers() {
     return;
   }
 
-  if (_state.devEditor.rows.length === 0) _state.devEditor.rows = collectEditableObjects();
+  _state.devEditor.rows = collectEditableObjects();
+  const selected = findDevEntityById(_state.devEditor.rows, _state.devEditor.selectedObjectId);
+  const selectedSignatures = selectedColliderSignatures(selected);
+  const entries = typeof _getSceneColliderDebugEntries === "function" ? _getSceneColliderDebugEntries() : [];
+  const nextSignature = [
+    _state.scene.id,
+    _state.devEditor.selectedObjectId,
+    [...selectedSignatures].sort().join(","),
+    entries.map((entry, index) => {
+      const key = colliderKey(entry, index);
+      const center = colliderCenter(entry);
+      const size = colliderSize(entry);
+      return `${key}:${entry?.active !== false}:${center.x},${center.y},${center.z}:${size.x},${size.y},${size.z}`;
+    }).join("|")
+  ].join("::");
+  if (nextSignature === colliderSyncSignature && colliderHelpers.size > 0) {
+    syncDevEditorSelectionToScene();
+    return;
+  }
+  colliderSyncSignature = nextSignature;
   const want = new Set();
-  _state.devEditor.rows.forEach((row) => {
-    if (!row.mesh || !row.collision.expected) return;
-    want.add(row.id);
-    const existing = colliderHelpers.get(row.mesh);
-    const helper = existing || new THREE.BoxHelper(row.mesh, COLLISION_COLORS.default);
-    helper.userData = { devEditorHelper: true, type: "collider", objectId: row.id };
-    markDevHelper(helper);
-    helper.material.color.setHex(row.mesh === selectedMesh ? COLLISION_COLORS.selected : COLLISION_COLORS.default);
-    helper.setFromObject(row.mesh);
-    helper.visible = true;
-    if (!existing) { colliderHelpers.set(row.mesh, helper); _scene.add(helper); }
+  entries.forEach((entry, index) => {
+    const center = colliderCenter(entry);
+    const size = colliderSize(entry);
+    if (![center.x, center.y, center.z, size.x, size.y, size.z].every(Number.isFinite)) return;
+    const key = colliderKey(entry, index);
+    want.add(key);
+    let helper = colliderHelpers.get(key);
+    if (!helper) {
+      helper = createActualColliderHelper(key);
+      colliderHelpers.set(key, helper);
+      _scene.add(helper);
+    }
+    updateActualColliderHelper(helper, entry, colliderIsSelected(entry, selectedSignatures));
   });
 
-  colliderHelpers.forEach((helper, mesh) => {
-    const row = _state.devEditor.rows.find((c) => c.mesh === mesh);
-    if (!row || !row.collision.expected || !want.has(row.id)) {
+  colliderHelpers.forEach((helper, key) => {
+    if (!want.has(key)) {
       _scene.remove(helper);
       helper.geometry?.dispose();
       helper.material?.dispose();
-      colliderHelpers.delete(mesh);
+      colliderHelpers.delete(key);
       return;
     }
-    helper.material.color.setHex(row.mesh === selectedMesh ? COLLISION_COLORS.selected : COLLISION_COLORS.default);
   });
 
   syncDevEditorSelectionToScene();
@@ -677,7 +933,7 @@ function moveSelected(axis, delta) {
   row.mesh.position[axis] += delta;
   if (_state.devEditor.snapToGrid) row.mesh.position[axis] = applyGridSnap(row.mesh.position[axis], _state.devEditor.nudgeStep);
   syncActorStateFromMesh(row.mesh);
-  _state.devEditor.rows = collectEditableObjects();
+  _state.devEditor.rows = collectEditableObjects({ force: true });
   syncDevEditorSelectionToScene();
   syncDevEditorColliderHelpers();
   updateDevEditorPanel();
@@ -688,6 +944,7 @@ function rotateSelected(deltaRadians) {
   if (!row || !row.mesh) return;
   row.mesh.rotation.y = normalizeAngle(row.mesh.rotation.y + deltaRadians);
   syncActorStateFromMesh(row.mesh);
+  _state.devEditor.rows = collectEditableObjects({ force: true });
   syncDevEditorSelectionToScene();
   syncDevEditorColliderHelpers();
   updateDevEditorPanel();
@@ -707,31 +964,31 @@ export function handleDevEditorPointerDown(event) {
   const pointer = getPointerNdc(event);
   raycaster.setFromCamera(pointer, _camera);
 
-  if (transformHelper?.visible) {
+  const rows = collectEditableObjects();
+  const roots = rows.map((row) => row.mesh).filter(Boolean);
+  const hits = raycaster.intersectObjects(roots, true);
+  const hit = hits.find((candidate) => !isDevHelper(candidate.object));
+  const entity = hit ? findDevEntityForObject(hit.object, rows) : null;
+  if (!entity && transformHelper?.visible) {
     const helperHits = raycaster.intersectObject(transformHelper, true);
     if (helperHits.length > 0) {
       event.preventDefault();
       return true;
     }
   }
-
-  const rows = collectEditableObjects();
-  const roots = rows.map((row) => row.mesh).filter(Boolean);
-  const hits = raycaster.intersectObjects(roots, true);
-  const hit = hits.find((candidate) => !isDevHelper(candidate.object));
-  const entity = hit ? findDevEntityForObject(hit.object, rows) : null;
-  if (!entity) return false;
+  if (!entity) {
+    event.preventDefault();
+    return true;
+  }
 
   event.preventDefault();
   selectById(entity.id);
-  _onShowPrompt(`Selected ${entity.name}.`, 1);
+  _onShowPrompt(`Selected ${entity.displayName || entity.name}.`, 1);
   return true;
 }
 
 export function handleDevEditorKeyDown(event) {
   if (event.code === "Escape") { event.preventDefault(); setDevEditorOpen(false); return true; }
-  if (event.code === "KeyQ") { event.preventDefault(); if (!event.repeat) rotateSelected(-DEG_15 * 6); return true; }
-  if (event.code === "KeyE") { event.preventDefault(); if (!event.repeat) rotateSelected(DEG_15 * 6); return true; }
 
   const move = (() => {
     if (event.code === "ArrowLeft" || event.code === "KeyJ") return { axis: "x", sign: -1 };

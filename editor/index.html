@@ -19,6 +19,7 @@
               <option value="level_two">Level Two</option>
             </select>
           </label>
+          <button id="playInGame" type="button" class="editor-button" title="Open source-backed Level Two in the playable game">Play in game</button>
           <span id="editorStatus" class="editor-status">Loading</span>
         </div>
       </header>
@@ -57,20 +58,45 @@
             <div class="editor-toolbar editor-camera-toolbar" role="toolbar" aria-label="Camera controls">
               <button id="zoomOutCamera" type="button" class="editor-button" aria-label="Zoom camera out" title="Zoom camera out">-</button>
               <button id="zoomInCamera" type="button" class="editor-button" aria-label="Zoom camera in" title="Zoom camera in">+</button>
+              <button id="pitchDownCamera" type="button" class="editor-button" title="Tilt camera down">Tilt -</button>
+              <button id="pitchUpCamera" type="button" class="editor-button" title="Tilt camera up">Tilt +</button>
               <button id="resetCamera" type="button" class="editor-button" title="Reset camera">Reset</button>
             </div>
             <label class="editor-check">
               <input id="snapToggle" type="checkbox" checked>
               <span>Snap</span>
             </label>
+            <div class="editor-state-toolbar" role="toolbar" aria-label="Selected object state">
+              <button id="resetSelected" type="button" class="editor-button" title="Restore selected object to its load-time transform">Reset Selected</button>
+              <button id="markDelete" type="button" class="editor-button" title="Mark selected object for deletion in copied editor state">Mark Delete</button>
+            </div>
+            <label class="editor-field" for="objectNote">
+              <span>Object Note</span>
+              <textarea id="objectNote" class="object-note" rows="4" placeholder="Add intent, animation notes, or AI handoff context"></textarea>
+            </label>
+            <div id="noteChipRow" class="note-chip-row" aria-label="Insert note keywords">
+              <button type="button" class="note-chip" data-note-chip="@move">@move</button>
+              <button type="button" class="note-chip" data-note-chip="@rotate">@rotate</button>
+              <button type="button" class="note-chip" data-note-chip="@fade">@fade</button>
+              <button type="button" class="note-chip" data-note-chip="@appear">@appear</button>
+              <button type="button" class="note-chip" data-note-chip="@disappear">@disappear</button>
+              <button type="button" class="note-chip" data-note-chip="@spawn">@spawn</button>
+              <button type="button" class="note-chip" data-note-chip="@trigger">@trigger</button>
+              <button type="button" class="note-chip" data-note-chip="@button">@button</button>
+              <button type="button" class="note-chip" data-note-chip="@platform">@platform</button>
+              <button type="button" class="note-chip" data-note-chip="@loop">@loop</button>
+            </div>
             <div id="selectionSummary" class="selection-summary">No selection</div>
             <div id="transformReadout" class="transform-readout"></div>
           </section>
 
           <section class="editor-section editor-section-fill">
             <div class="editor-section-heading">
-              <h2>Patch</h2>
-              <button id="copyPatch" type="button" class="editor-button editor-button-primary">Copy</button>
+              <h2>Export</h2>
+              <div class="editor-export-actions">
+                <button id="copyPatch" type="button" class="editor-button">Copy Patch</button>
+                <button id="copyState" type="button" class="editor-button editor-button-primary">Copy State</button>
+              </div>
             </div>
             <textarea id="patchOutput" class="patch-output" readonly spellcheck="false"></textarea>
           </section>

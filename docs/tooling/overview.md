@@ -12,6 +12,7 @@ This lane keeps gameplay/code changes separate from gameplay-inspection and test
   - Deterministic scene smoke
   - Targeted fixture runs
   - Collider + float checks
+  - Runtime/editor route smoke checks
 
 ## Commands in this phase
 
@@ -19,9 +20,11 @@ This lane keeps gameplay/code changes separate from gameplay-inspection and test
 - `tools:get-level-manifest <id>`
 - `tools:list-level-objects <id>`
 - `tools:run-scene-smoke [<id>]`
+- `tools:run-editor-smoke`
 - `tools:run-fixture <id> <fixture>`
 - `tools:validate-missing-colliders [<id>]`
 - `tools:validate-float-colliders [<id>]`
+- `tools:explain-editor-patch <patch.json>`
 
 All scripts support `--help` usage text and `--pretty` output.
 
@@ -39,6 +42,9 @@ All scripts support `--help` usage text and `--pretty` output.
 - `run-scene-smoke <id>`
   - Use for quick scene entry sanity and invariant checks.
   - Default choice after layout edits or asset swaps in a level.
+- `run-editor-smoke`
+  - Use after `/editor/` or editor patch schema changes.
+  - Confirms the route loads, render hook exists, default selection works, camera pitch works, state export works, and a small transform creates a dirty source-referenced patch.
 - `run-fixture <id> <fixture>`
   - Use for risky mechanics and behavior edits.
   - Keeps targeted behavior checks from forcing a full replay.
@@ -48,6 +54,9 @@ All scripts support `--help` usage text and `--pretty` output.
 - `validate-float-colliders [<id>]`
   - Run after position or elevation edits.
   - Flags likely floating/sinking/position anomalies before manual test passes.
+- `explain-editor-patch <patch.json>`
+  - Use after copying a transform patch from `/editor/`.
+  - Prints suggested source edits without modifying files.
 
 ## Common workflow examples
 
@@ -86,15 +95,26 @@ This lane also ships a runtime editor overlay for tiny edit loops.
 - Object list: filtered by current level, excluding tile fillers and procedural filler meshes.
 - Selection:
   - Click an object row in the panel.
+  - Click editable objects directly in the canvas while the Dev Editor remains open.
   - Selected row shows in the panel summary.
+- Debug camera:
+  - While the Dev Editor is open, `W/A/S/D` moves the free camera, `Q/E` yaws, `R/F` tilts, and wheel/`+`/`-` zooms.
+  - Gameplay movement and Cubeling actions are blocked until the Dev Editor closes.
 - Move/rotate:
   - Arrow keys / I J K L: nudge selected object by step size (`0.25` or `0.5`).
-  - `Q` / `E`: rotate by ±90° currently (step controls only).
-  - Optional controls in panel for ±X ±Z ±Y and ±15/±90 rotation.
+  - TransformControls and panel buttons handle move/rotate/scale, including ±X ±Z ±Y and ±15/±90 rotation.
 - Collision debug:
-  - `Colliders: On/Off` in the panel draws wireframe bounds for editable collision-expected objects.
+  - `Colliders: On/Off` in the panel draws actual runtime collider proxies from the current scene, not mesh visual bounds.
+  - The selected-object helper remains a separate visual bounds outline.
+  - Selected entities with matched colliders highlight those actual collider proxies.
 - Export:
   - `Copy Layout JSON` logs compact JSON and copies to clipboard when browser permissions allow.
+  - `Copy Selection Delta` copies `lumina3d.dev.selectionDelta.v1` JSON with the selected entity, original transform, current transform, and delta.
+  - `Copy AI Context` copies `lumina3d.dev.aiContext.v1` JSON with selected entity, nearby entities, runtime colliders, camera, actors, and source hints.
+  - `Export Patch Draft` copies `lumina3d.dev.scenePatch.v1` JSON for human-reviewed source patching.
+- Test hook:
+  - In local dev/test runs, `window.__luminaDevEditor` exposes `buildAiContextPayload`, `buildPatchDraftPayload`, `buildSelectionDeltaPayload`, `listEntities`, and `selectEntityById`.
+  - These hooks return browser payloads only; they do not write source files.
 
 ### Practical usage
 
@@ -111,8 +131,9 @@ This lane also ships a runtime editor overlay for tiny edit loops.
 - Dev Editor edits are preview-only while the session runs:
   - No file writes yet.
   - No MCP wrapper in this pass; this is runtime-only workflow.
-- Actor transforms (`human`, `frog`) are visible during the session but do not persist across code save/asset changes.
+- Actor transforms (`human`, `frog`, `elephant`) are visible during the session but do not persist across code save/asset changes.
 - Advanced systems (undo/redo, asset add/remove, direct persistence) are intentionally not included in this pass.
+- Browser output is clipboard/console/test-hook only. Apply any source patch through reviewed code edits, then build and smoke-test.
 
 ## Why this is still scripts-first
 
@@ -139,12 +160,25 @@ Two objects whose source mapping is clear.
 
 - Select an object from the list or by clicking it in the viewport.
 - Move or rotate it with Three.js TransformControls.
-- Navigate the editor camera with `W/A/S/D`, rotate it with `Q/E`, and zoom
-  with wheel, trackpad pinch over the canvas, `+`, or `-`.
-- Copy the JSON patch from the Patch panel.
+- Navigate the editor camera with `W/A/S/D`, rotate it with `Q/E`, tilt it with
+  `[` / `]`, and zoom with wheel, trackpad pinch over the canvas, `+`, or `-`.
+- Use `Reset Selected` to restore an object to its load-time transform.
+- Use object notes, keyword chips, and `Mark Delete` for planning context.
+- Use `Play in game` to open source-backed playable Level Two in a new tab.
+- Copy transform-only JSON with `Copy Patch` or affected-object handoff JSON
+  with `Copy State`.
+- Editor patches use `lumina3d.editor.transformPatch.v1`.
+- Editor state exports use `lumina3d.editor.stateExport.v1`.
+- Dry-run a saved patch with
+  `npm run tools:explain-editor-patch -- <patch.json>`.
 - Use `window.render_editor_to_text()` for compact QA state: selected object,
-  dirty count, camera state, and patch summary.
+  dirty count, affected state-export count, camera state, patch summary, and
+  state-export summary.
+- Run `npm run tools:run-editor-smoke -- --pretty` against a local dev server to confirm the route, render hook, default selection, dirty transform patch, notes/delete state export, reset, camera pitch, and play-in-game handoff.
 
 The old F2 Dev Editor can remain useful for runtime inspection. Use `/editor/`
 when the output should become a structured transform patch that Codex can apply
 in a reviewed source edit later.
+
+Detailed patch application guidance lives in
+`docs/tooling/editor-patch-workflow.md`.

@@ -26,10 +26,17 @@ import {
   LEVEL_TWO_CENTRAL_MOUNTAIN_TIERS,
   LEVEL_TWO_FROG_SIDE_LEDGE_TILES,
   LEVEL_TWO_FROG_SIDE_LEDGE_HEIGHT,
+  LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_HEIGHT,
+  LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_TILES,
   LEVEL_TWO_LOVE_LETTER_CLEARANCE,
   LEVEL_TWO_PLACEHOLDER_LOVE_LETTER_Y,
   LEVEL_TWO_POINTS,
   LEVEL_TWO_PROPS,
+  LEVEL_TWO_RED_BUTTONS,
+  LEVEL_TWO_RED_BUTTON_B_TERRACE_TILES,
+  LEVEL_TWO_RED_ELEVATOR_B_SHAFT_TILES,
+  LEVEL_TWO_RED_ELEVATOR_TOP_CONNECTOR_TILES,
+  LEVEL_TWO_RED_PLATFORMS,
   LEVEL_TWO_RESERVED_TERRACE_GROUPS,
   LEVEL_TWO_RESERVED_TERRACE_TILES,
   LEVEL_TWO_WIDTH,
@@ -226,19 +233,68 @@ function makeLevelMetadata() {
     LEVEL_TWO_FROG_SIDE_LEDGE_HEIGHT,
     "froglike crossing path before frog mechanics"
   );
-  const levelTwoReservedTerrace = LEVEL_TWO_RESERVED_TERRACE_GROUPS.flatMap((station) => {
-    const groupCount = LEVEL_TWO_RESERVED_TERRACE_TILES.filter((tile) => tile.stationId === station.id).length;
-    return [
-      makeTerrainExpectation(
-        `level_two_reserved_${station.id}`,
-        `${station.role} (${station.id})`,
-        `level-two-reserved-${station.id}-`,
-        groupCount,
-        SURFACE_Y,
-        `reserved: ${station.role}`
-      )
-    ];
-  });
+  const levelTwoRedElevatorTopConnector = makeTerrainExpectation(
+    "level_two_red_elevator_a_top_connector",
+    "Red Elevator A top connector",
+    "level-two-red-elevator-a-top-connector-",
+    LEVEL_TWO_RED_ELEVATOR_TOP_CONNECTOR_TILES.length,
+    LEVEL_TWO_RED_ELEVATOR_TOP_CONNECTOR_TILES[0]?.bottomY || SURFACE_Y,
+    "Elephant route connector from Red Elevator A to tier-3 terrain"
+  );
+  const levelTwoHumanLoveLetterRoute = makeTerrainExpectation(
+    "level_two_human_love_letter_route",
+    "Elevator B upper Love Letter route",
+    "level-two-human-love-letter-route-",
+    LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_TILES.length,
+    LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_HEIGHT,
+    "Elevator B human exit route to Level Two Love Letter"
+  );
+  const levelTwoRedButtons = LEVEL_TWO_RED_BUTTONS.map((button) => makeObject({
+    id: `level_two_${button.id.replace(/-/g, "_")}`,
+    name: button.id === "red-button-b" ? "Red Button B" : "Red Button A",
+    type: "mechanism-button",
+    category: "mechanism",
+    asset: {
+      key: button.asset,
+      path: resolveAssetPath(button.asset),
+      scale: 1
+    },
+    position: {
+      x: toTwoDecimals(button.position.x),
+      y: toTwoDecimals((button.surfaceTopY || SURFACE_Y) + (button.surfaceClearance || 0)),
+      z: toTwoDecimals(button.position.z)
+    },
+    collisionExpected: false,
+    mechanismLink: `${button.id} -> ${button.linkedPlatformId}`,
+    elevationBand: {
+      min: toTwoDecimals((button.surfaceTopY || SURFACE_Y) - 0.25),
+      max: toTwoDecimals((button.surfaceTopY || SURFACE_Y) + 0.65)
+    },
+    runtimeProbe: `levelTwo.redButtons.${button.id}`
+  }));
+  const levelTwoRedPlatforms = LEVEL_TWO_RED_PLATFORMS.map((platform) => makeObject({
+    id: `level_two_${platform.id.replace(/-/g, "_")}`,
+    name: platform.id === "red-elevator-b" ? "Red Elevator B" : "Red Elevator A",
+    type: "moving-platform",
+    category: "mechanism",
+    asset: {
+      key: platform.asset,
+      path: resolveAssetPath(platform.asset),
+      scale: 1
+    },
+    position: {
+      x: toTwoDecimals(platform.position.x),
+      y: toTwoDecimals(platform.baseY),
+      z: toTwoDecimals(platform.position.z)
+    },
+    collisionExpected: false,
+    mechanismLink: `${platform.linkedButtonId} -> ${platform.id}`,
+    elevationBand: {
+      min: toTwoDecimals(platform.baseY - 0.25),
+      max: toTwoDecimals(platform.baseY + platform.maxLift + 1.1)
+    },
+    runtimeProbe: `levelTwo.redPlatforms.${platform.id}`
+  }));
 
   const levelTwoPlaceholder = makeObject({
     id: "level_two_placeholder_love_letter",
@@ -522,7 +578,10 @@ function makeLevelMetadata() {
     ...LEVEL_TWO_PROPS_OBJECTS,
     levelTwoCentralTerrain,
     levelTwoFrogLedge,
-    ...levelTwoReservedTerrace,
+    levelTwoRedElevatorTopConnector,
+    levelTwoHumanLoveLetterRoute,
+    ...levelTwoRedButtons,
+    ...levelTwoRedPlatforms,
     levelTwoPlaceholder
   ];
 
@@ -607,7 +666,23 @@ function makeLevelMetadata() {
       sceneId: SCENES.LEVEL_TWO,
       sceneFile: "/src/scenes/levelTwoScene.js",
       levelDataFile: "/src/levels/levelTwo.js",
-      sceneAssets: ["groundTile", "pathTile", "forestTreeA", "forestTreeB", "forestBush", "forestRock", "forestGrass", "spellbookClosed", "bridgeModular"],
+      sceneAssets: [
+        "groundTile",
+        "pathTile",
+        "forestTreeA",
+        "forestTreeB",
+        "forestBush",
+        "forestRock",
+        "forestGrass",
+        "buttonBaseBlue",
+        "buttonTopBlue",
+        "buttonBaseRed",
+        "buttonTopRed",
+        "blueRamp",
+        "redPlatform4x4",
+        "spellbookClosed",
+        "bridgeModular"
+      ],
       bounds: LEVEL_TWO_BOUNDS,
       landmarks: makeLandmarks([
         { id: "level_two_entry", name: "Level Two entry", ...LEVEL_TWO_POINTS.entry },
@@ -634,6 +709,10 @@ function makeLevelMetadata() {
           fixtureImplemented(
             "level_two_love_letter_ready",
             "Enter Level Two, wait for play, then confirm the placeholder Love Letter is visible and collectible-ready indicators are stable."
+          ),
+          fixtureImplemented(
+            "level_two_red_b_route",
+            "Seed Elephant on Red Button B and human on Elevator B, cycle to the top, then walk the human route to collect the Level Two Love Letter."
           )
         ],
         planned: [
@@ -643,7 +722,7 @@ function makeLevelMetadata() {
           ),
           fixtureUnsupported(
             "level_two_red_button_test",
-            "Red button flow is placeholder-only and missing deterministic fixture state seeds."
+            "Use implemented level_two_red_b_route for the current Red Button B path; this older broad red-button fixture still needs split A/B expectations."
           ),
           fixtureUnsupported(
             "level_two_recall_test",
@@ -651,7 +730,7 @@ function makeLevelMetadata() {
           ),
           fixtureUnsupported(
             "level_two_elevator_test",
-            "Elevator flow lacks deterministic fixture seeding and positional assertions in current scene wiring."
+            "Use implemented level_two_red_b_route for the current Elevator B path; this older broad elevator fixture still needs split A/B expectations."
           )
         ]
       },
@@ -665,7 +744,10 @@ function makeLevelMetadata() {
         terrain: {
           centralMountainTileCount: LEVEL_TWO_CENTRAL_MOUNTAIN_TILES.length,
           frogSideLedgeTileCount: LEVEL_TWO_FROG_SIDE_LEDGE_TILES.length,
-          reservedTerraceTileCount: LEVEL_TWO_RESERVED_TERRACE_TILES.length
+          reservedTerraceTileCount: LEVEL_TWO_RESERVED_TERRACE_TILES.length,
+          redButtonBTerraceTileCount: LEVEL_TWO_RED_BUTTON_B_TERRACE_TILES.length,
+          redElevatorBShaftTileCount: LEVEL_TWO_RED_ELEVATOR_B_SHAFT_TILES.length,
+          humanLoveLetterRouteTileCount: LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_TILES.length
         }
       }
     }

@@ -20,6 +20,7 @@ export function createHudRefs(root = document) {
     devEditorSnapToggle: root.querySelector("#devEditorSnapToggle"),
     devEditorColliderToggle: root.querySelector("#devEditorColliderToggle"),
     devEditorExportLayout: root.querySelector("#devEditorExportLayout"),
+    devEditorCopySelectionDelta: root.querySelector("#devEditorCopySelectionDelta"),
     devEditorCopyAiContext: root.querySelector("#devEditorCopyAiContext"),
     devEditorExportPatchDraft: root.querySelector("#devEditorExportPatchDraft"),
     levelCompleteModal: root.querySelector("#levelCompleteModal"),
@@ -60,16 +61,16 @@ export function renderControlsPanel(hud, open) {
   hud.controlsPanel.classList.toggle("is-open", open);
 }
 
-export function renderLevelCompleteModal(hud, { open, isTutorial }) {
+export function renderLevelCompleteModal(hud, { open, isTutorial, levelName = "Level One" }) {
   if (!hud.levelCompleteModal) return;
   hud.levelCompleteModal.classList.toggle("is-open", open);
   hud.levelCompleteModal.setAttribute("aria-hidden", open ? "false" : "true");
-  if (hud.completeEyebrow) hud.completeEyebrow.textContent = isTutorial ? "Tutorial Complete" : "Level One Complete";
+  if (hud.completeEyebrow) hud.completeEyebrow.textContent = isTutorial ? "Tutorial Complete" : `${levelName} Complete`;
   if (hud.completeTitle) hud.completeTitle.textContent = "Love Letter Found!";
   if (hud.completeDescription) {
     hud.completeDescription.textContent = isTutorial
       ? "The tutorial is complete. You can keep testing this room, restart it, or continue to Level One."
-      : "Level One is complete. You can keep testing this room or reset the level.";
+      : `${levelName} is complete. You can keep testing this room or reset the level.`;
   }
   if (hud.nextLevel) {
     hud.nextLevel.disabled = !isTutorial;
@@ -114,7 +115,10 @@ export function getHudPrompt(state, stepId, { sceneIds, tutorialSteps, freePlayP
   if (state.scene.id === sceneIds.LEVEL_TWO) {
     if (state.levelTwo.phase === "title") return "";
     if (state.levelTwo.phase === "arrival") return "";
-    return state.overridePrompt?.text || "Look for the elevated Love Letter.";
+    if (state.celebration.active) return "Love Letter found.";
+    if (state.celebration.modalVisible) return "Level Two Complete.";
+    if (state.levelTwo.placeholderLoveLetterCollectable) return state.overridePrompt?.text || "Collect the elevated Love Letter.";
+    return state.overridePrompt?.text || "Use Frog and Elephant to reach the elevated Love Letter.";
   }
   if (state.celebration.active) return "Love Letter found.";
   if (state.celebration.modalVisible) return "Tutorial Complete.";
@@ -136,7 +140,10 @@ export function getHudGoalLabel(state, sceneIds) {
   }
   if (state.scene.id === sceneIds.LEVEL_TWO) {
     if (state.levelTwo.phase === "title") return "Level Two";
-    return "Review shell";
+    if (state.spellbookCollected || state.levelTwo.complete) return "Complete";
+    if (state.levelTwo.placeholderLoveLetterCollectable) return "Collect Love Letter";
+    if (state.levelTwo.elephantSpawned) return "Use Elephant";
+    return state.levelTwo.blueRampActive ? "Find Elephant Totem" : "Reach Love Letter";
   }
   return state.tutorialComplete ? "Complete" : state.doorwayOpen ? "Door open" : state.cubelings.frog.unlocked ? "Frog unlocked" : "Learn controls";
 }

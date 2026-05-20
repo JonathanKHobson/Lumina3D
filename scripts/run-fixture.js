@@ -6,6 +6,7 @@ import {
   waitForState,
   setPaused,
   advance,
+  hold,
   jumpToLevel
 } from "./lib/cli-utils.js";
 import { getFixture, getLevel, getDebugShortcut } from "./lib/levelCatalog.js";
@@ -116,9 +117,72 @@ async function runLevelTwoLoveLetterReady(page) {
   return { checks, state: readyState };
 }
 
+async function runLevelTwoRedBRoute(page) {
+  const checks = [];
+  await setPaused(page, true);
+  const readyState = await page.evaluate(() => {
+    if (typeof window.set_game_test_level_two_red_b_ready !== "function") return null;
+    return window.set_game_test_level_two_red_b_ready();
+  });
+  checks.push({ name: "seeded_red_b_route", ok: Boolean(readyState), details: `scene=${readyState?.scene?.id || "missing"}` });
+  checks.push({ name: "loaded_level_two", ok: readyState?.scene?.id === "level_two", details: `phase=${readyState?.scene?.phase}` });
+  checks.push({
+    name: "red_button_b_pressed_by_elephant",
+    ok: Boolean(readyState?.levelTwo?.redButtons?.find((button) => button.id === "red-button-b")?.active),
+    details: `heldBy=${readyState?.levelTwo?.redButtons?.find((button) => button.id === "red-button-b")?.heldActor || ""}`
+  });
+  checks.push({
+    name: "human_boarded_elevator_b",
+    ok: readyState?.levelTwo?.humanSurfaceId === "red-elevator-b",
+    details: `humanSurfaceId=${readyState?.levelTwo?.humanSurfaceId || ""}`
+  });
+
+  await advance(page, 5900);
+  const topState = await readState(page);
+  const elevatorB = topState.levelTwo?.redPlatforms?.find((platform) => platform.id === "red-elevator-b");
+  checks.push({
+    name: "elevator_b_reaches_top",
+    ok: Number(elevatorB?.progress || 0) >= 0.92,
+    details: `progress=${elevatorB?.progress}, moving=${elevatorB?.moving || ""}`
+  });
+  checks.push({
+    name: "human_rides_elevator_b",
+    ok: Boolean(elevatorB?.riderActors?.includes("human")),
+    details: `riders=${(elevatorB?.riderActors || []).join(",")}`
+  });
+
+  await hold(page, "KeyW", 2550, 130);
+  await hold(page, "KeyD", 420, 105);
+  await advance(page, 160);
+  const completeState = await readState(page);
+  checks.push({
+    name: "human_walked_love_letter_route",
+    ok: Boolean(completeState?.levelTwo?.complete) ||
+      completeState?.levelTwo?.humanSurfaceId === "level-two-love-letter-route",
+    details: `humanSurfaceId=${completeState?.levelTwo?.humanSurfaceId || ""}, human=(${completeState?.human?.x},${completeState?.human?.z})`
+  });
+  checks.push({
+    name: "level_two_love_letter_collects",
+    ok: Boolean(completeState?.reward?.collected),
+    details: `collected=${Boolean(completeState?.reward?.collected)}`
+  });
+  checks.push({
+    name: "level_two_complete",
+    ok: Boolean(completeState?.levelTwo?.complete),
+    details: `complete=${Boolean(completeState?.levelTwo?.complete)}`
+  });
+  checks.push({
+    name: "level_two_love_letter_message",
+    ok: completeState?.loveLetterMessage?.id === "level_two_love_letter_01",
+    details: `messageId=${completeState?.loveLetterMessage?.id || ""}`
+  });
+  return { checks, state: completeState };
+}
+
 const IMPLEMENTED_FIXTURES = {
   level_two_start: runLevelTwoStart,
-  level_two_love_letter_ready: runLevelTwoLoveLetterReady
+  level_two_love_letter_ready: runLevelTwoLoveLetterReady,
+  level_two_red_b_route: runLevelTwoRedBRoute
 };
 
 async function run() {

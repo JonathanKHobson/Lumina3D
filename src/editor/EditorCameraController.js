@@ -5,7 +5,10 @@ const DEFAULT_MIN_ZOOM = 0.45;
 const DEFAULT_MAX_ZOOM = 4;
 const DEFAULT_PAN_STEP = 1.2;
 const DEFAULT_YAW_STEP = Math.PI / 24;
+const DEFAULT_PITCH_STEP = Math.PI / 36;
 const DEFAULT_ZOOM_STEP = 1.15;
+const DEFAULT_MIN_PITCH = 0.22;
+const DEFAULT_MAX_PITCH = 1.24;
 
 function round(value) {
   return Number(value.toFixed(3));
@@ -20,6 +23,9 @@ export class EditorCameraController {
     maxZoom = DEFAULT_MAX_ZOOM,
     panStep = DEFAULT_PAN_STEP,
     yawStep = DEFAULT_YAW_STEP,
+    pitchStep = DEFAULT_PITCH_STEP,
+    minPitch = DEFAULT_MIN_PITCH,
+    maxPitch = DEFAULT_MAX_PITCH,
     zoomStep = DEFAULT_ZOOM_STEP
   }) {
     this.camera = camera;
@@ -29,21 +35,28 @@ export class EditorCameraController {
     this.maxZoom = maxZoom;
     this.panStep = panStep;
     this.yawStep = yawStep;
+    this.pitchStep = pitchStep;
+    this.minPitch = minPitch;
+    this.maxPitch = maxPitch;
     this.zoomStep = zoomStep;
     this.horizontalDistance = Math.hypot(offset.x, offset.z);
-    this.height = offset.y;
+    this.distance = offset.length();
     this.defaultYaw = Math.atan2(offset.x, offset.z);
+    this.defaultPitch = Math.atan2(offset.y, this.horizontalDistance);
     this.yaw = this.defaultYaw;
+    this.pitch = this.defaultPitch;
     this.zoom = THREE.MathUtils.clamp(camera.zoom || 1, this.minZoom, this.maxZoom);
     this.isNavigating = false;
     this.apply();
   }
 
   apply() {
+    const horizontalDistance = Math.cos(this.pitch) * this.distance;
+    const height = Math.sin(this.pitch) * this.distance;
     const offset = new THREE.Vector3(
-      Math.sin(this.yaw) * this.horizontalDistance,
-      this.height,
-      Math.cos(this.yaw) * this.horizontalDistance
+      Math.sin(this.yaw) * horizontalDistance,
+      height,
+      Math.cos(this.yaw) * horizontalDistance
     );
     this.camera.position.copy(this.target).add(offset);
     this.camera.up.copy(WORLD_UP);
@@ -60,6 +73,7 @@ export class EditorCameraController {
   reset(target = new THREE.Vector3()) {
     this.target.copy(target);
     this.yaw = this.defaultYaw;
+    this.pitch = this.defaultPitch;
     this.zoom = 1;
     this.apply();
   }
@@ -77,6 +91,16 @@ export class EditorCameraController {
   rotateYaw(direction, multiplier = 1) {
     if (!direction) return;
     this.yaw += direction * this.yawStep * multiplier;
+    this.apply();
+  }
+
+  tiltPitch(direction, multiplier = 1) {
+    if (!direction) return;
+    this.pitch = THREE.MathUtils.clamp(
+      this.pitch + direction * this.pitchStep * multiplier,
+      this.minPitch,
+      this.maxPitch
+    );
     this.apply();
   }
 
@@ -111,6 +135,7 @@ export class EditorCameraController {
         z: round(this.target.z)
       },
       yaw: round(this.yaw),
+      pitch: round(this.pitch),
       zoom: round(this.zoom),
       isNavigating: this.isNavigating
     };

@@ -12,15 +12,15 @@
 
 ## Next Level Two Feature Slice
 
-Current gate: human review the corrected Red Platform A / Elephant access slice. If it passes, the next Level Two feature slice can move to the next contained red elevator step.
+Current gate: human review the cleaned Red Button B / Elevator B route in the browser.
 
-Do next:
+Do next only after that review:
 
-1. Plan and implement Red Button / Elevator B as a contained slice.
-2. Keep the red continuous-cycle behavior from Red Platform A.
-3. Verify human boarding/riding only in the Elevator B slice, not on Red Platform A.
+1. Tune Level Two route readability and hinting if the happy path is confusing.
+2. Fix any human-review blockers in the Red Button B / Elevator B route.
+3. Then decide whether Cubeling Recall is still needed for Level Two or should wait for a later level.
 
-Stop there. Do not add Red Button C, final Love Letter routing, Cubeling Recall, optional collectibles, or extra red-button chains until Elevator B is stable.
+Stop there. Do not add Red Button C, optional collectibles, new Cubelings, or extra red-button chains until the completed Level Two route has been played and accepted.
 
 ## Home Scene Backlog
 
@@ -34,7 +34,11 @@ Stop there. Do not add Red Button C, final Love Letter routing, Cubeling Recall,
 - Fixed 2026-05-19 - Blue ramp collision/lift blocker; character can walk up, probe unsupported hill edge without getting stuck, recover, and walk back down.
 - Fixed 2026-05-19 - Red Elevator A visual placement/flicker pass; removed the unwanted half-sand dock, restored a flush-enough connection to the tier-3 sand tiles, stabilized the idle red platform before Elephant activation, and kept the human off Red Platform A in the current teaching slice.
 - Fixed 2026-05-19 - Red Platform A / Elephant access blocker: Red Button A and Elephant spawn now sit near the platform edge for side possession, Red Platform A cycles while Elephant holds the button, release finishes the current direction and stops at the next endpoint, and Elephant can walk off onto adjacent ground without getting trapped.
-- P1 - Human review Red Platform A access/cycling fix before implementing Elevator B.
+- Fixed 2026-05-20 - Red Button B / Elevator B completion loop: Elephant reaches west-side Button B, human rides Elevator B, Level Two Love Letter collects, and Level Two completion triggers.
+- Fixed 2026-05-20 - Red Elevator B surgical cleanup: moved Elevator B to the requested dock position, restored ground under it, removed the shaft/dock-marker visual clutter, moved Button B onto existing tier-3 mountain grass, removed active reserved scaffold tiles, and proved the human walks the Love Letter route in `level_two_red_b_route`.
+- P1 - Human review cleaned Red Button B / Elevator B route in browser, especially ground readability and top landing clarity.
+- P2 - Tune Elevator B visual timing/camera readability if the cycling window feels too tight.
+- P2 - Add optional hint dialogue if the player presses Button B before placing the human on Elevator B.
 - P2 - Add Elephant Totem discovery dialogue before pickup so the player understands the immediate objective, such as "That Elephant Cubeling is out of reach" or "There has to be a way up there."
 - P2 - Reduce Frog low-ledge jump arc so it reads as a small hop and does not imply Frog can jump the central mountain.
 - P3 - Make Frog low-ledge landing feel less visibly snapped while keeping reliable landing positions.
@@ -46,7 +50,7 @@ Stop there. Do not add Red Button C, final Love Letter routing, Cubeling Recall,
 ## Status Notes
 
 - Level One title card timing is currently resolved. Keep the later pacing polish idea, but no immediate action is needed.
-- Level Two Red Elevator A teaching assembly is implemented with continuous cycling and automated smoke coverage. The next step is human review before Elevator B.
+- Level Two Red Elevator A and Red Elevator B are implemented with continuous cycling and automated smoke coverage. The next step is human review of the cleaned full Level Two route.
 - Git/GitHub setup is complete; continue local-first development with intentional commits/pushes after stable slices.
 
 ## Shipped In This Pass
@@ -72,8 +76,8 @@ Stop there. Do not add Red Button C, final Love Letter routing, Cubeling Recall,
 ## Later
 
 - Continue Level Two in phases using `docs/game-design-handbook/07_level_two_phased_implementation_plan.md`.
-- Current Level Two state: shell, Frog low-ledge / blue-ramp / Elephant Totem access, Elephant Echo/Totem visuals, Elephant unlock/spawn/possession, and Red Elevator A teaching/access assembly are functionally present.
-- Next feature slice after Red Platform A human review: Red Button / Elevator B as a contained slice. Stop before Red Button C, Cubeling Recall, and the final Love Letter route.
+- Current Level Two state: shell, Frog low-ledge / blue-ramp / Elephant Totem access, Elephant Echo/Totem visuals, Elephant unlock/spawn/possession, Red Elevator A, Red Button B / Red Elevator B, Level Two Love Letter collection, and Level Two completion are functionally present.
+- Next feature slice after human review: polish blockers only, then decide whether Cubeling Recall belongs in Level Two or a later level.
 - Replace temporary Level One Love Letter copy with final writing.
 - Add a real level select/start-flow router so replaying Level One can skip the Home Space intro.
 - Move testing-only reset into a menu when the pause/menu surface exists.

@@ -34,6 +34,7 @@ export const LEVEL_TWO_RED_PLATFORM_DOWN_SPEED = 0.2;
 export const LEVEL_TWO_RED_PLATFORM_ENDPOINT_PAUSE_SECONDS = 1.25;
 export const LEVEL_TWO_RED_PLATFORM_VISUAL_HEIGHT = 1.18;
 export const LEVEL_TWO_RED_PLATFORM_SURFACE_OFFSET = 0.16;
+export const LEVEL_TWO_RED_PLATFORM_B_SURFACE_OFFSET = 0.42;
 export const LEVEL_TWO_RED_BUTTON_SURFACE_CLEARANCE = 0.08;
 export const LEVEL_TWO_RED_PLATFORM_VISUAL_FOOTPRINT = TILE * 2.35;
 export const LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_X = LEVEL_TWO_RED_PLATFORM_VISUAL_FOOTPRINT * 0.5 - 0.12;
@@ -54,7 +55,12 @@ export const LEVEL_TWO_ELEPHANT_ECHO_TERRACE_TIER = 3;
 export const LEVEL_TWO_ELEPHANT_ECHO_TOP_Y = tierBottomY(LEVEL_TWO_ELEPHANT_ECHO_TERRACE_TIER) + SURFACE_Y;
 export const LEVEL_TWO_ELEPHANT_ECHO_HEIGHT = LEVEL_TWO_ELEPHANT_ECHO_TOP_Y - SURFACE_Y;
 export const LEVEL_TWO_RED_PLATFORM_MAX_LIFT = LEVEL_TWO_ELEPHANT_ECHO_HEIGHT - LEVEL_TWO_RED_PLATFORM_SURFACE_OFFSET;
+export const LEVEL_TWO_RED_PLATFORM_B_MAX_LIFT = LEVEL_TWO_MOUNTAIN_LAYER_COUNT >= 4
+  ? tierBottomY(4) - LEVEL_TWO_RED_PLATFORM_B_SURFACE_OFFSET
+  : LEVEL_TWO_RED_PLATFORM_MAX_LIFT;
 export const LEVEL_TWO_RED_PLATFORM_BASE_Y = SURFACE_Y - LEVEL_TWO_RED_PLATFORM_VISUAL_HEIGHT + LEVEL_TWO_RED_PLATFORM_SURFACE_OFFSET;
+export const LEVEL_TWO_RED_PLATFORM_B_BASE_Y = SURFACE_Y - LEVEL_TWO_RED_PLATFORM_VISUAL_HEIGHT + LEVEL_TWO_RED_PLATFORM_B_SURFACE_OFFSET;
+export const LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_ID = "level-two-love-letter-route";
 
 function rectTiles(minX, maxX, minY, maxY, tier, zone, asset = "groundTile") {
   const tiles = [];
@@ -86,7 +92,9 @@ export const LEVEL_TWO_POINTS = {
   elephantEcho: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 16.2, 10.0, TILE),
   blueRamp: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 14.1, 3.05, TILE),
   redElevatorA: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 15.7, 10.0, TILE),
-  redButtonA: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 16.2, 10.0, TILE)
+  redButtonA: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 16.2, 10.0, TILE),
+  redElevatorB: { x: -1.75, z: 10.25 },
+  redButtonB: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 8.0, 11.0, TILE)
 };
 
 export const LEVEL_TWO_PATH_TILES = [
@@ -266,6 +274,22 @@ export const LEVEL_TWO_RED_ELEVATOR_TOP_EXIT_ZONE = {
   visual: "logical transition only; no extra dock mesh"
 };
 
+export const LEVEL_TWO_RED_BUTTON_B_TERRACE_TILES = [];
+
+export const LEVEL_TWO_RED_ELEVATOR_B_SHAFT_TILES = [];
+
+export const LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_TILES = rectTiles(9, 9, 11, 14, 4, "human_love_letter_route", "pathTile")
+  .map((tile) => ({
+  ...tile,
+  asset: "pathTile",
+  bottomY: tierBottomY(4),
+  topY: tierBottomY(4) + SURFACE_Y,
+  tierId: LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_ID,
+  stationId: "human-elevator-b-upper-stop",
+  role: "human upper route from Red Elevator B to the Love Letter plateau",
+  frogJumpable: false
+}));
+
 export const LEVEL_TWO_RED_ELEVATOR_SIDE_APPROACH_ZONE = {
   id: "red-elevator-a-side-approach-zone",
   minX: LEVEL_TWO_POINTS.redElevatorA.x + LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_X + 0.08,
@@ -318,39 +342,13 @@ export const LEVEL_TWO_ELEPHANT_TOTEM_HILL = {
   frogJumpable: false
 };
 
-export const LEVEL_TWO_RESERVED_TERRACE_GROUPS = [
-  {
-    id: "lower-elephant-elevator-bay",
-    role: "future partial Elephant elevator drop-off",
-    tier: 1,
-    tiles: rectTiles(8, 11, 14, 15, 1, "reserved_elevator_terrace", "pathTile")
-  },
-  {
-    id: "middle-elephant-platform-station",
-    role: "future Elephant platform station",
-    tier: 2,
-    tiles: rectTiles(5, 6, 7, 8, 2, "reserved_elevator_terrace", "pathTile")
-  },
-  {
-    id: "upper-red-button-station",
-    role: "future red-button platform station",
-    tier: 3,
-    tiles: rectTiles(8, 11, 6, 6, 3, "reserved_elevator_terrace", "pathTile")
-  }
-];
+export const LEVEL_TWO_RESERVED_TERRACE_GROUPS = [];
 
-export const LEVEL_TWO_RESERVED_TERRACE_TILES = LEVEL_TWO_RESERVED_TERRACE_GROUPS.flatMap((group) =>
-  group.tiles.map((tile) => ({
-    ...tile,
-    bottomY: tierBottomY(tile.tier),
-    topY: tierBottomY(tile.tier) + SURFACE_Y,
-    stationId: group.id,
-    role: group.role
-  }))
-).concat(LEVEL_TWO_RED_ELEVATOR_TOP_CONNECTOR_TILES);
+export const LEVEL_TWO_RESERVED_TERRACE_TILES = [];
 
 export const LEVEL_TWO_MOUNTAIN_PEAK_Y = LEVEL_TWO_CENTRAL_MOUNTAIN_TIERS[LEVEL_TWO_CENTRAL_MOUNTAIN_TIERS.length - 1].topY;
 export const LEVEL_TWO_PLACEHOLDER_LOVE_LETTER_Y = LEVEL_TWO_MOUNTAIN_PEAK_Y + LEVEL_TWO_LOVE_LETTER_CLEARANCE;
+export const LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_HEIGHT = LEVEL_TWO_MOUNTAIN_PEAK_Y - SURFACE_Y;
 
 export const LEVEL_TWO_PROPS = [
   ["forestTreeA", 0.8, 1.1, 0.88],
@@ -384,6 +382,21 @@ export const LEVEL_TWO_RED_BUTTONS = [
     activationType: "held-weight",
     linkedPlatformId: "red-elevator-a",
     visibleFromStart: true
+  },
+  {
+    id: "red-button-b",
+    asset: "buttonBaseRed",
+    topAsset: "buttonTopRed",
+    position: LEVEL_TWO_POINTS.redButtonB,
+    surfaceId: "tier-3-elephant-route",
+    platformId: null,
+    surfaceTopY: LEVEL_TWO_ELEPHANT_ECHO_TOP_Y,
+    radius: LEVEL_TWO_RED_BUTTON_RADIUS,
+    surfaceClearance: LEVEL_TWO_RED_BUTTON_SURFACE_CLEARANCE,
+    requiredActor: "elephant",
+    activationType: "held-weight",
+    linkedPlatformId: "red-elevator-b",
+    visibleFromStart: true
   }
 ];
 
@@ -411,6 +424,31 @@ export const LEVEL_TWO_RED_PLATFORMS = [
     movementRule: "cycle-while-held",
     walkableBy: ["human", "elephant"],
     linkedButtonId: "red-button-a",
+    visibleFromStart: true
+  },
+  {
+    id: "red-elevator-b",
+    asset: "redPlatform4x4",
+    position: LEVEL_TWO_POINTS.redElevatorB,
+    baseY: LEVEL_TWO_RED_PLATFORM_B_BASE_Y,
+    minX: LEVEL_TWO_POINTS.redElevatorB.x - LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_X,
+    maxX: LEVEL_TWO_POINTS.redElevatorB.x + LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_X,
+    minZ: LEVEL_TWO_POINTS.redElevatorB.z - LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_Z,
+    maxZ: LEVEL_TWO_POINTS.redElevatorB.z + LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_Z,
+    maxLift: LEVEL_TWO_RED_PLATFORM_B_MAX_LIFT,
+    surfaceOffset: LEVEL_TWO_RED_PLATFORM_B_SURFACE_OFFSET,
+    visualHalfFootprint: LEVEL_TWO_RED_PLATFORM_VISUAL_FOOTPRINT * 0.5,
+    upSpeed: LEVEL_TWO_RED_PLATFORM_UP_SPEED,
+    downSpeed: LEVEL_TWO_RED_PLATFORM_DOWN_SPEED,
+    endpointPauseSeconds: LEVEL_TWO_RED_PLATFORM_ENDPOINT_PAUSE_SECONDS,
+    initialProgress: 0,
+    inactiveProgress: 0,
+    activeProgress: 1,
+    initialDirection: "up",
+    releaseBehavior: "finish-current-direction",
+    movementRule: "cycle-while-held",
+    walkableBy: ["human"],
+    linkedButtonId: "red-button-b",
     visibleFromStart: true
   }
 ];

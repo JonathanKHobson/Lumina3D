@@ -45,7 +45,7 @@ import {
   WALL_COLUMN,
   WORLD_BOUNDS
 } from "./config/constants.js";
-import { LEVEL_ONE_LOVE_LETTER_ID, REWARD_NAME, TUTORIAL_LOVE_LETTER_ID } from "./content/loveLetters.js";
+import { LEVEL_ONE_LOVE_LETTER_ID, LEVEL_TWO_LOVE_LETTER_ID, REWARD_NAME, TUTORIAL_LOVE_LETTER_ID } from "./content/loveLetters.js";
 import { ELEPHANT_ECHO_LINES, FROG_ECHO_LINES, FROG_TOTEM_LINES } from "./content/dialogue.js";
 import { actorCanPressButton, syncButtonTopVisual } from "./systems/buttonSystem.js";
 import { applyCameraUpdate, getCameraFacingDirection, stepCameraYaw } from "./systems/cameraSystem.js";
@@ -86,6 +86,7 @@ import {
   spawnTransferParticles,
   updateParticles
 } from "./systems/particleSystem.js";
+import { devCameraSnapshot, enterDevCamera, exitDevCamera, handleDevCameraKeyDown, handleDevCameraKeyUp, updateDevCamera, zoomDevCameraFromWheel } from "./debug/devCameraControls.js";
 import { handleDevEditorKeyDown, handleDevEditorPointerDown, initDevEditor, syncDevEditorColliderHelpers, syncDevEditorSelectionToScene, toggleDevEditorPanel, updateDevEditorPanel } from "./debug/devEditor.js";
 import { installTestHooks } from "./debug/testHooks.js";
 import { currentVisibleAssetsForState } from "./debug/visibleAssets.js";
@@ -174,6 +175,9 @@ import {
   LEVEL_TWO_FROG_SIDE_LEDGE_TILES,
   LEVEL_TWO_FROG_SIDE_LEDGE_HEIGHT,
   LEVEL_TWO_HEIGHT,
+  LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_HEIGHT,
+  LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_ID,
+  LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_TILES,
   LEVEL_TWO_LOVE_LETTER_CLEARANCE,
   LEVEL_TWO_MOUNTAIN_LAYER_COUNT,
   LEVEL_TWO_MOUNTAIN_PEAK_Y,
@@ -181,6 +185,7 @@ import {
   LEVEL_TWO_POINTS,
   LEVEL_TWO_RED_BUTTON_INVALID_COOLDOWN,
   LEVEL_TWO_RED_BUTTONS,
+  LEVEL_TWO_RED_BUTTON_B_TERRACE_TILES,
   LEVEL_TWO_RED_ELEVATOR_SIDE_APPROACH_ZONE,
   LEVEL_TWO_RED_ELEVATOR_TOP_EXIT_ZONE,
   LEVEL_TWO_RED_PLATFORMS,
@@ -366,6 +371,7 @@ const state = {
     transformMode: "translate",
     transformDragging: false,
     showColliders: false,
+    debugCamera: null,
     rows: []
   },
   reveals: {
@@ -662,6 +668,7 @@ async function init() {
       levelTwo: startLevelTwo
     },
     onUpdateHud: updateHud,
+    onOpenChange: handleDevEditorOpenChange,
     onShowPrompt: showPrompt
   });
   hud.loveLetterContinue?.addEventListener("click", dismissLoveLetterMessage);
@@ -671,6 +678,8 @@ async function init() {
   hud.exitContinue?.addEventListener("click", confirmHomeExit);
   hud.exitStay?.addEventListener("click", stayInHomeIntro);
   window.addEventListener("pointerdown", handlePointerDown);
+  window.addEventListener("wheel", handleWheel, { passive: false });
+  applyInitialDebugSceneFromUrl();
   resize();
   renderer.setAnimationLoop(renderFrame);
 }
@@ -743,6 +752,19 @@ function buildActors() {
   });
 }
 
+function debugSceneFromUrl() {
+  const debugScene = new URLSearchParams(window.location.search).get("debugScene");
+  return Object.values(SCENES).includes(debugScene) ? debugScene : "";
+}
+
+function applyInitialDebugSceneFromUrl() {
+  const debugScene = debugSceneFromUrl();
+  if (debugScene === SCENES.TUTORIAL) jumpToTutorialDebug();
+  if (debugScene === SCENES.HOME) startHomeIntro(null, { debug: true });
+  if (debugScene === SCENES.LEVEL_ONE) startLevelOne();
+  if (debugScene === SCENES.LEVEL_TWO) startLevelTwo();
+}
+
 function handleKeyDown(event) {
   if (!state.ready && event.code !== "KeyR") return;
   const debugScene = event.repeat ? "" : debugSceneForCode(event.code);
@@ -760,7 +782,12 @@ function handleKeyDown(event) {
     return;
   }
   if (state.devEditor.open) {
+    if (handleDevCameraKeyDown(event, state)) return;
     if (handleDevEditorKeyDown(event)) return;
+    if (event.code === "Space") {
+      event.preventDefault();
+      return;
+    }
   }
   if (event.code === "KeyR") {
     event.preventDefault();
@@ -1042,6 +1069,7 @@ function getCurrentSceneColliderDebugEntries() {
 }
 
 function handleKeyUp(event) {
+  if (state.devEditor.open && handleDevCameraKeyUp(event, state)) return;
   captureMoveKeyUp(input, event);
 }
 
@@ -1051,6 +1079,21 @@ function handlePointerDown(event) {
   event.preventDefault();
   if (state.loveLetterMessage.visible) return;
   tryFinishCelebration();
+}
+
+function handleWheel(event) {
+  if (!state.devEditor.open || event.target !== renderer.domElement) return;
+  zoomDevCameraFromWheel(event, { state, camera });
+}
+
+function handleDevEditorOpenChange(open) {
+  input.keys.clear();
+  if (open) {
+    enterDevCamera({ state, camera, activeActor: getActiveActor() });
+    return;
+  }
+  exitDevCamera({ state, camera });
+  updateCamera(1);
 }
 
 function startHomeIntro(event, options = {}) {
@@ -1228,6 +1271,23 @@ function updateLevelTwoInteractions(dt = 0) {
       showSpeech("frog", "That Totem is for you.", 1.8);
     }
   }
+
+  state.levelTwo.placeholderLoveLetterCollectable = levelTwoLoveLetterReachableByHuman();
+  if (!state.spellbookCollected) {
+    const activeActor = getActiveActor();
+    const distanceToLoveLetter = distance2D(activeActor, LEVEL_TWO_POINTS.placeholderLoveLetter);
+    if (state.active === "human" && distanceToLoveLetter <= LOVE_LETTER_APPROACH_RADIUS && distanceToLoveLetter > SPELLBOOK_RADIUS) {
+      showHumanLoveLetterApproach();
+    }
+    if (state.active === "human" && distanceToLoveLetter <= SPELLBOOK_RADIUS && levelTwoLoveLetterReachableByHuman()) {
+      collectSpellbook();
+      return;
+    }
+    if (state.active !== "human" && distanceToLoveLetter <= SPELLBOOK_RADIUS) {
+      showPrompt("Cubelings can't collect Love Letters. Switch back to your character.", 2.4);
+      showSpeech(state.active, "I can't pick this up.", 1.8);
+    }
+  }
 }
 
 function resetLevelTwoRedMechanismState() {
@@ -1314,7 +1374,7 @@ function updateLevelTwoRedMechanisms(dt = 0) {
   LEVEL_TWO_RED_BUTTONS.forEach((button) => {
     const buttonState = state.levelTwo.redButtons[button.id];
     const heldByElephant = state.levelTwo.elephantSpawned &&
-      (state.levelTwo.elephantSurfaceId === button.surfaceId || levelTwoRedPlatformAt(state.elephant)?.id === button.platformId) &&
+      levelTwoActorIsOnRedButtonSurface("elephant", state.elephant, button) &&
       distance2D(state.elephant, button.position) <= button.radius;
     buttonState.active = heldByElephant;
     buttonState.heldActor = heldByElephant ? "elephant" : "";
@@ -1438,9 +1498,20 @@ function activeIneligibleActorOnRedButton() {
   if (state.active !== "human" && state.active !== "frog") return "";
   const actor = getActiveActor();
   const button = LEVEL_TWO_RED_BUTTONS.find((candidate) =>
-    distance2D(actor, candidate.position) <= candidate.radius
+    distance2D(actor, candidate.position) <= candidate.radius &&
+    levelTwoActorIsOnRedButtonSurface(state.active, actor, candidate)
   );
   return button ? state.active : "";
+}
+
+function levelTwoActorIsOnRedButtonSurface(actorKey, actor, button) {
+  if (!button) return false;
+  if (button.platformId && levelTwoRedPlatformAt(actor)?.id === button.platformId) return true;
+  if (button.surfaceId && levelTwoActorSurfaceId(actor) === button.surfaceId) return true;
+  if (button.surfaceId === "tier-3-elephant-route" && actorKey === "elephant") {
+    return levelTwoElephantEchoTerraceSafeAt(actor, actor.radius + 0.08);
+  }
+  return false;
 }
 
 function collectElephantTotem() {
@@ -1531,6 +1602,10 @@ function update(dt) {
 
 function updateActiveMovement(dt) {
   if (!sceneAllowsInput()) return;
+  if (state.devEditor.open) {
+    state.inputMoving = false;
+    return;
+  }
   if (state.frogJump || state.skipModal.visible || state.celebration.active || state.celebration.modalVisible) {
     state.inputMoving = false;
     return;
@@ -1601,6 +1676,11 @@ function updateCelebratingFrog(dt) {
 function updateElephantIdle(dt) {
   if (state.scene.id !== SCENES.LEVEL_TWO || !state.levelTwo.elephantSpawned || state.active === "elephant") return;
   if (!sceneAllowsInput() || state.levelTwo.elephantRevealActive) return;
+  const heldButton = LEVEL_TWO_RED_BUTTONS.find((candidate) =>
+    levelTwoActorIsOnRedButtonSurface("elephant", state.elephant, candidate) &&
+    distance2D(state.elephant, candidate.position) <= candidate.radius
+  );
+  if (heldButton) return;
   const button = LEVEL_TWO_RED_BUTTONS[0];
   if (!button) return;
   const distanceToButton = distance2D(state.elephant, button.position);
@@ -1824,7 +1904,7 @@ function updateVisualEffects(dt) {
   updateLoveLetterAttention(dt);
   levelTwoGoalMeshes.forEach((mesh) => {
     if (mesh.userData.levelTwoAsset !== "placeholder-love-letter") return;
-    mesh.visible = state.scene.id === SCENES.LEVEL_TWO;
+    mesh.visible = state.scene.id === SCENES.LEVEL_TWO && !state.spellbookCollected;
     mesh.position.y = LEVEL_TWO_PLACEHOLDER_LOVE_LETTER_Y + Math.sin(state.elapsed * 2.4) * 0.11;
     mesh.rotation.y += dt * 1.25;
   });
@@ -2370,6 +2450,7 @@ function collectSpellbook() {
   state.spellbookCollected = true;
   if (state.scene.id === SCENES.TUTORIAL) state.tutorialComplete = true;
   if (state.scene.id === SCENES.LEVEL_ONE) state.levelOne.complete = true;
+  if (state.scene.id === SCENES.LEVEL_TWO) state.levelTwo.complete = true;
   state.reward = { active: true, elapsed: 0 };
   state.loveLetterMessage = createLoveLetterMessageState(currentLoveLetterId());
   state.celebration = createCelebrationState({ active: true, animationStage: "jump" });
@@ -2546,6 +2627,18 @@ function levelTwoWalkableSurfaceAllows(actor, x, z, collider) {
   if (actor === state.human && state.levelTwo.blueRampActive && collider.label.startsWith("level-two-elephant-totem-hill")) {
     return levelTwoTotemHillWalkableAt({ x, z }, actor.radius);
   }
+  if (actor === state.human && collider.label.startsWith("level-two-human-love-letter-route")) {
+    const currentPlatform = LEVEL_TWO_RED_PLATFORMS.find((platform) => platform.id === state.levelTwo.humanSurfaceId);
+    return levelTwoHumanLoveLetterRouteSafeAt({ x, z }, actor.radius) ||
+      Boolean(currentPlatform && levelTwoRedPlatformIsTopAligned(currentPlatform));
+  }
+  if (
+    actor === state.human &&
+    collider.label.startsWith("level-two-central-mountain") &&
+    Number.isFinite(collider.levelTwoTier)
+  ) {
+    return levelTwoHumanLoveLetterRouteSafeAt({ x, z }, actor.radius);
+  }
   if (actor === state.elephant && collider.label.startsWith("level-two-central-mountain")) {
     return levelTwoElephantCanUseMountainCollider({ x, z }, collider);
   }
@@ -2643,6 +2736,8 @@ function levelTwoRedPlatformLiftById(id) {
 }
 
 function levelTwoRedButtonSurfaceY(button) {
+  if (!button) return SURFACE_Y;
+  if (!button.platformId && Number.isFinite(button.surfaceTopY)) return button.surfaceTopY;
   const platform = LEVEL_TWO_RED_PLATFORMS.find((candidate) =>
     candidate.id === (button?.platformId || button?.linkedPlatformId)
   );
@@ -2676,6 +2771,13 @@ function levelTwoRedPlatformCanAttachActor(actor, platform) {
   if (!levelTwoActorCanRideRedPlatform(actor, platform)) return false;
   if (levelTwoActorIsOnRedPlatformSurface(actor, platform)) return true;
   if (levelTwoRedPlatformIsGroundAligned(platform)) return true;
+  if (
+    actor === state.human &&
+    state.levelTwo.humanSurfaceId === LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_ID &&
+    levelTwoRedPlatformIsTopAligned(platform)
+  ) {
+    return true;
+  }
   return actor === state.elephant &&
     state.levelTwo.elephantSurfaceId === "tier-3-elephant-route" &&
     levelTwoRedPlatformIsTopAligned(platform);
@@ -2711,6 +2813,26 @@ function levelTwoElephantEchoTerraceSafeAt(point, actorRadius = 0) {
     levelTwoRedElevatorTopExitSafeAt(point, actorRadius);
 }
 
+function levelTwoHumanLoveLetterRouteAccessible() {
+  if (state.levelTwo.humanSurfaceId === LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_ID) return true;
+  return levelTwoRedPlatformProgressById("red-elevator-b") >= 0.92;
+}
+
+function levelTwoHumanLoveLetterRouteSafeAt(point, actorRadius = 0) {
+  if (!levelTwoHumanLoveLetterRouteAccessible()) return false;
+  const routePadding = Math.max(0.04, actorRadius * 0.08);
+  const plateauPadding = Math.max(0.04, actorRadius * 0.08);
+  const loveLetterPlateau = LEVEL_TWO_CENTRAL_MOUNTAIN_TIERS.find((tier) => tier.id === "tier-4-love-letter-plateau");
+  return pointInLevelTwoTiles(point, LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_TILES, routePadding) ||
+    Boolean(loveLetterPlateau && pointInLevelTwoTiles(point, loveLetterPlateau.tiles, plateauPadding));
+}
+
+function levelTwoLoveLetterReachableByHuman() {
+  if (state.scene.id !== SCENES.LEVEL_TWO || state.spellbookCollected) return false;
+  return state.levelTwo.humanSurfaceId === LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_ID ||
+    levelTwoHumanLoveLetterRouteSafeAt(state.human, state.human.radius + 0.08);
+}
+
 function levelTwoRedElevatorTopExitSafeAt(point, actorRadius = 0) {
   if (levelTwoRedPlatformProgressById("red-elevator-a") < 0.92) return false;
   const padding = Math.max(0, actorRadius * 0.2);
@@ -2736,6 +2858,13 @@ function levelTwoRaisedSurfaceBlocksTransition(actor, x, z) {
     const target = { x, z };
     return state.levelTwo.elephantSurfaceId === "tier-3-elephant-route" &&
       !levelTwoElephantEchoTerraceSafeAt(target, actor.radius);
+  }
+  if (actor === state.human && state.levelTwo.humanSurfaceId === LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_ID) {
+    const target = { x, z };
+    const targetPlatform = levelTwoRedPlatformAt(target);
+    if (levelTwoHumanLoveLetterRouteSafeAt(target, actor.radius)) return false;
+    if (targetPlatform && levelTwoRedPlatformIsTopAligned(targetPlatform)) return false;
+    return true;
   }
   if (actor !== state.human || !state.levelTwo.blueRampActive) return false;
   const target = { x, z };
@@ -2768,6 +2897,13 @@ function levelTwoRedPlatformBlocksTransition(actor, target) {
     ) {
       return false;
     }
+    if (
+      actor === state.human &&
+      levelTwoRedPlatformIsTopAligned(currentPlatform) &&
+      levelTwoHumanLoveLetterRouteSafeAt(target, actor.radius)
+    ) {
+      return false;
+    }
     return true;
   }
 
@@ -2776,6 +2912,13 @@ function levelTwoRedPlatformBlocksTransition(actor, target) {
   if (
     actor === state.elephant &&
     state.levelTwo.elephantSurfaceId === "tier-3-elephant-route" &&
+    levelTwoRedPlatformIsTopAligned(targetPlatform)
+  ) {
+    return false;
+  }
+  if (
+    actor === state.human &&
+    state.levelTwo.humanSurfaceId === LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_ID &&
     levelTwoRedPlatformIsTopAligned(targetPlatform)
   ) {
     return false;
@@ -2813,6 +2956,9 @@ function levelTwoActorLiftAt(actor, point = actor) {
     }
     if (levelTwoHumanHillSafeAt(point, actor.radius)) return Math.max(LEVEL_TWO_ELEPHANT_TOTEM_HILL.heightAboveGround, redPlatformLift);
   }
+  if (actor === state.human && levelTwoHumanLoveLetterRouteSafeAt(point, actor.radius + 0.04)) {
+    return Math.max(LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_HEIGHT, redPlatformLift);
+  }
   if (actor === state.elephant && state.levelTwo.elephantSpawned) {
     if (levelTwoElephantHasTopRouteAccess() && levelTwoElephantEchoTerraceSafeAt(point, actor.radius + 0.04)) {
       return Math.max(LEVEL_TWO_ELEPHANT_ECHO_HEIGHT, redPlatformLift);
@@ -2830,8 +2976,19 @@ function updateLevelTwoSurfaceState() {
     }
   }
   const humanRedPlatform = levelTwoRedPlatformAt(state.human);
-  if (humanRedPlatform && levelTwoRedPlatformCanAttachActor(state.human, humanRedPlatform)) {
+  const humanOnLoveLetterRoute = levelTwoHumanLoveLetterRouteSafeAt(state.human, state.human.radius + 0.06);
+  if (
+    humanOnLoveLetterRoute &&
+    (
+      state.levelTwo.humanSurfaceId === LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_ID ||
+      (state.levelTwo.humanSurfaceId === "red-elevator-b" && levelTwoRedPlatformProgressById("red-elevator-b") >= 0.92)
+    )
+  ) {
+    state.levelTwo.humanSurfaceId = LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_ID;
+  } else if (humanRedPlatform && levelTwoRedPlatformCanAttachActor(state.human, humanRedPlatform)) {
     state.levelTwo.humanSurfaceId = humanRedPlatform.id;
+  } else if (humanOnLoveLetterRoute) {
+    state.levelTwo.humanSurfaceId = LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_ID;
   } else if (state.levelTwo.blueRampActive) {
     if (levelTwoHumanHillSafeAt(state.human, state.human.radius)) {
       state.levelTwo.humanSurfaceId = "elephant-totem-hill";
@@ -3123,6 +3280,10 @@ function playHumanAnimation(name, force = false) {
 }
 
 function updateCamera(dt) {
+  if (state.devEditor.open) {
+    updateDevCamera({ state, camera, dt, activeActor: getActiveActor() });
+    return;
+  }
   const activeActor = state.celebration.active || state.celebration.modalVisible ? state.human : getActiveActor();
   const bounds = activeWorldBounds();
   applyCameraUpdate(camera, state, dt, activeActor, bounds);
@@ -3556,7 +3717,8 @@ function updateControlsPanel() {
 function updateLevelCompleteModal() {
   renderLevelCompleteModal(hud, {
     open: state.celebration.modalVisible,
-    isTutorial: state.scene.id === SCENES.TUTORIAL
+    isTutorial: state.scene.id === SCENES.TUTORIAL,
+    levelName: state.scene.id === SCENES.LEVEL_TWO ? "Level Two" : "Level One"
   });
 }
 
@@ -3758,7 +3920,16 @@ function getSpeechAnchorPoint(anchor) {
     const button = buttonPoint();
     return { x: button.x, y: SURFACE_Y + 1.05, z: button.z };
   }
-  if (anchor === "loveLetter" || anchor === "spellbook") return { x: SPELLBOOK.x, y: SURFACE_Y + 1.9, z: SPELLBOOK.z };
+  if (anchor === "loveLetter" || anchor === "spellbook") {
+    if (state.scene.id === SCENES.LEVEL_TWO) {
+      return {
+        x: LEVEL_TWO_POINTS.placeholderLoveLetter.x,
+        y: LEVEL_TWO_PLACEHOLDER_LOVE_LETTER_Y + 1.2,
+        z: LEVEL_TWO_POINTS.placeholderLoveLetter.z
+      };
+    }
+    return { x: SPELLBOOK.x, y: SURFACE_Y + 1.9, z: SPELLBOOK.z };
+  }
   return { x: state.human.x, y: SURFACE_Y + 2.35, z: state.human.z };
 }
 
@@ -3798,7 +3969,9 @@ function sceneAllowsInput() {
 }
 
 function currentLoveLetterId() {
-  return state.scene.id === SCENES.LEVEL_ONE ? LEVEL_ONE_LOVE_LETTER_ID : TUTORIAL_LOVE_LETTER_ID;
+  if (state.scene.id === SCENES.LEVEL_ONE) return LEVEL_ONE_LOVE_LETTER_ID;
+  if (state.scene.id === SCENES.LEVEL_TWO) return LEVEL_TWO_LOVE_LETTER_ID;
+  return TUTORIAL_LOVE_LETTER_ID;
 }
 
 function directionName(vector) {
@@ -4039,7 +4212,8 @@ function renderGameToText() {
   camera: {
     yaw: Number(state.cameraYaw.toFixed(3)),
     targetYaw: Number(state.targetCameraYaw.toFixed(3)),
-    movement: "camera-relative"
+    movement: state.devEditor.open ? "dev-editor-free-camera" : "camera-relative",
+    devEditor: devCameraSnapshot(state)
   },
   frogAi: {
     active: state.reveals.frog && state.active !== "frog" && !state.celebration.modalVisible,
@@ -4216,10 +4390,11 @@ function renderGameToText() {
     mapShape: "square",
     width: LEVEL_TWO_WIDTH,
     height: LEVEL_TWO_HEIGHT,
+    complete: state.levelTwo.complete,
     frogAvailableFromStart: state.scene.id === SCENES.LEVEL_TWO && state.reveals.frog,
     elevatedGoalVisible: state.scene.id === SCENES.LEVEL_TWO && state.levelTwo.elevatedGoalVisible,
     placeholderLoveLetterVisible: state.scene.id === SCENES.LEVEL_TWO && state.levelTwo.placeholderLoveLetterVisible,
-    placeholderLoveLetterCollectable: false,
+    placeholderLoveLetterCollectable: state.levelTwo.placeholderLoveLetterCollectable || levelTwoLoveLetterReachableByHuman(),
     placeholderLoveLetterPosition: {
       x: Number(LEVEL_TWO_POINTS.placeholderLoveLetter.x.toFixed(2)),
       y: Number(LEVEL_TWO_PLACEHOLDER_LOVE_LETTER_Y.toFixed(2)),
@@ -4366,7 +4541,19 @@ function renderGameToText() {
       surfaceId: state.levelTwo.elephantSurfaceId,
       surfaceLift: Number(levelTwoActorLiftAt(state.elephant).toFixed(2)),
       mostlyStationaryWhenUnpossessed: state.active !== "elephant",
-      behavior: "slow grounded movement; seeks nearest accessible red button when unpossessed; no hop or patrol; activates red weight buttons; no recall or final route yet"
+      behavior: "slow grounded movement; holds red buttons when unpossessed; activates Button A for its elevator and Button B for the human elevator"
+    },
+    loveLetterRoute: {
+      id: LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_ID,
+      visible: state.scene.id === SCENES.LEVEL_TWO,
+      reachableByHuman: levelTwoLoveLetterReachableByHuman(),
+      tileCount: LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_TILES.length,
+      heightAboveGround: Number(LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_HEIGHT.toFixed(2)),
+      requiresElevatorBTopAligned: state.levelTwo.humanSurfaceId !== LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_ID,
+      elevatorBProgress: Number(levelTwoRedPlatformProgressById("red-elevator-b").toFixed(2)),
+      buttonBTerraceTileCount: LEVEL_TWO_RED_BUTTON_B_TERRACE_TILES.length,
+      buttonBUsesExistingTier3Terrain: LEVEL_TWO_RED_BUTTON_B_TERRACE_TILES.length === 0,
+      routeProof: "fixture walks human from Elevator B upper stop to Love Letter"
     },
     redButtons: LEVEL_TWO_RED_BUTTONS.map((button) => {
       const buttonState = state.levelTwo.redButtons?.[button.id] || {};
@@ -4464,6 +4651,26 @@ function renderGameToText() {
       connectedToLoveLetterRoute: false,
       invalidFeedback: "Only the Elephant Cubeling is heavy enough for red buttons."
     },
+    redElevatorB: {
+      visible: state.scene.id === SCENES.LEVEL_TWO,
+      teachingSequence: "Elephant holds west-side Red Button B while the human rides Red Elevator B to the Love Letter route.",
+      startsRaised: false,
+      upperDockTier: 4,
+      upperDockSurfaceY: Number(LEVEL_TWO_MOUNTAIN_PEAK_Y.toFixed(2)),
+      topConnection: LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_ID,
+      verticalShaftClearance: "ground restored under platform; no shaft cutout",
+      hasShaftCutout: false,
+      buttonNearEdge: false,
+      buttonOffsetFromPlatformCenter: Number(distance2D(LEVEL_TWO_RED_BUTTONS[1].position, LEVEL_TWO_RED_PLATFORMS[1].position).toFixed(2)),
+      cyclesWhileHeldByElephant: LEVEL_TWO_RED_PLATFORMS[1].movementRule === "cycle-while-held",
+      releaseBehavior: LEVEL_TWO_RED_PLATFORMS[1].releaseBehavior,
+      raisesWhenHeldByElephant: true,
+      humanRidesThisSlice: true,
+      supportsHumanCollision: true,
+      supportsHumanRidingIfPlayerBoards: true,
+      connectedToLoveLetterRoute: true,
+      invalidFeedback: "Only the Elephant Cubeling is heavy enough for red buttons."
+    },
     reservedPlatformStations: LEVEL_TWO_RESERVED_TERRACE_GROUPS.map((station) => ({
       id: station.id,
       role: station.role,
@@ -4528,8 +4735,8 @@ function renderGameToText() {
     humanToFrogEcho: Number(distance2D(state.human, START.frog).toFixed(2)),
     humanToFrogTotem: Number(distance2D(state.human, FROG_TOTEM).toFixed(2)),
     frogToButton: Number(distance2D(state.frog, buttonPoint()).toFixed(2)),
-    humanToLoveLetter: Number(distance2D(state.human, SPELLBOOK).toFixed(2)),
-    frogToLoveLetter: Number(distance2D(state.frog, SPELLBOOK).toFixed(2))
+    humanToLoveLetter: Number(distance2D(state.human, getSpeechAnchorPoint("loveLetter")).toFixed(2)),
+    frogToLoveLetter: Number(distance2D(state.frog, getSpeechAnchorPoint("loveLetter")).toFixed(2))
   },
   frameAgeMs: Math.round(performance.now() - lastFrameTime)
   });

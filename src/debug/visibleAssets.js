@@ -44,7 +44,8 @@ export function currentVisibleAssetsForState(state, sceneIds) {
       "kaykit-blockbits-frog-side-ledge",
       "kaykit-blockbits-blue-button-ledge",
       "kaykit-blockbits-elephant-totem-hill",
-      "kaykit-blockbits-reserved-elephant-elevator-terraces",
+      "kaykit-blockbits-red-elevator-a-top-connector",
+      "kaykit-blockbits-human-love-letter-route",
       "kaykit-forest-tree",
       "kaykit-forest-bush",
       "kaykit-forest-rock",
@@ -59,7 +60,9 @@ export function currentVisibleAssetsForState(state, sceneIds) {
       state.levelTwo.elephantEchoVisible ? "elephant-echo-muted-grey-ground-circle" : null,
       state.levelTwo.elephantTotemVisible && !state.levelTwo.elephantTotemCollected ? "elephant-cubeling-totem-small-gold-floating-elephant" : null,
       "kaykit-platformer-button-red-weight-elevator-a",
+      "kaykit-platformer-button-red-weight-elevator-b",
       "kaykit-platformer-red-elevator-a",
+      "kaykit-platformer-red-elevator-b",
       "kaykit-love-letter-closed-placeholder-noncollectable",
       "animals-farm-background-clouds-under-scene"
     ].filter(Boolean);

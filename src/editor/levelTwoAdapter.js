@@ -18,14 +18,15 @@ import {
   LEVEL_TWO_ELEPHANT_TOTEM_HILL,
   LEVEL_TWO_ELEPHANT_TOTEM_VISUAL_SCALE,
   LEVEL_TWO_FROG_SIDE_LEDGE_TILES,
+  LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_TILES,
   LEVEL_TWO_HEIGHT,
   LEVEL_TWO_PATH_TILES,
   LEVEL_TWO_PLACEHOLDER_LOVE_LETTER_Y,
   LEVEL_TWO_POINTS,
   LEVEL_TWO_PROPS,
   LEVEL_TWO_RED_BUTTONS,
+  LEVEL_TWO_RED_ELEVATOR_TOP_CONNECTOR_TILES,
   LEVEL_TWO_RED_PLATFORMS,
-  LEVEL_TWO_RESERVED_TERRACE_TILES,
   LEVEL_TWO_WIDTH
 } from "../levels/levelTwo.js";
 import { snapshotTransform } from "./EditorPatchExporter.js";
@@ -118,7 +119,8 @@ function addTerrain({ group, placeAsset }) {
     ["frog-side-ledge", LEVEL_TWO_FROG_SIDE_LEDGE_TILES],
     ["blue-button-ledge", LEVEL_TWO_BUTTON_LEDGE_TILES],
     ["elephant-totem-hill", LEVEL_TWO_ELEPHANT_TOTEM_HILL.tiles],
-    ["reserved-terrace", LEVEL_TWO_RESERVED_TERRACE_TILES]
+    ["red-elevator-a-top-connector", LEVEL_TWO_RED_ELEVATOR_TOP_CONNECTOR_TILES],
+    ["human-love-letter-route", LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_TILES]
   ].forEach(([label, tiles]) => {
     tiles.forEach((tile, index) => {
       placeRaisedTile({ group, placeAsset, tile, label, index });
@@ -249,7 +251,7 @@ export function buildLevelTwoEditorScene({ cloneAsset, placeAsset }) {
     group.add(redButton);
     editableObjects.push(tagRoot(redButton, {
       id: `level_two.${button.id}`,
-      name: "Red Button A",
+      name: button.id === "red-button-b" ? "Red Button B" : "Red Button A",
       category: "red_button",
       assetKey: button.asset,
       sourceRef: sourceRef("LEVEL_TWO_RED_BUTTONS", button.id)
@@ -266,7 +268,7 @@ export function buildLevelTwoEditorScene({ cloneAsset, placeAsset }) {
     group.add(redPlatform);
     editableObjects.push(tagRoot(redPlatform, {
       id: `level_two.${platform.id}`,
-      name: "Red Elevator A",
+      name: platform.id === "red-elevator-b" ? "Red Elevator B" : "Red Elevator A",
       category: "red_platform",
       assetKey: platform.asset,
       sourceRef: sourceRef("LEVEL_TWO_RED_PLATFORMS", platform.id)

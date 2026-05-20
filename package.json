@@ -12,7 +12,9 @@
     "tools:list-levels": "node scripts/list-levels.js",
     "tools:get-level-manifest": "node scripts/get-level-manifest.js",
     "tools:list-level-objects": "node scripts/list-level-objects.js",
+    "tools:explain-editor-patch": "node scripts/explain-editor-patch.js",
     "tools:run-scene-smoke": "node scripts/run-scene-smoke.js",
+    "tools:run-editor-smoke": "node scripts/run-editor-smoke.js",
     "tools:run-fixture": "node scripts/run-fixture.js",
     "tools:validate-missing-colliders": "node scripts/validate-missing-colliders.js",
     "tools:validate-float-colliders": "node scripts/validate-float-colliders.js"

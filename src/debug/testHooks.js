@@ -130,6 +130,53 @@ export function installTestHooks({
     return JSON.parse(renderGameToText());
   };
 
+  windowRef.set_game_test_level_two_red_b_ready = () => {
+    startLevelTwo({ showTitle: false });
+    state.scene.phase = "play";
+    state.scene.titleCardVisible = false;
+    state.scene.titleCardText = "";
+    state.levelTwo.phase = "play";
+    state.levelTwo.blueButtonPressed = true;
+    state.levelTwo.blueRampActive = true;
+    state.levelTwo.elephantEchoVisible = true;
+    state.levelTwo.elephantEchoPromptIndex = 0;
+    state.levelTwo.lastElephantEchoPromptAt = -Infinity;
+    state.levelTwo.elephantEchoSparkleTimer = 0.7;
+    state.levelTwo.elephantTotemVisible = false;
+    state.levelTwo.elephantTotemCollected = true;
+    state.levelTwo.elephantUnlockPending = false;
+    state.levelTwo.elephantAwake = true;
+    state.levelTwo.elephantSpawned = true;
+    state.levelTwo.elephantSurfaceId = "tier-3-elephant-route";
+    state.levelTwo.elephantRevealActive = false;
+    state.levelTwo.elephantRevealElapsed = 0;
+    state.levelTwo.elephantSpawnCount = Math.max(1, state.levelTwo.elephantSpawnCount || 0);
+    resetLevelTwoRedMechanismState?.();
+    state.cubelings.elephant = { unlocked: true, unlockedPending: false, active: false, spawned: true };
+    state.active = "human";
+    state.elephant.x = levelTwoPoints.redButtonB.x;
+    state.elephant.z = levelTwoPoints.redButtonB.z;
+    state.elephant.facing = { x: 0, z: 1, name: "south" };
+    state.human.x = levelTwoPoints.redElevatorB.x;
+    state.human.z = levelTwoPoints.redElevatorB.z;
+    state.human.facing = { x: 0, z: -1, name: "north" };
+    state.frog.x = levelTwoPoints.frogStart.x;
+    state.frog.z = levelTwoPoints.frogStart.z;
+    state.frog.facing = { x: 1, z: 0, name: "east" };
+    state.levelTwo.frogSurfaceId = null;
+    state.levelTwo.humanSurfaceId = "red-elevator-b";
+    input.keys.clear();
+    clearSpeechQueue();
+    state.speech = { text: "", anchor: "human", until: 0 };
+    state.secondarySpeech = { text: "", anchor: "", until: 0 };
+    updateLevelTwoSurfaceState();
+    update(1 / 60);
+    syncAll();
+    updateCamera(1);
+    updateHud();
+    return JSON.parse(renderGameToText());
+  };
+
   windowRef.set_game_test_actor_position = (payload = {}) => {
     const actor = payload.actor === "frog" ? state.frog : payload.actor === "elephant" ? state.elephant : state.human;
     if (Number.isFinite(payload.x)) actor.x = Number(payload.x);

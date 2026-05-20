@@ -1,12 +1,29 @@
 # Lumina3D AI Context Packet Schema
 
-This schema is for manual paste workflows, future copy buttons, or future AI forms. It does not require automation, MCP, or a new editor.
+This schema is for manual paste workflows, the runtime F2 Dev Editor `Copy AI
+Context` button, or future AI forms. It does not require MCP or source-file
+writes from the browser.
+
+Canonical runtime schema ID:
+
+```txt
+lumina3d.dev.aiContext.v1
+```
+
+Related runtime export schemas:
+
+```txt
+lumina3d.dev.selectionDelta.v1
+lumina3d.dev.scenePatch.v1
+```
+
+Older `lumina3d-ai-context-v1` references are legacy documentation labels only.
 
 ## Schema
 
 ```json
 {
-  "schemaVersion": "lumina3d-ai-context-v1",
+  "schema": "lumina3d.dev.aiContext.v1",
   "taskType": "collision | walkable-surface | orientation | positioning | trigger | scene-flow | visual-polish",
   "sceneId": "tutorial | home_intro | level_one | level_two | unknown",
   "levelId": "tutorial | home_intro | level_one | level_two | unknown",
@@ -25,6 +42,7 @@ This schema is for manual paste workflows, future copy buttons, or future AI for
   "levelObjects": [],
   "selectedObject": {
     "id": "",
+    "displayName": "",
     "name": "",
     "type": "",
     "category": "",
@@ -36,6 +54,12 @@ This schema is for manual paste workflows, future copy buttons, or future AI for
     "mechanismLink": null
   },
   "nearbyObjects": [],
+  "selectionDelta": {
+    "schema": "lumina3d.dev.selectionDelta.v1",
+    "original": null,
+    "current": null,
+    "delta": null
+  },
   "colliderContext": {
     "suspectedColliderIds": [],
     "observedColliderCount": null,
@@ -84,7 +108,7 @@ Use `home_intro` for CLI commands.
 
 ```json
 {
-  "schemaVersion": "lumina3d-ai-context-v1",
+  "schema": "lumina3d.dev.aiContext.v1",
   "taskType": "collision",
   "sceneId": "home_intro",
   "levelId": "home_intro",
@@ -160,7 +184,7 @@ Use `home_intro` for CLI commands.
 
 ```json
 {
-  "schemaVersion": "lumina3d-ai-context-v1",
+  "schema": "lumina3d.dev.aiContext.v1",
   "taskType": "walkable-surface",
   "sceneId": "level_two",
   "levelId": "level_two",

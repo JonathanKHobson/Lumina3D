@@ -10,6 +10,13 @@ import {
   snapshotTransform,
   summarizeEditorPatch
 } from "./EditorPatchExporter.js";
+import {
+  buildEditorStateExport,
+  loadEditorObjectMeta,
+  normalizeObjectMeta,
+  saveEditorObjectMeta,
+  summarizeEditorStateExport
+} from "./EditorStateExporter.js";
 import { EditorCameraController } from "./EditorCameraController.js";
 import { buildLevelTwoEditorScene } from "./levelTwoAdapter.js";
 
@@ -17,6 +24,18 @@ const VIEW_HEIGHT = 42;
 const CAMERA_OFFSET = new THREE.Vector3(28, 30, 28);
 const TRANSLATE_SNAP = 0.25;
 const ROTATION_SNAP = Math.PI / 12;
+const NOTE_CHIPS = [
+  "@move",
+  "@rotate",
+  "@fade",
+  "@appear",
+  "@disappear",
+  "@spawn",
+  "@trigger",
+  "@button",
+  "@platform",
+  "@loop"
+];
 
 export class EditorApp {
   constructor({ root, canvas }) {
@@ -31,7 +50,9 @@ export class EditorApp {
     this.pointer = new THREE.Vector2();
     this.level = null;
     this.records = [];
+    this.objectMeta = {};
     this.selectedId = "";
+    this.outputMode = "patch";
     this.transformControls = null;
     this.transformHelper = null;
     this.selectionBox = null;
@@ -83,18 +104,26 @@ export class EditorApp {
       objectCount: this.root.querySelector("#objectCount"),
       objectList: this.root.querySelector("#objectList"),
       dirtyCount: this.root.querySelector("#dirtyCount"),
+      playInGame: this.root.querySelector("#playInGame"),
       translateMode: this.root.querySelector("#translateMode"),
       rotateMode: this.root.querySelector("#rotateMode"),
       frameSelected: this.root.querySelector("#frameSelected"),
       zoomOutCamera: this.root.querySelector("#zoomOutCamera"),
       zoomInCamera: this.root.querySelector("#zoomInCamera"),
+      pitchDownCamera: this.root.querySelector("#pitchDownCamera"),
+      pitchUpCamera: this.root.querySelector("#pitchUpCamera"),
       resetCamera: this.root.querySelector("#resetCamera"),
       cameraReadout: this.root.querySelector("#cameraReadout"),
       snapToggle: this.root.querySelector("#snapToggle"),
+      resetSelected: this.root.querySelector("#resetSelected"),
+      markDelete: this.root.querySelector("#markDelete"),
+      objectNote: this.root.querySelector("#objectNote"),
+      noteChipRow: this.root.querySelector("#noteChipRow"),
       selectionSummary: this.root.querySelector("#selectionSummary"),
       transformReadout: this.root.querySelector("#transformReadout"),
       patchOutput: this.root.querySelector("#patchOutput"),
       copyPatch: this.root.querySelector("#copyPatch"),
+      copyState: this.root.querySelector("#copyState"),
       viewportBadge: this.root.querySelector("#viewportBadge"),
       toast: this.root.querySelector("#editorToast")
     };
@@ -151,9 +180,21 @@ export class EditorApp {
     this.dom.frameSelected.addEventListener("click", () => this.frameSelected());
     this.dom.zoomOutCamera.addEventListener("click", () => this.zoomCamera("out"));
     this.dom.zoomInCamera.addEventListener("click", () => this.zoomCamera("in"));
+    this.dom.pitchDownCamera.addEventListener("click", () => this.tiltCamera("down"));
+    this.dom.pitchUpCamera.addEventListener("click", () => this.tiltCamera("up"));
     this.dom.resetCamera.addEventListener("click", () => this.resetCamera());
     this.dom.snapToggle.addEventListener("change", () => this.updateSnap());
+    this.dom.resetSelected.addEventListener("click", () => this.resetSelectedObject());
+    this.dom.markDelete.addEventListener("click", () => this.toggleDeleteMark());
+    this.dom.objectNote.addEventListener("input", () => this.updateSelectedNote(this.dom.objectNote.value));
+    this.dom.noteChipRow.addEventListener("click", (event) => {
+      const chip = event.target.closest("[data-note-chip]");
+      if (!chip) return;
+      this.insertNoteChip(chip.dataset.noteChip);
+    });
     this.dom.copyPatch.addEventListener("click", () => this.copyPatch());
+    this.dom.copyState.addEventListener("click", () => this.copyEditorState());
+    this.dom.playInGame.addEventListener("click", () => this.playInGame());
     this.dom.levelSelect.addEventListener("change", () => this.loadLevel(this.dom.levelSelect.value));
   }
 
@@ -172,6 +213,7 @@ export class EditorApp {
     });
     this.scene.add(this.level.group);
     this.records = this.level.editableObjects;
+    this.objectMeta = loadEditorObjectMeta(levelId);
     this.dom.viewportBadge.textContent = this.level.name;
     this.selectObject("level_two.blue_ramp");
     this.setStatus("Ready");
@@ -240,6 +282,8 @@ export class EditorApp {
       KeyD: () => this.cameraController.pan({ right: 1, multiplier }),
       KeyQ: () => this.cameraController.rotateYaw(-1, multiplier),
       KeyE: () => this.cameraController.rotateYaw(1, multiplier),
+      BracketLeft: () => this.cameraController.tiltPitch(-1, multiplier),
+      BracketRight: () => this.cameraController.tiltPitch(1, multiplier),
       Equal: () => this.cameraController.zoomIn(),
       NumpadAdd: () => this.cameraController.zoomIn(),
       Minus: () => this.cameraController.zoomOut(),
@@ -337,11 +381,89 @@ export class EditorApp {
     this.transformControls.setRotationSnap(snap ? ROTATION_SNAP : null);
   }
 
+  resetSelectedObject() {
+    const record = this.selectedRecord();
+    if (!record) return;
+    const transform = record.originalTransform;
+    record.object.position.set(transform.position.x, transform.position.y, transform.position.z);
+    record.object.rotation.set(transform.rotation.x, transform.rotation.y, transform.rotation.z);
+    record.object.scale.set(transform.scale.x, transform.scale.y, transform.scale.z);
+    record.object.updateMatrixWorld(true);
+    this.updateSelectionHelpers();
+    this.updateUi();
+  }
+
+  selectedMeta() {
+    if (!this.selectedId) return normalizeObjectMeta();
+    return normalizeObjectMeta(this.objectMeta[this.selectedId]);
+  }
+
+  setObjectMeta(objectId, updates) {
+    if (!objectId) return;
+    const nextMeta = normalizeObjectMeta({
+      ...this.objectMeta[objectId],
+      ...updates,
+      updatedAt: new Date().toISOString()
+    });
+    const hasContent = nextMeta.note.trim() || nextMeta.markedForDelete;
+    if (hasContent) {
+      this.objectMeta = {
+        ...this.objectMeta,
+        [objectId]: nextMeta
+      };
+    } else {
+      const nextObjectMeta = { ...this.objectMeta };
+      delete nextObjectMeta[objectId];
+      this.objectMeta = nextObjectMeta;
+    }
+    saveEditorObjectMeta(this.level?.id || "level_two", this.objectMeta);
+    this.outputMode = "state";
+    this.updateUi();
+  }
+
+  updateSelectedNote(note) {
+    if (!this.selectedId) return;
+    this.setObjectMeta(this.selectedId, { note });
+  }
+
+  insertNoteChip(chip) {
+    if (!this.selectedId || !NOTE_CHIPS.includes(chip)) return;
+    const noteInput = this.dom.objectNote;
+    const current = noteInput.value;
+    const start = noteInput.selectionStart ?? current.length;
+    const end = noteInput.selectionEnd ?? current.length;
+    const prefix = current.slice(0, start);
+    const suffix = current.slice(end);
+    const needsLeadingSpace = prefix.length > 0 && !/\s$/.test(prefix);
+    const needsTrailingSpace = suffix.length > 0 && !/^\s/.test(suffix);
+    const insertion = `${needsLeadingSpace ? " " : ""}${chip}${needsTrailingSpace ? " " : ""}`;
+    const nextValue = `${prefix}${insertion}${suffix}`;
+    noteInput.value = nextValue;
+    const cursor = prefix.length + insertion.length;
+    noteInput.focus({ preventScroll: true });
+    noteInput.setSelectionRange(cursor, cursor);
+    this.updateSelectedNote(nextValue);
+  }
+
+  toggleDeleteMark() {
+    if (!this.selectedId) return;
+    const meta = this.selectedMeta();
+    this.setObjectMeta(this.selectedId, { markedForDelete: !meta.markedForDelete });
+  }
+
   zoomCamera(direction) {
     if (!this.cameraController) return;
     if (direction === "in") this.cameraController.zoomIn();
     if (direction === "out") this.cameraController.zoomOut();
     this.markCameraNavigating();
+    this.updateUi();
+  }
+
+  tiltCamera(direction) {
+    if (!this.cameraController) return;
+    this.cameraController.tiltPitch(direction === "up" ? 1 : -1);
+    this.markCameraNavigating();
+    this.updateSelectionHelpers();
     this.updateUi();
   }
 
@@ -371,6 +493,7 @@ export class EditorApp {
     box.getCenter(center);
     this.setupCamera(center);
     this.updateSelectionHelpers();
+    this.updateUi();
   }
 
   canvasPointForObject(objectId) {
@@ -395,15 +518,32 @@ export class EditorApp {
     });
   }
 
+  currentStateExport() {
+    return buildEditorStateExport({
+      levelId: this.level?.id || "level_two",
+      records: this.records,
+      selectedId: this.selectedId,
+      objectMeta: this.objectMeta
+    });
+  }
+
   updateUi() {
     if (!this.dom.objectList) return;
     const dirty = dirtyRecords(this.records);
     const dirtyIds = new Set(dirty.map((record) => record.id));
+    const notedIds = new Set(Object.entries(this.objectMeta)
+      .filter(([, meta]) => normalizeObjectMeta(meta).note.trim())
+      .map(([objectId]) => objectId));
+    const deleteIds = new Set(Object.entries(this.objectMeta)
+      .filter(([, meta]) => normalizeObjectMeta(meta).markedForDelete)
+      .map(([objectId]) => objectId));
     const selected = this.selectedRecord();
     const patch = this.currentPatch();
+    const stateExport = this.currentStateExport();
+    const selectedMeta = this.selectedMeta();
 
     this.dom.objectCount.textContent = String(this.records.length);
-    this.dom.dirtyCount.textContent = `${dirty.length} dirty`;
+    this.dom.dirtyCount.textContent = `${stateExport.affectedObjectCount} affected`;
     this.dom.editorStatus.textContent = this.status;
     this.dom.editorStatus.classList.toggle("is-ready", this.status === "Ready");
     this.dom.editorStatus.classList.toggle("is-error", /failed|unsupported/i.test(this.status));
@@ -415,12 +555,19 @@ export class EditorApp {
       row.className = [
         "editor-object-row",
         record.id === this.selectedId ? "is-selected" : "",
-        dirtyIds.has(record.id) ? "is-dirty" : ""
+        dirtyIds.has(record.id) ? "is-dirty" : "",
+        notedIds.has(record.id) ? "is-noted" : "",
+        deleteIds.has(record.id) ? "is-delete" : ""
       ].filter(Boolean).join(" ");
+      const metaFlags = [
+        dirtyIds.has(record.id) ? "changed" : "",
+        notedIds.has(record.id) ? "note" : "",
+        deleteIds.has(record.id) ? "delete" : ""
+      ].filter(Boolean).join(" / ");
       row.dataset.editorObjectId = record.id;
       row.innerHTML = `
         <span class="object-name">${record.name}</span>
-        <span class="object-meta">${record.category} / ${record.assetKey || "generated"}</span>
+        <span class="object-meta">${record.category} / ${record.assetKey || "generated"}${metaFlags ? ` / ${metaFlags}` : ""}</span>
       `;
       this.dom.objectList.appendChild(row);
     });
@@ -428,6 +575,15 @@ export class EditorApp {
     if (!selected) {
       this.dom.selectionSummary.textContent = "No selection";
       this.dom.transformReadout.innerHTML = "";
+      this.dom.resetSelected.disabled = true;
+      this.dom.markDelete.disabled = true;
+      this.dom.markDelete.classList.remove("is-active");
+      this.dom.markDelete.textContent = "Mark Delete";
+      this.dom.objectNote.value = "";
+      this.dom.objectNote.disabled = true;
+      this.dom.noteChipRow.querySelectorAll("button").forEach((button) => {
+        button.disabled = true;
+      });
     } else {
       const transform = snapshotTransform(selected.object);
       this.dom.selectionSummary.textContent = `${selected.name} / ${selected.id}`;
@@ -437,9 +593,20 @@ export class EditorApp {
         <div><span>Scale</span><code>${this.formatAxes(transform.scale)}</code></div>
         <div><span>Source</span><code>${selected.sourceRef.exportName}:${selected.sourceRef.path}</code></div>
       `;
+      this.dom.resetSelected.disabled = false;
+      this.dom.markDelete.disabled = false;
+      this.dom.markDelete.classList.toggle("is-active", selectedMeta.markedForDelete);
+      this.dom.markDelete.textContent = selectedMeta.markedForDelete ? "Unmark Delete" : "Mark Delete";
+      this.dom.objectNote.disabled = false;
+      if (document.activeElement !== this.dom.objectNote || this.dom.objectNote.value !== selectedMeta.note) {
+        this.dom.objectNote.value = selectedMeta.note;
+      }
+      this.dom.noteChipRow.querySelectorAll("button").forEach((button) => {
+        button.disabled = false;
+      });
     }
 
-    this.dom.patchOutput.value = JSON.stringify(patch, null, 2);
+    this.dom.patchOutput.value = JSON.stringify(this.outputMode === "state" ? stateExport : patch, null, 2);
     this.updateCameraReadout();
   }
 
@@ -455,11 +622,12 @@ export class EditorApp {
   updateCameraReadout() {
     if (!this.dom.cameraReadout || !this.cameraController) return;
     const camera = this.cameraController.state();
-    this.dom.cameraReadout.textContent = `zoom ${camera.zoom.toFixed(2)} / yaw ${camera.yaw.toFixed(2)}`;
+    this.dom.cameraReadout.textContent = `zoom ${camera.zoom.toFixed(2)} / yaw ${camera.yaw.toFixed(2)} / pitch ${camera.pitch.toFixed(2)}`;
   }
 
   async copyPatch() {
     const patchText = JSON.stringify(this.currentPatch(), null, 2);
+    this.outputMode = "patch";
     this.dom.patchOutput.value = patchText;
     if (!navigator.clipboard?.writeText) {
       this.showToast("Clipboard unavailable");
@@ -473,6 +641,33 @@ export class EditorApp {
     }
   }
 
+  async copyEditorState() {
+    const stateText = JSON.stringify(this.currentStateExport(), null, 2);
+    this.outputMode = "state";
+    this.dom.patchOutput.value = stateText;
+    if (!navigator.clipboard?.writeText) {
+      this.showToast("Clipboard unavailable");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(stateText);
+      this.showToast("State copied");
+    } catch {
+      this.showToast("Copy blocked");
+    }
+  }
+
+  playInGame() {
+    const target = new URL("/", window.location.href);
+    target.searchParams.set("debugScene", "level_two");
+    const opened = window.open(target.href, "_blank");
+    if (opened) {
+      opened.opener = null;
+      return;
+    }
+    this.showToast("Popup blocked");
+  }
+
   showToast(message) {
     this.dom.toast.textContent = message;
     this.dom.toast.hidden = false;
@@ -484,6 +679,7 @@ export class EditorApp {
 
   renderEditorToText() {
     const patch = this.currentPatch();
+    const stateExport = this.currentStateExport();
     return {
       mode: "level-editor",
       ready: this.isReady,
@@ -492,8 +688,11 @@ export class EditorApp {
       objectCount: this.records.length,
       selectedId: this.selectedId || null,
       dirtyCount: patch.objects.length,
+      affectedCount: stateExport.affectedObjectCount,
+      selectedMeta: this.selectedId ? this.selectedMeta() : null,
       camera: this.cameraController?.state() || null,
-      patch: summarizeEditorPatch(patch)
+      patch: summarizeEditorPatch(patch),
+      stateExport: summarizeEditorStateExport(stateExport)
     };
   }
 }

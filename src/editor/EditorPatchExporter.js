@@ -1,4 +1,6 @@
 const TRANSFORM_EPSILON = 0.0001;
+export const EDITOR_TRANSFORM_PATCH_SCHEMA = "lumina3d.editor.transformPatch.v1";
+export const LEGACY_EDITOR_TRANSFORM_PATCH_TYPE = "lumina3d.editor.transformPatch";
 
 function rounded(value) {
   return Number(Number(value).toFixed(6));
@@ -52,7 +54,9 @@ export function buildEditorPatch({ levelId, records, selectedId }) {
   const selectedRecord = records.find((record) => record.id === selectedId) || null;
   const primary = selectedDirty || selectedRecord;
   return {
-    patchType: "lumina3d.editor.transformPatch",
+    schema: EDITOR_TRANSFORM_PATCH_SCHEMA,
+    patchType: EDITOR_TRANSFORM_PATCH_SCHEMA,
+    legacyPatchType: LEGACY_EDITOR_TRANSFORM_PATCH_TYPE,
     levelId,
     objectId: primary?.id || selectedId || null,
     sourceRef: primary?.sourceRef || null,
@@ -69,7 +73,9 @@ export function buildEditorPatch({ levelId, records, selectedId }) {
 
 export function summarizeEditorPatch(patch) {
   return {
+    schema: patch.schema,
     patchType: patch.patchType,
+    legacyPatchType: patch.legacyPatchType,
     levelId: patch.levelId,
     objectId: patch.objectId,
     dirtyObjectCount: patch.objects.length,

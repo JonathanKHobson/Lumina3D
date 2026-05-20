@@ -20,14 +20,15 @@ import {
   LEVEL_TWO_ELEPHANT_TOTEM_HILL_TILES,
   LEVEL_TWO_ELEPHANT_TOTEM_VISUAL_SCALE,
   LEVEL_TWO_FROG_SIDE_LEDGE_TILES,
+  LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_TILES,
   LEVEL_TWO_HEIGHT,
   LEVEL_TWO_PLACEHOLDER_LOVE_LETTER_Y,
   LEVEL_TWO_PATH_TILES,
   LEVEL_TWO_POINTS,
   LEVEL_TWO_PROPS,
   LEVEL_TWO_RED_BUTTONS,
+  LEVEL_TWO_RED_ELEVATOR_TOP_CONNECTOR_TILES,
   LEVEL_TWO_RED_PLATFORMS,
-  LEVEL_TWO_RESERVED_TERRACE_TILES,
   LEVEL_TWO_WIDTH
 } from "../levels/levelTwo.js";
 
@@ -131,8 +132,12 @@ export function buildLevelTwoScene({
     placeRaisedTile(tile, index, "elephant-totem-hill");
   });
 
-  LEVEL_TWO_RESERVED_TERRACE_TILES.forEach((tile, index) => {
-    placeRaisedTile(tile, index, `reserved-${tile.stationId}`);
+  LEVEL_TWO_RED_ELEVATOR_TOP_CONNECTOR_TILES.forEach((tile, index) => {
+    placeRaisedTile(tile, index, "red-elevator-a-top-connector");
+  });
+
+  LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_TILES.forEach((tile, index) => {
+    placeRaisedTile(tile, index, "human-love-letter-route");
   });
 
   const loveLetter = cloneAsset("spellbookClosed");
@@ -173,7 +178,7 @@ export function buildLevelTwoScene({
       button.surfaceTopY + (button.surfaceClearance || 0),
       button.position.z
     );
-    redButtonGroup.userData.levelTwoAsset = "red-button-a";
+    redButtonGroup.userData.levelTwoAsset = button.id;
     redButtonGroup.userData.redButtonId = button.id;
     redButtonGroup.add(redButtonBase, redButtonTop);
     redButtonGroup.visible = false;
@@ -206,7 +211,7 @@ export function buildLevelTwoScene({
       scale: 1.0
     });
     stabilizeElevatorPlatformMaterial(redPlatform);
-    redPlatform.userData.levelTwoAsset = "red-elevator-a";
+    redPlatform.userData.levelTwoAsset = platform.id;
     redPlatform.userData.redPlatformId = platform.id;
     redPlatform.visible = false;
     levelTwoMeshes.push(redPlatform);
