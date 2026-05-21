@@ -8,7 +8,8 @@ import {
   createLevelOneState,
   createLevelTwoState,
   createLoveLetterAttentionState,
-  createLoveLetterMessageState
+  createLoveLetterMessageState,
+  createTutorialRecoveryState
 } from "../state/gameState.js";
 
 export function resetTutorialSceneFlow(context) {
@@ -62,6 +63,7 @@ export function resetTutorialSceneFlow(context) {
   state.loveLetterAttention = createLoveLetterAttentionState();
   state.skipModal = { visible: false, reason: "", anchor: "human" };
   state.skipNudge = { id: "", count: 0, lastAt: -Infinity };
+  state.tutorialRecovery = createTutorialRecoveryState();
   state.speech = { text: SPEECH_STEPS.move_up.text, anchor: "human", until: state.elapsed + 3 };
   state.secondarySpeech = { text: "", anchor: "", until: 0 };
   state.speechQueue = [];

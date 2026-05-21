@@ -1,9 +1,11 @@
 import { ASSETS } from "../../src/config/assets.js";
 import {
   SURFACE_Y,
+  TILE,
   WORLD_BOUNDS
 } from "../../src/config/constants.js";
 import { SCENES } from "../../src/config/scenes.js";
+import { sceneGridPoint } from "../../src/core/grid.js";
 import {
   HOME_BOUNDS,
   HOME_HEIGHT,
@@ -22,6 +24,8 @@ import {
 } from "../../src/levels/levelOne.js";
 import {
   LEVEL_TWO_BOUNDS,
+  LEVEL_TWO_BLUE_RAMP,
+  LEVEL_TWO_BUTTON_LEDGE_TILES,
   LEVEL_TWO_CENTRAL_MOUNTAIN_TILES,
   LEVEL_TWO_CENTRAL_MOUNTAIN_TIERS,
   LEVEL_TWO_FROG_SIDE_LEDGE_TILES,
@@ -123,12 +127,13 @@ function makeObject(input) {
   return result;
 }
 
-function makePropObject(levelPrefix, source, props, assumeSolid = true) {
+function makePropObject(levelPrefix, source, props, assumeSolid = true, toWorldPosition = null) {
   return props.map(([assetKey, x, z, scale], index) => {
+    const worldPosition = toWorldPosition ? toWorldPosition(x, z) : { x, z };
     const position = {
-      x: toTwoDecimals(x),
+      x: toTwoDecimals(worldPosition.x),
       y: toTwoDecimals(SURFACE_Y),
-      z: toTwoDecimals(z)
+      z: toTwoDecimals(worldPosition.z)
     };
     const collisionExpected = assumeSolid && /Tree|Rock|Bush/.test(assetKey);
     return makeObject({
@@ -216,7 +221,13 @@ function fixtureUnsupported(id, reason) {
 
 const LEVEL_ONE_PROPS_OBJECTS = makePropObject("level_one", "level-one", LEVEL_ONE_PROPS);
 const HOME_PROPS_OBJECTS = makePropObject("home_intro", "home", HOME_PROPS, false);
-const LEVEL_TWO_PROPS_OBJECTS = makePropObject("level_two", "level-two", LEVEL_TWO_PROPS);
+const LEVEL_TWO_PROPS_OBJECTS = makePropObject(
+  "level_two",
+  "level-two",
+  LEVEL_TWO_PROPS,
+  true,
+  (x, z) => sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, x, z, TILE)
+);
 
 function makeLevelMetadata() {
   const levelTwoCentralTerrain = makeTerrainExpectation(
@@ -249,6 +260,68 @@ function makeLevelMetadata() {
     LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_HEIGHT,
     "Elevator B human exit route to Level Two Love Letter"
   );
+  const levelTwoBlueButton = makeObject({
+    id: "level_two_blue_button",
+    name: "Blue Button",
+    type: "mechanism-button",
+    category: "mechanism",
+    asset: makeAsset("buttonBaseBlue"),
+    position: {
+      x: toTwoDecimals(LEVEL_TWO_POINTS.blueButton.x),
+      y: toTwoDecimals(SURFACE_Y + (LEVEL_TWO_BUTTON_LEDGE_TILES[0]?.bottomY || 0)),
+      z: toTwoDecimals(LEVEL_TWO_POINTS.blueButton.z)
+    },
+    collisionExpected: false,
+    mechanismLink: "blue-button -> blue-ramp",
+    elevationBand: {
+      min: toTwoDecimals(SURFACE_Y - 0.2),
+      max: toTwoDecimals(SURFACE_Y + 3.2)
+    },
+    runtimeProbe: "levelTwo.blueButton"
+  });
+  const levelTwoBlueRamp = makeObject({
+    id: "level_two_blue_ramp",
+    name: "Blue Ramp",
+    type: "mechanism-ramp",
+    category: "mechanism",
+    asset: makeAsset(LEVEL_TWO_BLUE_RAMP.asset),
+    position: {
+      x: toTwoDecimals(LEVEL_TWO_BLUE_RAMP.position.x),
+      y: toTwoDecimals(SURFACE_Y),
+      z: toTwoDecimals(LEVEL_TWO_BLUE_RAMP.position.z)
+    },
+    collisionExpected: false,
+    mechanismLink: "blue-button -> active-ramp",
+    elevationBand: {
+      min: toTwoDecimals(SURFACE_Y - 0.2),
+      max: toTwoDecimals(SURFACE_Y + LEVEL_TWO_BLUE_RAMP.targetLift + 0.6)
+    },
+    runtimeProbe: "levelTwo.blueRamp"
+  });
+  const levelTwoBlueRampDormantPanel = LEVEL_TWO_BLUE_RAMP.dormantPanel ? makeObject({
+    id: "level_two_blue_ramp_dormant_panel",
+    name: "Blue Ramp Dormant Panel",
+    type: "mechanism-visual",
+    category: "visual-only",
+    asset: {
+      key: "generated-blue-ramp-dormant-panel",
+      path: UNKNOWN_ASSET_PATH,
+      scale: 1
+    },
+    position: {
+      x: toTwoDecimals(LEVEL_TWO_BLUE_RAMP.dormantPanel.position.x),
+      y: toTwoDecimals(LEVEL_TWO_BLUE_RAMP.dormantPanel.y),
+      z: toTwoDecimals(LEVEL_TWO_BLUE_RAMP.dormantPanel.position.z)
+    },
+    collisionExpected: false,
+    mechanismLink: "blue-button -> blue-ramp visual cue",
+    elevationBand: {
+      min: toTwoDecimals(LEVEL_TWO_BLUE_RAMP.dormantPanel.y - 0.1),
+      max: toTwoDecimals(LEVEL_TWO_BLUE_RAMP.dormantPanel.y + 0.2)
+    },
+    runtimeProbe: "levelTwo.blueRamp.dormantPanel",
+    fingerprint: "visual-only, no collider"
+  }) : null;
   const levelTwoRedButtons = LEVEL_TWO_RED_BUTTONS.map((button) => makeObject({
     id: `level_two_${button.id.replace(/-/g, "_")}`,
     name: button.id === "red-button-b" ? "Red Button B" : "Red Button A",
@@ -580,10 +653,13 @@ function makeLevelMetadata() {
     levelTwoFrogLedge,
     levelTwoRedElevatorTopConnector,
     levelTwoHumanLoveLetterRoute,
+    levelTwoBlueButton,
+    levelTwoBlueRamp,
+    levelTwoBlueRampDormantPanel,
     ...levelTwoRedButtons,
     ...levelTwoRedPlatforms,
     levelTwoPlaceholder
-  ];
+  ].filter(Boolean);
 
   const levelTwoReservedFixtureIds = LEVEL_TWO_RESERVED_TERRACE_GROUPS.map((station) => `reserved-${station.id}`);
 
@@ -605,7 +681,16 @@ function makeLevelMetadata() {
       collectibles: [{ id: "tutorial_love_letter", name: "Love Letter", position: makeLandmarks([{ id: "tutorial_spellbook", name: "Love Letter", ...SPELLBOOK }])[0].position }],
       objects: tutorialObjects,
       fixtures: {
-        implemented: [],
+        implemented: [
+          fixtureImplemented(
+            "tutorial_frog_stranded_reset_lesson",
+            "Seed the tutorial state where Frog hopped the wall and the player returned to human before pressing the button, then verify reset teaching."
+          ),
+          fixtureImplemented(
+            "tutorial_unpossessed_frog_button_rescue",
+            "Seed the same stranded tutorial state, wait past the reset lesson, then verify unpossessed Frog can press the button and open the doorway."
+          )
+        ],
         planned: []
       },
       smokeAvailable: true
@@ -655,7 +740,12 @@ function makeLevelMetadata() {
       collectibles: [{ id: "level_one_love_letter", name: "Love Letter", position: { x: 11.5, y: SURFACE_Y, z: 5.5 } }],
       objects: levelOneObjects,
       fixtures: {
-        implemented: [],
+        implemented: [
+          fixtureImplemented(
+            "level_one_unpossessed_frog_button_activation",
+            "Seed Frog on the Level One blue button while the human is active, then verify the bridge activates from physical Frog contact."
+          )
+        ],
         planned: []
       },
       smokeAvailable: true
@@ -711,8 +801,40 @@ function makeLevelMetadata() {
             "Enter Level Two, wait for play, then confirm the placeholder Love Letter is visible and collectible-ready indicators are stable."
           ),
           fixtureImplemented(
+            "level_two_red_a_elephant_exit_route",
+            "Seed Elephant on top-aligned Red Elevator A, walk west onto the top connector, then verify the Elephant reaches the tier-3 route."
+          ),
+          fixtureImplemented(
+            "level_two_red_a_human_exit_route",
+            "Seed the human on top-aligned Red Elevator A, walk west onto the top connector, then verify the human can use the same tier-3 route."
+          ),
+          fixtureImplemented(
+            "level_two_red_a_button_starts_elevator",
+            "Seed Elephant physically holding Red Button A while the human is away, then verify Elevator A starts descending immediately while bottom forgiveness remains separate."
+          ),
+          fixtureImplemented(
+            "level_two_red_a_elephant_bottom_pause",
+            "Seed player-controlled Elephant on Red Elevator A at the bottom and verify the bottom pause is preserved before normal rising motion."
+          ),
+          fixtureImplemented(
+            "level_two_red_a_released_bottom_stays",
+            "Seed Red Elevator A at the bottom after activation with Red Button A released, then verify the elevator stays at the bottom."
+          ),
+          fixtureImplemented(
+            "level_two_love_letter_camera_visibility",
+            "Seed the human on the high Love Letter route, then verify the camera target lifts and zooms out for high-elevation play."
+          ),
+          fixtureImplemented(
+            "level_two_red_a_ground_clearance",
+            "Seed human and Frog near Red Elevator A's ground corridor, then verify both can cross the path under the raised platform footprint."
+          ),
+          fixtureImplemented(
             "level_two_red_b_route",
             "Seed Elephant on Red Button B and human on Elevator B, cycle to the top, then walk the human route to collect the Level Two Love Letter."
+          ),
+          fixtureImplemented(
+            "level_two_unpossessed_frog_blue_button_activation",
+            "Seed Frog on the Level Two blue button ledge while the human is active, then verify the blue ramp activates from physical Frog contact."
           )
         ],
         planned: [

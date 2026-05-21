@@ -32,6 +32,8 @@ export const LEVEL_TWO_RED_BUTTON_INVALID_COOLDOWN = 1.5;
 export const LEVEL_TWO_RED_PLATFORM_UP_SPEED = 0.16;
 export const LEVEL_TWO_RED_PLATFORM_DOWN_SPEED = 0.2;
 export const LEVEL_TWO_RED_PLATFORM_ENDPOINT_PAUSE_SECONDS = 1.25;
+export const LEVEL_TWO_RED_PLATFORM_BOTTOM_PAUSE_SECONDS = 2.5;
+export const LEVEL_TWO_RED_ELEVATOR_A_START_DELAY_SECONDS = 2.5;
 export const LEVEL_TWO_RED_PLATFORM_VISUAL_HEIGHT = 1.18;
 export const LEVEL_TWO_RED_PLATFORM_SURFACE_OFFSET = 0.16;
 export const LEVEL_TWO_RED_PLATFORM_B_SURFACE_OFFSET = 0.42;
@@ -87,13 +89,13 @@ export const LEVEL_TWO_POINTS = {
     facing: { x: 1, z: 0, name: "east" }
   },
   placeholderLoveLetter: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 9.5, 9.5, TILE),
-  blueButton: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 16.85, 16.0, TILE),
+  blueButton: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 17.125, 16.125, TILE),
   elephantTotem: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 17.0, 3.0, TILE),
-  elephantEcho: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 16.2, 10.0, TILE),
+  elephantEcho: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 16.375, 8.75, TILE),
   blueRamp: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 14.1, 3.05, TILE),
-  redElevatorA: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 15.7, 10.0, TILE),
-  redButtonA: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 16.2, 10.0, TILE),
-  redElevatorB: { x: -1.75, z: 10.25 },
+  redElevatorA: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 15.625, 9.5, TILE),
+  redButtonA: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 16.375, 8.75, TILE),
+  redElevatorB: { x: -0.75, z: 12.25 },
   redButtonB: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 8.0, 11.0, TILE)
 };
 
@@ -110,6 +112,13 @@ export const LEVEL_TWO_PATH_TILES = [
   ...rectTiles(3, 5, 10, 10, 0, "frog-side-trail", "pathTile"),
   ...rectTiles(14, 17, 12, 12, 0, "elephant-terrace-trail", "pathTile"),
   ...rectTiles(14, 17, 18, 18, 0, "button-ledge-trail", "pathTile")
+];
+
+export const LEVEL_TWO_RED_ELEVATOR_A_GROUND_CLEARANCE_TILES = [
+  { x: 14, y: 10, tier: 0, zone: "red_elevator_a_ground_clearance", asset: "pathTile" },
+  { x: 15, y: 10, tier: 0, zone: "red_elevator_a_ground_clearance", asset: "pathTile" },
+  { x: 16, y: 10, tier: 0, zone: "red_elevator_a_ground_clearance", asset: "pathTile" },
+  { x: 15, y: 11, tier: 0, zone: "red_elevator_a_ground_clearance", asset: "pathTile" }
 ];
 
 export const LEVEL_TWO_CENTRAL_MOUNTAIN_TIERS = [
@@ -266,10 +275,10 @@ export const LEVEL_TWO_RED_ELEVATOR_TOP_CONNECTOR_TILES = rectTiles(12, 14, 9, 1
 
 export const LEVEL_TWO_RED_ELEVATOR_TOP_EXIT_ZONE = {
   id: "red-elevator-a-top-exit-zone",
-  minX: LEVEL_TWO_POINTS.redElevatorA.x - LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_X - 0.35,
-  maxX: LEVEL_TWO_POINTS.redElevatorA.x - LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_X + 1.05,
-  minZ: LEVEL_TWO_POINTS.redElevatorA.z - LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_Z + 0.25,
-  maxZ: LEVEL_TWO_POINTS.redElevatorA.z + LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_Z - 0.25,
+  minX: LEVEL_TWO_POINTS.redElevatorA.x - LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_X - 1.1,
+  maxX: LEVEL_TWO_POINTS.redElevatorA.x - LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_X + 1.35,
+  minZ: LEVEL_TWO_POINTS.redElevatorA.z - LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_Z,
+  maxZ: LEVEL_TWO_POINTS.redElevatorA.z + LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_Z,
   surfaceId: "tier-3-elephant-route",
   visual: "logical transition only; no extra dock mesh"
 };
@@ -315,6 +324,11 @@ export const LEVEL_TWO_ELEPHANT_ROUTE_TILES = [
 
 export const LEVEL_TWO_ELEPHANT_ECHO_TERRACE_TILES = LEVEL_TWO_ELEPHANT_ROUTE_TILES;
 
+const LEVEL_TWO_BLUE_RAMP_MIN_X = sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 12.25, 3.05, TILE).x;
+const LEVEL_TWO_BLUE_RAMP_MAX_X = sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 16.45, 3.05, TILE).x;
+const LEVEL_TWO_BLUE_RAMP_MIN_Z = sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 12.25, 2.35, TILE).z;
+const LEVEL_TWO_BLUE_RAMP_MAX_Z = sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 12.25, 3.75, TILE).z;
+
 export const LEVEL_TWO_BLUE_RAMP = {
   id: "blue-ramp-to-elephant-totem",
   asset: "blueRamp",
@@ -323,13 +337,31 @@ export const LEVEL_TWO_BLUE_RAMP = {
   visualScale: { x: 0.36, y: 0.48, z: 0.92 },
   lowEnd: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 12.35, 3.05, TILE),
   highEnd: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 15.95, 3.05, TILE),
-  minX: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 12.25, 3.05, TILE).x,
-  maxX: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 16.45, 3.05, TILE).x,
-  minZ: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 12.25, 2.35, TILE).z,
-  maxZ: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 12.25, 3.75, TILE).z,
+  minX: LEVEL_TWO_BLUE_RAMP_MIN_X,
+  maxX: LEVEL_TWO_BLUE_RAMP_MAX_X,
+  minZ: LEVEL_TWO_BLUE_RAMP_MIN_Z,
+  maxZ: LEVEL_TWO_BLUE_RAMP_MAX_Z,
   targetLift: LEVEL_TWO_ELEPHANT_TOTEM_HILL_HEIGHT,
   actorLiftClearance: 0.38,
-  groundExitProgress: 0.18
+  groundExitProgress: 0.18,
+  revealSeconds: 0.72,
+  revealStartYOffset: -0.34,
+  dormantPanel: {
+    id: "blue-ramp-dormant-panel",
+    label: "Blue Ramp dormant ground panel",
+    position: {
+      x: (LEVEL_TWO_BLUE_RAMP_MIN_X + LEVEL_TWO_BLUE_RAMP_MAX_X) * 0.5,
+      z: (LEVEL_TWO_BLUE_RAMP_MIN_Z + LEVEL_TWO_BLUE_RAMP_MAX_Z) * 0.5
+    },
+    y: SURFACE_Y + 0.035,
+    width: LEVEL_TWO_BLUE_RAMP_MAX_X - LEVEL_TWO_BLUE_RAMP_MIN_X,
+    depth: LEVEL_TWO_BLUE_RAMP_MAX_Z - LEVEL_TWO_BLUE_RAMP_MIN_Z,
+    height: 0.08,
+    color: 0x4da8ff,
+    opacity: 0.7,
+    visualOnly: true,
+    walkableBy: []
+  }
 };
 
 export const LEVEL_TWO_ELEPHANT_TOTEM_HILL = {
@@ -352,14 +384,14 @@ export const LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_HEIGHT = LEVEL_TWO_MOUNTAIN_PEAK_
 
 export const LEVEL_TWO_PROPS = [
   ["forestTreeA", 0.8, 1.1, 0.88],
-  ["forestTreeB", 18.6, 1.5, 0.82],
+  ["forestTreeB", 18.6, 0.125, 0.82],
   ["forestTreeA", 18.4, 17.8, 0.82],
   ["forestTreeB", 1.0, 18.2, 0.78],
   ["forestBush", 1.1, 7.4, 0.72],
   ["forestBush", 17.8, 6.3, 0.66],
   ["forestBush", 4.0, 17.0, 0.62],
   ["forestRock", 3.1, 3.0, 0.58],
-  ["forestRock", 16.7, 15.4, 0.58],
+  ["forestRock", 15.875, 15.0, 0.58],
   ["forestRock", 11.2, 1.0, 0.5],
   ["forestGrass", 3.0, 13.4, 0.5],
   ["forestGrass", 6.8, 17.1, 0.48],
@@ -416,11 +448,13 @@ export const LEVEL_TWO_RED_PLATFORMS = [
     upSpeed: LEVEL_TWO_RED_PLATFORM_UP_SPEED,
     downSpeed: LEVEL_TWO_RED_PLATFORM_DOWN_SPEED,
     endpointPauseSeconds: LEVEL_TWO_RED_PLATFORM_ENDPOINT_PAUSE_SECONDS,
+    topPauseSeconds: LEVEL_TWO_RED_PLATFORM_ENDPOINT_PAUSE_SECONDS,
+    bottomPauseSeconds: LEVEL_TWO_RED_PLATFORM_BOTTOM_PAUSE_SECONDS,
     initialProgress: 1,
     inactiveProgress: 1,
     activeProgress: 0,
     initialDirection: "down",
-    releaseBehavior: "finish-current-direction",
+    releaseBehavior: "return-to-bottom",
     movementRule: "cycle-while-held",
     walkableBy: ["human", "elephant"],
     linkedButtonId: "red-button-a",
@@ -430,7 +464,7 @@ export const LEVEL_TWO_RED_PLATFORMS = [
     id: "red-elevator-b",
     asset: "redPlatform4x4",
     position: LEVEL_TWO_POINTS.redElevatorB,
-    baseY: LEVEL_TWO_RED_PLATFORM_B_BASE_Y,
+    baseY: 1,
     minX: LEVEL_TWO_POINTS.redElevatorB.x - LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_X,
     maxX: LEVEL_TWO_POINTS.redElevatorB.x + LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_X,
     minZ: LEVEL_TWO_POINTS.redElevatorB.z - LEVEL_TWO_RED_PLATFORM_WALKABLE_HALF_Z,
@@ -441,6 +475,8 @@ export const LEVEL_TWO_RED_PLATFORMS = [
     upSpeed: LEVEL_TWO_RED_PLATFORM_UP_SPEED,
     downSpeed: LEVEL_TWO_RED_PLATFORM_DOWN_SPEED,
     endpointPauseSeconds: LEVEL_TWO_RED_PLATFORM_ENDPOINT_PAUSE_SECONDS,
+    topPauseSeconds: LEVEL_TWO_RED_PLATFORM_ENDPOINT_PAUSE_SECONDS,
+    bottomPauseSeconds: LEVEL_TWO_RED_PLATFORM_BOTTOM_PAUSE_SECONDS,
     initialProgress: 0,
     inactiveProgress: 0,
     activeProgress: 1,

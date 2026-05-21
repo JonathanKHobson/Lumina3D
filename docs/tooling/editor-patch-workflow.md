@@ -1,9 +1,9 @@
 # Lumina3D Editor Patch Workflow
 
-The separate `/editor/` route is a visual placement tool for Level Two. It does
-not boot the playable game entrypoint and it does not write source files from
-the browser. Its job is to export small transform patches that a human or AI
-assistant can review and apply to local level source data.
+The separate `/editor/` route is a visual placement and AI-handoff tool. It
+does not boot the playable game entrypoint and it does not write source files
+from the browser. Its transform-patch job is to export small coordinate patches
+that a human or AI assistant can review and apply to local level source data.
 
 ## Patch Shape
 
@@ -44,9 +44,10 @@ Current transform patches use:
 
 ## Editor State Export Shape
 
-`Copy State` exports the broader handoff payload for planning source edits. It
+`Copy State JSON` exports the broader handoff payload for planning source edits. It
 still does not write files. The state export includes only affected objects:
-objects that moved, rotated, scaled, received a note, or were marked for delete.
+objects that moved, rotated, scaled, received a note, or were marked for
+delete/replace.
 
 ```json
 {
@@ -71,15 +72,18 @@ objects that moved, rotated, scaled, received a note, or were marked for delete.
       "changes": [],
       "note": "@move Raise this slightly after the button trigger.",
       "noteTags": ["@move"],
-      "markedForDelete": false
+      "noteIntents": [],
+      "markedForDelete": false,
+      "markedForReplace": false,
+      "actionIntent": "none"
     }
   ]
 }
 ```
 
 Object notes persist in browser `localStorage` under
-`lumina3d.editor.objectMeta.v1:<levelId>`. Delete marks are export-only intent;
-they do not remove or hide objects in the editor.
+`lumina3d.editor.objectMeta.v1:<levelId>`. Delete and replace marks are
+export-only intent; they do not remove, hide, or swap objects in the editor.
 
 ## Copy And Export
 
@@ -92,11 +96,12 @@ npm run editor
 2. Open `/editor/`.
 3. Select an object from the object list or viewport.
 4. Move or rotate it with the transform controls.
-5. Add an object note or keyword chips when the change needs human/AI context.
+5. Add an object note with `@intent` typeahead when the change needs human/AI context.
 6. Use `Mark Delete` when an object should be removed in a later reviewed edit.
-7. Use `Copy Patch` for transform-only patch JSON.
-8. Use `Copy State` for the full affected-object handoff JSON.
-9. Save the payload somewhere temporary or hand it to Codex directly.
+7. Use `Mark Replace` when an object should be replaced rather than simply deleted.
+8. Use `Copy Patch JSON` for transform-only patch JSON.
+9. Use `Copy State JSON` for the full affected-object handoff JSON.
+10. Use `Copy AI Prompt` when handing the visual state to Codex.
 
 Editor exports are review artifacts. Applying them still happens through normal
 local source edits.
@@ -258,17 +263,20 @@ Then open `/editor/` and confirm the changed object appears where expected.
 ## Manual Editor QA
 
 - `/` still opens the playable game.
-- `/editor/` opens the separate Level Two editor.
+- `/editor/` opens the separate editor.
+- Level picker shows Tutorial, Home Intro, Level One, and Level Two.
 - Object list selection works.
 - Viewport click selection works.
 - Move and rotate controls update the inspector.
 - Camera pan, yaw, and zoom controls still work.
 - Camera tilt buttons and `[` / `]` shortcuts change camera pitch.
 - Snap toggle still changes transform behavior.
-- Object notes, keyword chips, and delete marks update `Copy State`.
+- Object notes with `@intent` typeahead and delete/replace marks update `Copy State JSON`.
 - `Reset Selected` restores the selected object to its load-time transform.
-- `Play in game` opens source-backed playable Level Two with `?debugScene=level_two`.
+- `Reset Level` clears transforms and current-level metadata after confirmation.
+- `Play in game` opens the selected source-backed playable level with `?debugScene=<level_id>`.
 - Copying the patch or state export produces valid JSON.
+- `Copy AI Prompt` produces Markdown with fenced state JSON.
 - Reloading the editor returns to source state.
 
 ## Current Non-Goals

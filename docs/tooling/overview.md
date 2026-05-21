@@ -19,6 +19,7 @@ This lane keeps gameplay/code changes separate from gameplay-inspection and test
 - `tools:list-levels`
 - `tools:get-level-manifest <id>`
 - `tools:list-level-objects <id>`
+- `tools:build-external-asset-index`
 - `tools:run-scene-smoke [<id>]`
 - `tools:run-editor-smoke`
 - `tools:run-fixture <id> <fixture>`
@@ -39,12 +40,16 @@ All scripts support `--help` usage text and `--pretty` output.
 - `list-level-objects <id>`
   - Use when you need deterministic object rows for review or spot-diff checks.
   - Good for direct Cubeling/prope/terrain inspection before fixture edits.
+- `build-external-asset-index`
+  - Use after adding or reorganizing focused local 3D packs outside the game project.
+  - Refreshes the read-only editor asset reference snapshot; it does not import,
+    load, place, or source-write external assets.
 - `run-scene-smoke <id>`
   - Use for quick scene entry sanity and invariant checks.
   - Default choice after layout edits or asset swaps in a level.
 - `run-editor-smoke`
   - Use after `/editor/` or editor patch schema changes.
-  - Confirms the route loads, render hook exists, default selection works, camera pitch works, state export works, and a small transform creates a dirty source-referenced patch.
+  - Confirms the route loads, level picker works, render hook exists, default selection works, camera pitch works, note typeahead works, state/AI prompt export works, delete/replace marks are mutually exclusive, reset level clears state, and a small transform creates a dirty source-referenced patch.
 - `run-fixture <id> <fixture>`
   - Use for risky mechanics and behavior edits.
   - Keeps targeted behavior checks from forcing a full replay.
@@ -66,6 +71,8 @@ All scripts support `--help` usage text and `--pretty` output.
 - Quick gameplay slice checks:
   - `npm run tools:run-scene-smoke -- level_two --pretty`
   - `npm run tools:run-fixture -- level_two level_two_start --pretty`
+- Refresh editor external asset references:
+  - `npm run tools:build-external-asset-index -- --pretty`
 - Collision sanity pass:
   - `npm run tools:validate-missing-colliders -- level_two --pretty`
   - `npm run tools:validate-float-colliders -- level_two --pretty`
@@ -92,7 +99,9 @@ This lane also ships a runtime editor overlay for tiny edit loops.
 - Scene jump:
   - Tutorial/Home/Level One/Level Two buttons in the editor panel.
   - Uses existing scene jump pathways (same as debug debug-key flow).
-- Object list: filtered by current level, excluding tile fillers and procedural filler meshes.
+- Object list: filtered by current level, with tiles hidden by default but
+  selectable by canvas click. Use `Show Tiles` or the filter box when a floor,
+  water, path, grass/sand, or raised terrain tile needs list selection.
 - Selection:
   - Click an object row in the panel.
   - Click editable objects directly in the canvas while the Dev Editor remains open.
@@ -108,23 +117,33 @@ This lane also ships a runtime editor overlay for tiny edit loops.
   - The selected-object helper remains a separate visual bounds outline.
   - Selected entities with matched colliders highlight those actual collider proxies.
 - Export:
-  - `Copy Layout JSON` logs compact JSON and copies to clipboard when browser permissions allow.
-  - `Copy Selection Delta` copies `lumina3d.dev.selectionDelta.v1` JSON with the selected entity, original transform, current transform, and delta.
+  - `Copy Layout Snapshot` logs compact JSON and copies to clipboard when browser permissions allow.
+  - `Copy Transform Delta` copies `lumina3d.dev.selectionDelta.v1` JSON with the selected entity, original transform, current transform, and delta.
   - `Copy AI Context` copies `lumina3d.dev.aiContext.v1` JSON with selected entity, nearby entities, runtime colliders, camera, actors, and source hints.
   - `Export Patch Draft` copies `lumina3d.dev.scenePatch.v1` JSON for human-reviewed source patching.
+  - `Open in Level Editor` stores a temporary `lumina3d.dev.editorHandoff.v1`
+    handoff and opens `/editor/` with the current selected object context.
+- Selected object annotations:
+  - Notes, issue flags, replacement intent, and delete-candidate intent are
+    stored locally as `lumina3d.dev.objectAnnotations.v1`.
+  - Delete/replace flags are annotation-only. They do not remove objects,
+    swap assets, or write source files.
 - Test hook:
-  - In local dev/test runs, `window.__luminaDevEditor` exposes `buildAiContextPayload`, `buildPatchDraftPayload`, `buildSelectionDeltaPayload`, `listEntities`, and `selectEntityById`.
+  - In local dev/test runs, `window.__luminaDevEditor` exposes `buildAiContextPayload`, `buildPatchDraftPayload`, `buildSelectionDeltaPayload`, `buildTransformDeltaPayload`, `buildEditorHandoffPayload`, annotation helpers, `listEntities`, `canvasPointForEntity`, and `selectEntityById`.
   - These hooks return browser payloads only; they do not write source files.
 
 ### Practical usage
 
 - Use scripts for deterministic checks:
   - `tools:run-scene-smoke -- level_two --pretty`
+  - `tools:run-dev-editor-selectability-smoke -- --pretty`
   - `tools:validate-missing-colliders -- level_two --pretty`
   - `tools:validate-float-colliders -- level_two --pretty`
 - Use the Dev Editor for fast local edits:
   - Moving bridges/props/buttons/totems quickly.
   - Inspecting current `x/y/z/rotation` before running one targeted check.
+  - Annotating suspicious objects before copying AI context or handing off to
+    `/editor/`.
 
 ### Important limitations
 
@@ -141,44 +160,82 @@ This lane also ships a runtime editor overlay for tiny edit loops.
 - `src/levels`, `src/scenes`, and tooling scripts are still the preferred stable contract for automation and pre-checks.
 - MCP wrapping is intentionally deferred until this contract is stable across a few fixture passes.
 
-## Separate Level Editor MVP (`/editor/`)
+## Separate Level Editor (`/editor/`)
 
-The separate editor route is the durable path for visual placement patches. It
-does not boot `src/main.js`, does not write source files, and starts with Level
-Two objects whose source mapping is clear.
+The separate editor route is the durable path for visual placement patches and
+AI handoffs. It does not boot `src/main.js` and does not write source files.
 
 ### Open and scope
 
 - `npm run editor`: start Vite and open `/editor/`.
-- `/editor/`: load the Level Two editor viewport.
-- Supported first objects: blue ramp, blue button, placeholder Love Letter,
-  Elephant Echo, Elephant Totem, red button, red platform, and simple props.
+- `/editor/`: load the editor viewport.
+- Level picker: Tutorial, Home Intro, Level One, and Level Two.
+- Level Two has the richest source-mapped coverage. Other levels are MVP
+  previews with useful editable anchors, props, and selectable terrain preview
+  tiles.
 - Not supported yet: collider editing, behavior fields, object creation or
   deletion, asset palettes, patch application, and source-file writes.
 
 ### Patch flow
 
 - Select an object from the list or by clicking it in the viewport.
+- Select `Map Notes` or click empty viewport space to clear object selection and
+  write notes about the whole level.
 - Move or rotate it with Three.js TransformControls.
 - Navigate the editor camera with `W/A/S/D`, rotate it with `Q/E`, tilt it with
   `[` / `]`, and zoom with wheel, trackpad pinch over the canvas, `+`, or `-`.
 - Use `Reset Selected` to restore an object to its load-time transform.
-- Use object notes, keyword chips, and `Mark Delete` for planning context.
-- Use `Play in game` to open source-backed playable Level Two in a new tab.
-- Copy transform-only JSON with `Copy Patch` or affected-object handoff JSON
-  with `Copy State`.
+- Type `@` in Object Note to insert intent tags such as `@move`, `@trigger`,
+  `@collision`, and `@replace`; hover/focus suggestions for usage examples.
+- Type `#` in Object Note or Level Note to reference editor objects or read-only
+  assets. The Objects tab suggests tokens like `#level_two.blue_ramp`; the
+  Assets tab suggests tokens like `#blueRamp` and external reference tokens
+  like `#external.kaykits.medieval_pack.building_bridge_a`.
+- Generated terrain tiles are selectable for notes and AI handoff, but remain
+  read-only/manual-review transform targets until a source-backed terrain edit
+  workflow exists.
+- Level Two elevated/source-backed terrain tiles are movable in the editor.
+  Base ground and generated terrain stay selectable but locked, with lock
+  reasons shown in the inspector and exported state.
+- Use object-list search and collapsed quick filters to manage dense tile-heavy levels.
+  Search supports plain text plus tokens such as `id:level_two.blue_ramp`,
+  `type:tile`, `tag:elevated`, `state:dirty`, `mark:replace`,
+  `movable:true`, and `locked:true`.
+- Use the Assets tab source/pack/folder filters for the read-only external 3D
+  pack index. External assets are reference-only; they are not imported,
+  runtime-loaded, or placeable in this slice.
+- Use `Mark Delete` or `Mark Replace` for export-only planning context; the
+  marks are mutually exclusive and do not alter the scene.
+- Use `Reset Level` to restore current-level transforms and clear current-level
+  notes/delete/replace marks after confirmation.
+- If opened from the runtime Dev Editor, `/editor/` reads the temporary
+  handoff from localStorage. Matching supported editor objects are
+  selected/framed when available; unsupported scenes or entities show a
+  read-only handoff summary.
+- Use `Play in game` to open the selected source-backed playable level in a new tab.
+- Copy transform-only JSON with `Copy Patch JSON`, affected-object handoff JSON
+  with `Copy State JSON`, or a complete Codex handoff with `Copy AI Prompt`.
 - Editor patches use `lumina3d.editor.transformPatch.v1`.
 - Editor state exports use `lumina3d.editor.stateExport.v1`.
+- State exports include camera context, note intents, intent glossary,
+  note references, reference glossary,
+  delete/replace marks, level notes, action intent, selected object context,
+  tile editability metadata, object-list filter summary, and editor-only
+  timeline/asset-catalog summaries.
 - Dry-run a saved patch with
   `npm run tools:explain-editor-patch -- <patch.json>`.
-- Use `window.render_editor_to_text()` for compact QA state: selected object,
-  dirty count, affected state-export count, camera state, patch summary, and
-  state-export summary.
-- Run `npm run tools:run-editor-smoke -- --pretty` against a local dev server to confirm the route, render hook, default selection, dirty transform patch, notes/delete state export, reset, camera pitch, and play-in-game handoff.
+- Use `window.render_editor_to_text()` for compact QA state: selection mode,
+  selected object, selectable terrain count, dirty count, affected state-export
+  count, level note tags, note-reference counts, camera state, object-list
+  filter state, movable/locked tile counts, patch summary, and state-export
+  summary.
+- Run `npm run tools:run-editor-smoke -- --pretty` against a local dev server to confirm the route, level picker, render hook, default selection, terrain selection, elevated tile movement, base terrain locking, object-list filters, empty-click level-note mode, dirty transform patch, note intent/reference export, delete/replace state export, reset selected, reset level, camera pitch, AI prompt export, and play-in-game handoff.
 
 The old F2 Dev Editor can remain useful for runtime inspection. Use `/editor/`
 when the output should become a structured transform patch that Codex can apply
 in a reviewed source edit later.
 
-Detailed patch application guidance lives in
+Detailed editor guidance lives in `docs/editor/level-editor.md`,
+`docs/editor/timeline-scrubber-plan.md`, `docs/editor/asset-library-plan.md`,
+`docs/tooling/editor-ai-handoff.md`, and
 `docs/tooling/editor-patch-workflow.md`.

@@ -9,6 +9,23 @@ import {
   findDevEntityForObject,
   normalizeDevEntity
 } from "./devEntityRegistry.js";
+import {
+  annotationBadgeParts,
+  annotationHasContent,
+  annotationStorageKey,
+  clearAnnotation,
+  compactAnnotation,
+  emptyAnnotation,
+  getAnnotation,
+  listAnnotations,
+  normalizeAnnotation,
+  setAnnotation
+} from "./devObjectAnnotations.js";
+import {
+  editorHandoffUrl,
+  normalizeEditorHandoffPayload,
+  saveEditorHandoff
+} from "./devEditorHandoff.js";
 
 const DEG_15 = Math.PI / 12;
 const AI_CONTEXT_SCHEMA = "lumina3d.dev.aiContext.v1";
@@ -20,10 +37,13 @@ const COLLIDER_MIN_VISIBLE_SIZE_Y = 0.1;
 const SCALE_SNAP = 0.05;
 const NEARBY_ENTITY_LIMIT = 10;
 const NEARBY_ENTITY_RADIUS = 8;
+const TRANSFORM_UNDO_LIMIT = 40;
 
 const colliderHelpers = new Map();
 const raycaster = new THREE.Raycaster();
 const pointerNdc = new THREE.Vector2();
+const pickBox = new THREE.Box3();
+const pickCenter = new THREE.Vector3();
 
 let selectedMesh = null;
 let selectionHelper = null;
@@ -35,6 +55,11 @@ let rowsCacheSceneId = "";
 let rowsCacheVersion = 0;
 let objectListSignature = "";
 let colliderSyncSignature = "";
+let annotationFormEntityKey = "";
+let annotationFormSyncing = false;
+let annotationsVersion = 0;
+let activeTransformDragSnapshot = null;
+const transformUndoStack = [];
 
 // Set by initDevEditor - holds all external references.
 let _state;
@@ -95,26 +120,103 @@ function collectEditableObjects({ force = false } = {}) {
   return rowsCache;
 }
 
+function objectListFilterText() {
+  return String(_state?.devEditor?.objectFilter || "").trim().toLowerCase();
+}
+
+function isTerrainTileEntity(entity) {
+  return entity?.category === "terrain_tile";
+}
+
+function entityMatchesFilter(entity, filterText = objectListFilterText()) {
+  if (!filterText) return true;
+  return [
+    entity.id,
+    entity.name,
+    entity.displayName,
+    entity.category,
+    entity.asset?.key
+  ].some((value) => String(value || "").toLowerCase().includes(filterText));
+}
+
+function rowsForObjectList(rows) {
+  const filterText = objectListFilterText();
+  const showTiles = Boolean(_state?.devEditor?.showTiles);
+  const selectedId = _state?.devEditor?.selectedObjectId || "";
+  const visibleRows = (rows || []).filter((row) => {
+    if (filterText && !entityMatchesFilter(row, filterText)) return false;
+    if (row.id === selectedId) return true;
+    if (isTerrainTileEntity(row) && !showTiles && !filterText) return false;
+    return true;
+  });
+  return visibleRows.sort((a, b) => {
+    if (a.id === selectedId) return -1;
+    if (b.id === selectedId) return 1;
+    return 0;
+  });
+}
+
 function currentTransformMode() {
   return _state.devEditor.transformMode || "translate";
+}
+
+function cloneArray(values, fallback = []) {
+  const source = Array.isArray(values) ? values : fallback;
+  return source.map((value, index) => Number.isFinite(Number(value)) ? Number(value) : Number(fallback[index] || 0));
+}
+
+function cloneLocalTransform(local = {}) {
+  return {
+    position: cloneArray(local.position, [0, 0, 0]),
+    rotationEuler: cloneArray(local.rotationEuler, [0, 0, 0]),
+    rotationY: Number.isFinite(Number(local.rotationY)) ? Number(local.rotationY) : Number(local.rotationEuler?.[1] || 0),
+    scale: cloneArray(local.scale, [1, 1, 1])
+  };
+}
+
+function localTransformFromMesh(mesh, fallback = {}) {
+  if (!mesh) return cloneLocalTransform(fallback);
+  return {
+    position: [mesh.position.x, mesh.position.y, mesh.position.z],
+    rotationEuler: [mesh.rotation.x, mesh.rotation.y, mesh.rotation.z],
+    rotationY: mesh.rotation.y,
+    scale: [mesh.scale.x, mesh.scale.y, mesh.scale.z]
+  };
 }
 
 function transformSnapshot(entity) {
   if (!entity) return null;
   return {
     entityId: entity.id,
+    sceneId: entity.sceneId || currentSceneId(),
+    displayName: entity.displayName || entity.name || "",
     sourceFileHint: entity.sourceFileHint || entity.notes?.sourceFileHint || "",
-    local: {
-      position: entity.transform.local.position,
-      rotationEuler: entity.transform.local.rotationEuler,
-      rotationY: entity.transform.local.rotationY,
-      scale: entity.transform.local.scale
-    }
+    local: cloneLocalTransform(localTransformFromMesh(entity.mesh, entity.transform?.local))
   };
 }
 
 function serializableEntities(rows) {
   return rows.map((entity) => normalizeDevEntity(entity));
+}
+
+function canvasPointForEntity(objectId) {
+  const entity = findDevEntityById(collectEditableObjects({ force: true }), objectId);
+  if (!entity?.mesh || !_camera || !_renderer?.domElement) return null;
+  const box = new THREE.Box3().setFromObject(entity.mesh);
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+  if (entity.category !== "terrain_tile" && Number.isFinite(box.max.y)) {
+    center.y = box.max.y - Math.min(0.05, Math.max(0, box.max.y - box.min.y) * 0.15);
+  }
+  const projected = center.project(_camera);
+  const rect = _renderer.domElement.getBoundingClientRect();
+  return {
+    x: ((projected.x + 1) / 2) * rect.width + rect.left,
+    y: ((1 - projected.y) / 2) * rect.height + rect.top,
+    entityId: entity.id,
+    displayName: entity.displayName || entity.name || "",
+    visible: isVisibleInHierarchy(entity.mesh)
+  };
 }
 
 function writeClipboardOrConsole(payload, successMessage, blockedMessage) {
@@ -132,6 +234,159 @@ function writeClipboardOrConsole(payload, successMessage, blockedMessage) {
 
 function getSelectedRow() {
   return _state.devEditor.rows.find((r) => r.id === _state.devEditor.selectedObjectId) || null;
+}
+
+function currentSceneId() {
+  return _state?.scene?.id || "";
+}
+
+function annotationForEntity(entity) {
+  if (!entity) return emptyAnnotation(currentSceneId(), "");
+  return getAnnotation(entity.sceneId || currentSceneId(), entity.id);
+}
+
+function compactAnnotationForEntity(entity) {
+  return compactAnnotation(annotationForEntity(entity));
+}
+
+function annotatedEntitiesForScene(rows) {
+  return (rows || [])
+    .map((entity) => {
+      const annotation = compactAnnotationForEntity(entity);
+      if (!annotation) return null;
+      return {
+        entityId: entity.id,
+        displayName: entity.displayName || entity.name || "",
+        annotation
+      };
+    })
+    .filter(Boolean);
+}
+
+function annotationSummaryText(annotation) {
+  const parts = annotationBadgeParts(annotation);
+  if (!parts.length) return "annotation:none";
+  return `annotation:${parts.join("/")}`;
+}
+
+function annotationFields() {
+  return [
+    _hud.devEditorAnnotationNotes,
+    _hud.devEditorAnnotationDeleteCandidate,
+    _hud.devEditorAnnotationReplaceCandidate,
+    _hud.devEditorAnnotationCollisionIssue,
+    _hud.devEditorAnnotationOrientationIssue,
+    _hud.devEditorAnnotationPositioningIssue,
+    _hud.devEditorAnnotationPriority,
+    _hud.devEditorAnnotationReplacementAsset,
+    _hud.devEditorAnnotationReplacementReason,
+    _hud.devEditorAnnotationClear
+  ].filter(Boolean);
+}
+
+function annotationFieldHasFocus() {
+  return annotationFields().some((field) => document.activeElement === field);
+}
+
+function isTextEditingTarget(target) {
+  return Boolean(target?.matches?.("input, textarea, select, [contenteditable='true']"));
+}
+
+function setAnnotationFieldsDisabled(disabled) {
+  annotationFields().forEach((field) => {
+    field.disabled = disabled;
+  });
+}
+
+function setAnnotationFieldValues(annotation) {
+  annotationFormSyncing = true;
+  if (_hud.devEditorAnnotationNotes) _hud.devEditorAnnotationNotes.value = annotation.notes;
+  if (_hud.devEditorAnnotationDeleteCandidate) _hud.devEditorAnnotationDeleteCandidate.checked = annotation.flags.deleteCandidate;
+  if (_hud.devEditorAnnotationReplaceCandidate) _hud.devEditorAnnotationReplaceCandidate.checked = annotation.flags.replaceCandidate;
+  if (_hud.devEditorAnnotationCollisionIssue) _hud.devEditorAnnotationCollisionIssue.checked = annotation.flags.collisionIssue;
+  if (_hud.devEditorAnnotationOrientationIssue) _hud.devEditorAnnotationOrientationIssue.checked = annotation.flags.orientationIssue;
+  if (_hud.devEditorAnnotationPositioningIssue) _hud.devEditorAnnotationPositioningIssue.checked = annotation.flags.positioningIssue;
+  if (_hud.devEditorAnnotationPriority) _hud.devEditorAnnotationPriority.value = annotation.priority;
+  if (_hud.devEditorAnnotationReplacementAsset) _hud.devEditorAnnotationReplacementAsset.value = annotation.replacement.assetKey;
+  if (_hud.devEditorAnnotationReplacementReason) _hud.devEditorAnnotationReplacementReason.value = annotation.replacement.reason;
+  annotationFormSyncing = false;
+}
+
+function syncAnnotationForm(selected) {
+  if (!_hud) return;
+  if (!selected) {
+    annotationFormEntityKey = "";
+    setAnnotationFieldsDisabled(true);
+    setAnnotationFieldValues(emptyAnnotation(currentSceneId(), ""));
+    return;
+  }
+
+  setAnnotationFieldsDisabled(false);
+  const key = annotationStorageKey(selected.sceneId || currentSceneId(), selected.id);
+  if (annotationFormEntityKey === key && annotationFieldHasFocus()) return;
+  annotationFormEntityKey = key;
+  setAnnotationFieldValues(annotationForEntity(selected));
+}
+
+function readAnnotationForm() {
+  return normalizeAnnotation({
+    notes: _hud.devEditorAnnotationNotes?.value || "",
+    flags: {
+      deleteCandidate: Boolean(_hud.devEditorAnnotationDeleteCandidate?.checked),
+      replaceCandidate: Boolean(_hud.devEditorAnnotationReplaceCandidate?.checked),
+      collisionIssue: Boolean(_hud.devEditorAnnotationCollisionIssue?.checked),
+      orientationIssue: Boolean(_hud.devEditorAnnotationOrientationIssue?.checked),
+      positioningIssue: Boolean(_hud.devEditorAnnotationPositioningIssue?.checked)
+    },
+    replacement: {
+      assetKey: _hud.devEditorAnnotationReplacementAsset?.value || "",
+      reason: _hud.devEditorAnnotationReplacementReason?.value || ""
+    },
+    priority: _hud.devEditorAnnotationPriority?.value || "normal"
+  }, currentSceneId(), _state.devEditor.selectedObjectId || "");
+}
+
+function handleAnnotationChange() {
+  if (annotationFormSyncing) return;
+  const selected = getSelectedRow();
+  if (!selected) return;
+  setAnnotation(selected.sceneId || currentSceneId(), selected.id, readAnnotationForm());
+  annotationsVersion += 1;
+  objectListSignature = "";
+  updateDevEditorPanel();
+}
+
+function handleAnnotationClear() {
+  const selected = getSelectedRow();
+  if (!selected) return;
+  clearAnnotation(selected.sceneId || currentSceneId(), selected.id);
+  annotationFormEntityKey = "";
+  annotationsVersion += 1;
+  objectListSignature = "";
+  syncAnnotationForm(selected);
+  updateDevEditorPanel();
+  _onShowPrompt("Annotation cleared.", 1.2);
+}
+
+function bindAnnotationEvents() {
+  [
+    _hud.devEditorAnnotationNotes,
+    _hud.devEditorAnnotationReplacementAsset,
+    _hud.devEditorAnnotationReplacementReason
+  ].filter(Boolean).forEach((field) => {
+    field.addEventListener("input", handleAnnotationChange);
+  });
+  [
+    _hud.devEditorAnnotationDeleteCandidate,
+    _hud.devEditorAnnotationReplaceCandidate,
+    _hud.devEditorAnnotationCollisionIssue,
+    _hud.devEditorAnnotationOrientationIssue,
+    _hud.devEditorAnnotationPositioningIssue,
+    _hud.devEditorAnnotationPriority
+  ].filter(Boolean).forEach((field) => {
+    field.addEventListener("change", handleAnnotationChange);
+  });
+  _hud.devEditorAnnotationClear?.addEventListener("click", handleAnnotationClear);
 }
 
 function getActorKeyForMesh(mesh) {
@@ -253,13 +508,39 @@ function isDevHelper(object) {
   return false;
 }
 
+function hitsActiveTransformPicker() {
+  const picker = transformControls?._gizmo?.picker?.[currentTransformMode()];
+  if (!picker) return false;
+  return raycaster.intersectObject(picker, true).some((hit) => hit.object?.visible);
+}
+
+function isVisibleInHierarchy(object) {
+  let current = object;
+  while (current) {
+    if (current.visible === false) return false;
+    current = current.parent;
+  }
+  return true;
+}
+
 function setupTransformControls() {
   if (transformControls || !_camera || !_renderer?.domElement) return;
   transformControls = new TransformControls(_camera, _renderer.domElement);
   transformControls.setSize(0.72);
   transformControls.addEventListener("objectChange", handleTransformObjectChange);
   transformControls.addEventListener("dragging-changed", (event) => {
-    _state.devEditor.transformDragging = Boolean(event.value);
+    const dragging = Boolean(event.value);
+    _state.devEditor.transformDragging = dragging;
+    if (dragging) {
+      activeTransformDragSnapshot = transformSnapshot(getSelectedRow());
+      return;
+    }
+    if (!activeTransformDragSnapshot) return;
+    const rows = collectEditableObjects({ force: true });
+    const transformed = findDevEntityById(rows, activeTransformDragSnapshot.entityId) || getSelectedRow();
+    pushTransformUndo(transformed, activeTransformDragSnapshot, `transform-control:${currentTransformMode()}`);
+    activeTransformDragSnapshot = null;
+    updateDevEditorPanel();
   });
   transformHelper = transformControls.getHelper();
   transformHelper.visible = false;
@@ -330,16 +611,23 @@ export function initDevEditor({
   _onOpenChange = onOpenChange || (() => {});
   _onShowPrompt = onShowPrompt;
   _state.devEditor.transformMode = _state.devEditor.transformMode || "translate";
+  _state.devEditor.showTiles = Boolean(_state.devEditor.showTiles);
+  _state.devEditor.objectFilter = _state.devEditor.objectFilter || "";
 
   setupTransformControls();
   hud.devEditorToggle?.addEventListener("click", toggleDevEditorPanel);
   hud.devEditorSnapToggle?.addEventListener("click", toggleDevEditorSnap);
   hud.devEditorColliderToggle?.addEventListener("click", toggleDevEditorColliders);
+  hud.devEditorShowTilesToggle?.addEventListener("click", toggleDevEditorShowTiles);
+  hud.devEditorObjectFilter?.addEventListener("input", handleObjectFilterInput);
   hud.devEditorExportLayout?.addEventListener("click", handleExportClick);
   hud.devEditorCopySelectionDelta?.addEventListener("click", handleCopySelectionDelta);
+  hud.devEditorUndoTransform?.addEventListener("click", () => undoLastTransform());
   hud.devEditorCopyAiContext?.addEventListener("click", handleCopyAiContext);
   hud.devEditorExportPatchDraft?.addEventListener("click", handleExportPatchDraft);
+  hud.devEditorOpenLevelEditor?.addEventListener("click", handleOpenLevelEditor);
   hud.devEditorPanel?.addEventListener("click", handlePanelClick);
+  bindAnnotationEvents();
   installDevEditorTestHooks();
 }
 
@@ -357,10 +645,13 @@ function setDevEditorOpen(open) {
     _hud.devEditorPanel.hidden = !_state.devEditor.open;
     _hud.devEditorPanel.classList.toggle("is-open", _state.devEditor.open);
   }
+  _hud.root?.classList.toggle("dev-editor-active", _state.devEditor.open);
   if (!_state.devEditor.open) {
     _state.devEditor.selectedObjectId = "";
+    _state.devEditor.transformDragging = false;
     selectedMesh = null;
     selectionBaseline = null;
+    activeTransformDragSnapshot = null;
     invalidateEditableRows();
     if (selectionHelper) {
       _scene.remove(selectionHelper);
@@ -402,6 +693,18 @@ function toggleDevEditorColliders() {
   updateDevEditorPanel();
 }
 
+function toggleDevEditorShowTiles() {
+  _state.devEditor.showTiles = !Boolean(_state.devEditor.showTiles);
+  objectListSignature = "";
+  updateDevEditorPanel();
+}
+
+function handleObjectFilterInput(event) {
+  _state.devEditor.objectFilter = event?.target?.value || "";
+  objectListSignature = "";
+  updateDevEditorPanel();
+}
+
 function handleExportClick() {
   const rows = collectEditableObjects({ force: true });
   const snapshot = {
@@ -424,10 +727,15 @@ function handleExportClick() {
         z: row.transform.local.scale[2]
       },
       collisionExpected: row.collision.expected,
-      sourceFileHint: row.sourceFileHint
-    }))
+      sourceFileHint: row.sourceFileHint,
+      annotation: compactAnnotationForEntity(row)
+    })),
+    annotations: {
+      schema: "lumina3d.dev.objectAnnotations.v1",
+      annotatedEntities: annotatedEntitiesForScene(rows)
+    }
   };
-  writeClipboardOrConsole(snapshot, "Dev layout copied to clipboard.", "Copy blocked. Layout logged in console.");
+  writeClipboardOrConsole(snapshot, "Layout snapshot copied to clipboard.", "Copy blocked. Layout snapshot logged in console.");
 }
 
 function cameraSnapshot() {
@@ -478,6 +786,7 @@ function buildAiContextPayload() {
   const rows = collectEditableObjects({ force: true });
   const selected = findDevEntityById(rows, _state.devEditor.selectedObjectId);
   const runtimeSnapshot = typeof _getRuntimeSnapshot === "function" ? _getRuntimeSnapshot() : null;
+  const selectedAnnotation = compactAnnotationForEntity(selected);
   return {
     schema: AI_CONTEXT_SCHEMA,
     capturedAt: new Date().toISOString(),
@@ -498,11 +807,18 @@ function buildAiContextPayload() {
       phase: _state.scene.phase,
       titleCardVisible: Boolean(_state.scene.titleCardVisible)
     },
-    selection: selected ? normalizeDevEntity(selected) : null,
+    selection: selected ? {
+      ...normalizeDevEntity(selected),
+      annotation: selectedAnnotation
+    } : null,
     nearbyEntities: getNearbyEntities(rows, selected),
     entities: {
       count: rows.length,
       ids: rows.map((entity) => entity.id)
+    },
+    annotations: {
+      selected: selectedAnnotation,
+      annotatedEntities: annotatedEntitiesForScene(rows)
     },
     colliders: typeof _getSceneColliderDebugEntries === "function" ? _getSceneColliderDebugEntries() : [],
     camera: cameraSnapshot(),
@@ -538,6 +854,13 @@ function valuesDiffer(a, b) {
   return JSON.stringify(a) !== JSON.stringify(b);
 }
 
+function transformsDiffer(a, b) {
+  if (!a || !b) return false;
+  return valuesDiffer(a.position, b.position) ||
+    valuesDiffer(a.rotationEuler, b.rotationEuler) ||
+    valuesDiffer(a.scale, b.scale);
+}
+
 function deltaArray(oldValue = [], newValue = [], digits = 3) {
   return newValue.map((value, index) => round(Number(value) - Number(oldValue[index] || 0), digits));
 }
@@ -555,6 +878,95 @@ function baselineForSelected(selected) {
   if (!selected) return null;
   if (selectionBaseline?.entityId === selected.id) return selectionBaseline.local;
   return localTransformForDelta(selected);
+}
+
+function pushTransformUndo(entity, beforeSnapshot, action = "transform") {
+  if (!entity || !entity.mesh || !beforeSnapshot?.local) return false;
+  const afterSnapshot = transformSnapshot(entity);
+  if (!afterSnapshot || !transformsDiffer(beforeSnapshot.local, afterSnapshot.local)) return false;
+  transformUndoStack.push({
+    entityId: entity.id,
+    sceneId: entity.sceneId || currentSceneId(),
+    displayName: entity.displayName || entity.name || beforeSnapshot.displayName || entity.id,
+    sourceFileHint: entity.sourceFileHint || entity.notes?.sourceFileHint || beforeSnapshot.sourceFileHint || "",
+    action,
+    createdAt: new Date().toISOString(),
+    before: cloneLocalTransform(beforeSnapshot.local),
+    after: cloneLocalTransform(afterSnapshot.local)
+  });
+  if (transformUndoStack.length > TRANSFORM_UNDO_LIMIT) {
+    transformUndoStack.splice(0, transformUndoStack.length - TRANSFORM_UNDO_LIMIT);
+  }
+  return true;
+}
+
+function undoableTransformEntry(rows = collectEditableObjects()) {
+  const sceneId = currentSceneId();
+  for (let i = transformUndoStack.length - 1; i >= 0; i -= 1) {
+    const entry = transformUndoStack[i];
+    if (entry.sceneId && entry.sceneId !== sceneId) continue;
+    if (findDevEntityById(rows, entry.entityId)?.mesh) return { entry, index: i };
+  }
+  return null;
+}
+
+function applyLocalTransform(mesh, local) {
+  const next = cloneLocalTransform(local);
+  mesh.position.set(next.position[0], next.position[1], next.position[2]);
+  mesh.rotation.set(next.rotationEuler[0], next.rotationEuler[1], next.rotationEuler[2]);
+  mesh.scale.set(next.scale[0], next.scale[1], next.scale[2]);
+  mesh.updateMatrixWorld(true);
+}
+
+function refreshAfterTransformChange({ forceRows = true } = {}) {
+  if (forceRows) _state.devEditor.rows = collectEditableObjects({ force: true });
+  syncDevEditorSelectionToScene();
+  syncDevEditorColliderHelpers();
+  updateDevEditorPanel();
+}
+
+function undoLastTransform({ showPrompt = true } = {}) {
+  let rows = collectEditableObjects({ force: true });
+  while (transformUndoStack.length > 0) {
+    const undoable = undoableTransformEntry(rows);
+    if (!undoable) {
+      transformUndoStack.length = 0;
+      break;
+    }
+    const [entry] = transformUndoStack.splice(undoable.index, 1);
+    const entity = findDevEntityById(rows, entry.entityId);
+    if (!entity?.mesh) {
+      rows = collectEditableObjects({ force: true });
+      continue;
+    }
+    applyLocalTransform(entity.mesh, entry.before);
+    syncActorStateFromMesh(entity.mesh);
+    _state.devEditor.selectedObjectId = entity.id;
+    selectedMesh = entity.mesh;
+    rows = collectEditableObjects({ force: true });
+    refreshAfterTransformChange({ forceRows: false });
+    if (showPrompt) _onShowPrompt(`Undid transform: ${entry.displayName || entry.entityId}.`, 1.2);
+    return true;
+  }
+  updateDevEditorPanel();
+  if (showPrompt) _onShowPrompt("No Dev Editor transform to undo.", 1.2);
+  return false;
+}
+
+function transformUndoState() {
+  const rows = collectEditableObjects();
+  const undoable = undoableTransformEntry(rows);
+  return {
+    count: transformUndoStack.length,
+    canUndo: Boolean(undoable),
+    latest: undoable ? {
+      entityId: undoable.entry.entityId,
+      sceneId: undoable.entry.sceneId,
+      displayName: undoable.entry.displayName,
+      action: undoable.entry.action,
+      createdAt: undoable.entry.createdAt
+    } : null
+  };
 }
 
 function buildSelectionDeltaPayload() {
@@ -578,6 +990,7 @@ function buildSelectionDeltaPayload() {
     category: selected?.category || "",
     asset: selected?.asset || null,
     sourceFileHint: selected?.sourceFileHint || selected?.notes?.sourceFileHint || "",
+    annotation: compactAnnotationForEntity(selected),
     changed,
     original,
     current,
@@ -591,11 +1004,15 @@ function buildSelectionDeltaPayload() {
   };
 }
 
+function buildTransformDeltaPayload() {
+  return buildSelectionDeltaPayload();
+}
+
 function handleCopySelectionDelta() {
   writeClipboardOrConsole(
-    buildSelectionDeltaPayload(),
-    "Selection delta copied to clipboard.",
-    "Copy blocked. Selection delta logged in console."
+    buildTransformDeltaPayload(),
+    "Transform delta copied to clipboard.",
+    "Copy blocked. Transform delta logged in console."
   );
 }
 
@@ -623,6 +1040,7 @@ function buildPatchChanges(selected) {
 function buildPatchDraftPayload() {
   const rows = collectEditableObjects({ force: true });
   const selected = findDevEntityById(rows, _state.devEditor.selectedObjectId);
+  const selectedAnnotation = compactAnnotationForEntity(selected);
   return {
     schema: SCENE_PATCH_SCHEMA,
     patchId: `scene-patch-${Date.now().toString(36)}`,
@@ -631,6 +1049,13 @@ function buildPatchDraftPayload() {
     issueType: "",
     selectedEntityId: selected?.id || "",
     changes: buildPatchChanges(selected),
+    annotationIntent: {
+      selected: selectedAnnotation,
+      deleteCandidate: Boolean(selectedAnnotation?.flags?.deleteCandidate),
+      replaceCandidate: Boolean(selectedAnnotation?.flags?.replaceCandidate),
+      replacement: selectedAnnotation?.replacement || null,
+      browserMayDeleteOrReplaceObjects: false
+    },
     validationCommands: [
       "npm run build",
       `npm run tools:run-scene-smoke -- ${_state.scene.id} --pretty`,
@@ -653,11 +1078,78 @@ function handleExportPatchDraft() {
   );
 }
 
+function buildEditorHandoffPayload() {
+  const rows = collectEditableObjects({ force: true });
+  const selected = findDevEntityById(rows, _state.devEditor.selectedObjectId);
+  const selectedAnnotation = compactAnnotationForEntity(selected);
+  return normalizeEditorHandoffPayload({
+    sceneId: _state.scene.id,
+    scene: {
+      id: _state.scene.id,
+      phase: _state.scene.phase,
+      titleCardVisible: Boolean(_state.scene.titleCardVisible)
+    },
+    selectedEntityId: selected?.id || "",
+    selection: selected ? {
+      ...normalizeDevEntity(selected),
+      annotation: selectedAnnotation
+    } : null,
+    transformDelta: buildTransformDeltaPayload(),
+    aiContext: buildAiContextPayload(),
+    annotations: {
+      selected: selectedAnnotation,
+      annotatedEntities: annotatedEntitiesForScene(rows)
+    },
+    colliders: typeof _getSceneColliderDebugEntries === "function" ? _getSceneColliderDebugEntries() : [],
+    camera: cameraSnapshot(),
+    actors: {
+      active: _state.active,
+      human: actorSnapshot(_state.human),
+      frog: actorSnapshot(_state.frog),
+      elephant: actorSnapshot(_state.elephant)
+    },
+    sourceHints: {
+      selected: selected?.sourceFileHint || selected?.notes?.sourceFileHint || "",
+      browserMayWriteSourceFiles: false,
+      deleteOrReplaceIsAnnotationOnly: true
+    }
+  });
+}
+
+function handleOpenLevelEditor() {
+  const selected = getSelectedRow();
+  if (!selected) {
+    _onShowPrompt("Select an object before opening it in the level editor.", 1.5);
+    return;
+  }
+  const { handoff, saved } = saveEditorHandoff(buildEditorHandoffPayload());
+  const targetUrl = editorHandoffUrl(handoff, window.location.href);
+  if (!saved) {
+    writeClipboardOrConsole(
+      handoff,
+      "Editor handoff copied to clipboard.",
+      "Copy blocked. Editor handoff logged in console."
+    );
+    return;
+  }
+  const opened = window.open(targetUrl, "_blank", "noopener");
+  if (opened) {
+    _onShowPrompt("Opened selected object in Level Editor.", 1.3);
+    return;
+  }
+  writeClipboardOrConsole(
+    handoff,
+    "Popup blocked. Editor handoff copied to clipboard.",
+    "Popup and clipboard blocked. Editor handoff logged in console."
+  );
+}
+
 function selectById(objectId) {
   _state.devEditor.selectedObjectId = objectId || "";
   _state.devEditor.rows = collectEditableObjects({ force: true });
   const selected = getSelectedRow();
   selectionBaseline = transformSnapshot(selected);
+  annotationFormEntityKey = "";
   syncDevEditorSelectionToScene();
   updateDevEditorPanel();
 }
@@ -668,10 +1160,29 @@ function installDevEditorTestHooks() {
     buildAiContextPayload,
     buildPatchDraftPayload,
     buildSelectionDeltaPayload,
+    buildTransformDeltaPayload,
+    buildEditorHandoffPayload,
     listEntities: () => serializableEntities(collectEditableObjects({ force: true })),
+    canvasPointForEntity,
     selectEntityById: (objectId) => {
       selectById(objectId);
       return normalizeDevEntity(getSelectedRow());
+    },
+    undoLastTransform: () => undoLastTransform({ showPrompt: false }),
+    getTransformUndoState: () => transformUndoState(),
+    getAnnotations: () => listAnnotations(),
+    getAnnotationForSelected: () => {
+      const selected = getSelectedRow();
+      return selected ? annotationForEntity(selected) : null;
+    },
+    setAnnotationForSelected: (updates = {}) => {
+      const selected = getSelectedRow();
+      if (!selected) return null;
+      const next = setAnnotation(selected.sceneId || currentSceneId(), selected.id, updates);
+      annotationsVersion += 1;
+      objectListSignature = "";
+      updateDevEditorPanel();
+      return next;
     }
   };
 }
@@ -692,6 +1203,8 @@ function handlePanelClick(event) {
     _state.devEditor.selectedObjectId = "";
     selectedMesh = null;
     selectionBaseline = null;
+    activeTransformDragSnapshot = null;
+    transformUndoStack.length = 0;
     attachTransformControls(null);
     if (targetScene === SCENES.TUTORIAL) _sceneNav.tutorial();
     if (targetScene === SCENES.HOME) _sceneNav.home();
@@ -753,12 +1266,26 @@ function selectionDeltaSummary(selected) {
   return `Start ${formatVec(original.position)} -> Now ${formatVec(current.position)} | dPos ${formatVec(positionDelta, 3)} | dRot ${formatVec(rotationDelta, 3)} | dScale ${formatVec(scaleDelta, 3)}`;
 }
 
+function annotationBadgesMarkup(annotation) {
+  const badges = annotationBadgeParts(annotation);
+  if (!badges.length) return "";
+  return `<span class="dev-editor-badges">${badges.map((badge) => (
+    `<span class="dev-editor-badge dev-editor-badge-${badge}">${badge}</span>`
+  )).join("")}</span>`;
+}
+
 function objectListCacheSignature(rows) {
   return [
     _state.scene.id,
     _state.devEditor.selectedObjectId,
+    _state.devEditor.showTiles ? "tiles-on" : "tiles-off",
+    objectListFilterText(),
     rowsCacheVersion,
-    rows.map((row) => `${row.id}:${row.displayName || row.name}:${row.category}`).join("|")
+    annotationsVersion,
+    rows.map((row) => {
+      const annotation = annotationForEntity(row);
+      return `${row.id}:${row.displayName || row.name}:${row.category}:${annotationBadgeParts(annotation).join(",")}`;
+    }).join("|")
   ].join("::");
 }
 
@@ -769,10 +1296,23 @@ export function updateDevEditorPanel() {
   _hud.devEditorPanel.classList.toggle("is-open", open);
   _hud.devEditorToggle.classList.toggle("is-open", open);
   _hud.devEditorToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  _hud.root?.classList.toggle("dev-editor-active", open);
 
   if (_hud.devEditorSnapToggle) {
     _hud.devEditorSnapToggle.textContent = _state.devEditor.snapToGrid ? "Snap Grid: On" : "Snap Grid: Off";
     _hud.devEditorSnapToggle.classList.toggle("is-on", _state.devEditor.snapToGrid);
+  }
+  if (_hud.devEditorUndoTransform) {
+    if (open) {
+      const undoState = transformUndoState();
+      _hud.devEditorUndoTransform.disabled = !undoState.canUndo;
+      _hud.devEditorUndoTransform.title = undoState.latest
+        ? `Undo last Dev Editor transform: ${undoState.latest.displayName || undoState.latest.entityId}`
+        : "Undo the last Dev Editor transform";
+    } else {
+      _hud.devEditorUndoTransform.disabled = true;
+      _hud.devEditorUndoTransform.title = "Undo the last Dev Editor transform";
+    }
   }
   if (_hud.devEditorPanel) {
     const stepButtons = _hud.devEditorPanel.querySelectorAll(".dev-editor-step");
@@ -790,6 +1330,13 @@ export function updateDevEditorPanel() {
     _hud.devEditorColliderToggle.textContent = `Colliders: ${_state.devEditor.showColliders ? "On" : "Off"}`;
     _hud.devEditorColliderToggle.classList.toggle("is-on", _state.devEditor.showColliders);
   }
+  if (_hud.devEditorShowTilesToggle) {
+    _hud.devEditorShowTilesToggle.textContent = `Show Tiles: ${_state.devEditor.showTiles ? "On" : "Off"}`;
+    _hud.devEditorShowTilesToggle.classList.toggle("is-on", Boolean(_state.devEditor.showTiles));
+  }
+  if (_hud.devEditorObjectFilter && _hud.devEditorObjectFilter.value !== (_state.devEditor.objectFilter || "")) {
+    _hud.devEditorObjectFilter.value = _state.devEditor.objectFilter || "";
+  }
   if (!open) return;
   if (_hud.devEditorSelectionSummary) {
     const currentRows = collectEditableObjects();
@@ -805,13 +1352,19 @@ export function updateDevEditorPanel() {
     if (selected) {
       selectedMesh = selected.mesh;
       attachTransformControls(selectedMesh);
+      const selectedAnnotation = annotationForEntity(selected);
       _hud.devEditorSelectionSummary.textContent =
         `${selected.displayName || selected.name} (${selected.id}) | ${selected.category} | ${selected.asset?.key || "asset-missing"} | ` +
         `x:${selected.transform.local.position[0].toFixed(2)} y:${selected.transform.local.position[1].toFixed(2)} z:${selected.transform.local.position[2].toFixed(2)} | ` +
         `rotY:${selected.transform.local.rotationY.toFixed(2)}rad | collision:${selected.collision.expected ? "yes" : "no"} | ` +
+        `${annotationSummaryText(selectedAnnotation)} | ` +
         selectionDeltaSummary(selected);
     } else {
       _hud.devEditorSelectionSummary.textContent = "No object selected.";
+    }
+    syncAnnotationForm(selected);
+    if (_hud.devEditorOpenLevelEditor) {
+      _hud.devEditorOpenLevelEditor.disabled = !selected;
     }
 
     if (_hud.devEditorObjectList) {
@@ -819,10 +1372,17 @@ export function updateDevEditorPanel() {
       if (signature === objectListSignature) return;
       objectListSignature = signature;
       _hud.devEditorObjectList.innerHTML = "";
-      currentRows.forEach((row) => {
+      rowsForObjectList(currentRows).forEach((row) => {
+        const annotation = annotationForEntity(row);
+        const hasAnnotation = annotationHasContent(annotation);
         const item = document.createElement("button");
         item.type = "button";
-        item.className = `dev-editor-row${row.id === _state.devEditor.selectedObjectId ? " is-selected" : ""}`;
+        item.className = [
+          "dev-editor-row",
+          row.id === _state.devEditor.selectedObjectId ? "is-selected" : "",
+          hasAnnotation ? "is-annotated" : "",
+          annotation.flags.deleteCandidate ? "is-delete-candidate" : ""
+        ].filter(Boolean).join(" ");
         item.dataset.devObjectId = row.id;
         item.innerHTML = `
           <span class="dev-editor-row-name">${row.displayName || row.name}</span>
@@ -832,6 +1392,7 @@ export function updateDevEditorPanel() {
             <strong>Asset:</strong> ${row.asset?.key || "n/a"}<br />
             <strong>Collision:</strong> ${row.collision.expected ? "yes" : "no"}
           </span>
+          ${annotationBadgesMarkup(annotation)}
         `;
         _hud.devEditorObjectList.appendChild(item);
       });
@@ -930,9 +1491,11 @@ function syncColliderHelpers() {
 function moveSelected(axis, delta) {
   const row = getSelectedRow();
   if (!row || !row.mesh) return;
+  const before = transformSnapshot(row);
   row.mesh.position[axis] += delta;
   if (_state.devEditor.snapToGrid) row.mesh.position[axis] = applyGridSnap(row.mesh.position[axis], _state.devEditor.nudgeStep);
   syncActorStateFromMesh(row.mesh);
+  pushTransformUndo(row, before, `nudge:${axis}`);
   _state.devEditor.rows = collectEditableObjects({ force: true });
   syncDevEditorSelectionToScene();
   syncDevEditorColliderHelpers();
@@ -942,8 +1505,10 @@ function moveSelected(axis, delta) {
 function rotateSelected(deltaRadians) {
   const row = getSelectedRow();
   if (!row || !row.mesh) return;
+  const before = transformSnapshot(row);
   row.mesh.rotation.y = normalizeAngle(row.mesh.rotation.y + deltaRadians);
   syncActorStateFromMesh(row.mesh);
+  pushTransformUndo(row, before, "rotate-y");
   _state.devEditor.rows = collectEditableObjects({ force: true });
   syncDevEditorSelectionToScene();
   syncDevEditorColliderHelpers();
@@ -957,6 +1522,56 @@ function getPointerNdc(event) {
   return pointerNdc;
 }
 
+function screenDistanceToEntity(entity, event) {
+  if (!entity?.mesh) return Infinity;
+  pickBox.setFromObject(entity.mesh);
+  pickBox.getCenter(pickCenter);
+  if (entity.category !== "terrain_tile" && Number.isFinite(pickBox.max.y)) {
+    pickCenter.y = pickBox.max.y - Math.min(0.05, Math.max(0, pickBox.max.y - pickBox.min.y) * 0.15);
+  }
+  pickCenter.project(_camera);
+  const rect = _renderer.domElement.getBoundingClientRect();
+  const x = ((pickCenter.x + 1) / 2) * rect.width + rect.left;
+  const y = ((1 - pickCenter.y) / 2) * rect.height + rect.top;
+  return Math.hypot(x - event.clientX, y - event.clientY);
+}
+
+function nearestScreenEntity(rows, event, { excludeTiles = false, maxDistance = 28 } = {}) {
+  const candidates = (rows || [])
+    .filter((entity) => entity?.mesh && isVisibleInHierarchy(entity.mesh))
+    .filter((entity) => !(excludeTiles && isTerrainTileEntity(entity)))
+    .map((entity) => ({
+      entity,
+      screenDistance: screenDistanceToEntity(entity, event)
+    }))
+    .filter((candidate) => Number.isFinite(candidate.screenDistance) && candidate.screenDistance <= maxDistance)
+    .sort((a, b) => a.screenDistance - b.screenDistance);
+  return candidates[0] || null;
+}
+
+function resolveDevEntityHit(hits, rows, event) {
+  const candidates = [];
+  const seen = new Set();
+  hits.forEach((hit) => {
+    if (isDevHelper(hit.object) || !isVisibleInHierarchy(hit.object)) return;
+    const entity = findDevEntityForObject(hit.object, rows);
+    if (!entity || seen.has(entity.id)) return;
+    seen.add(entity.id);
+    candidates.push({
+      entity,
+      hitDistance: hit.distance,
+      screenDistance: screenDistanceToEntity(entity, event)
+    });
+  });
+  candidates.sort((a, b) => a.screenDistance - b.screenDistance || a.hitDistance - b.hitDistance);
+  const best = candidates[0] || null;
+  const nearestNonTile = nearestScreenEntity(rows, event, { excludeTiles: true, maxDistance: 30 });
+  if (nearestNonTile && (!best || best.entity.category === "terrain_tile" || nearestNonTile.screenDistance + 4 < best.screenDistance)) {
+    return nearestNonTile.entity;
+  }
+  return best?.entity || null;
+}
+
 export function handleDevEditorPointerDown(event) {
   if (!_state?.devEditor?.open || !_renderer?.domElement || !_camera) return false;
   if (event.target !== _renderer.domElement) return false;
@@ -964,18 +1579,16 @@ export function handleDevEditorPointerDown(event) {
   const pointer = getPointerNdc(event);
   raycaster.setFromCamera(pointer, _camera);
 
-  const rows = collectEditableObjects();
-  const roots = rows.map((row) => row.mesh).filter(Boolean);
-  const hits = raycaster.intersectObjects(roots, true);
-  const hit = hits.find((candidate) => !isDevHelper(candidate.object));
-  const entity = hit ? findDevEntityForObject(hit.object, rows) : null;
-  if (!entity && transformHelper?.visible) {
-    const helperHits = raycaster.intersectObject(transformHelper, true);
-    if (helperHits.length > 0) {
-      event.preventDefault();
-      return true;
-    }
+  if (_state.devEditor.transformDragging) {
+    event.preventDefault();
+    return true;
   }
+  if (transformHelper?.visible && hitsActiveTransformPicker()) return true;
+
+  const rows = collectEditableObjects();
+  const roots = rows.map((row) => row.mesh).filter((mesh) => mesh && isVisibleInHierarchy(mesh));
+  const hits = raycaster.intersectObjects(roots, true);
+  const entity = resolveDevEntityHit(hits, rows, event);
   if (!entity) {
     event.preventDefault();
     return true;
@@ -989,6 +1602,11 @@ export function handleDevEditorPointerDown(event) {
 
 export function handleDevEditorKeyDown(event) {
   if (event.code === "Escape") { event.preventDefault(); setDevEditorOpen(false); return true; }
+  if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.code === "KeyZ" && !isTextEditingTarget(event.target)) {
+    event.preventDefault();
+    undoLastTransform();
+    return true;
+  }
 
   const move = (() => {
     if (event.code === "ArrowLeft" || event.code === "KeyJ") return { axis: "x", sign: -1 };

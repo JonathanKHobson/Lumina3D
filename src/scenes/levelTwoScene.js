@@ -188,6 +188,30 @@ export function buildLevelTwoScene({
     levelTwoInteractiveMeshes.redButtonTops[button.id] = redButtonTop;
   });
 
+  const dormantPanel = LEVEL_TWO_BLUE_RAMP.dormantPanel;
+  if (dormantPanel) {
+    const blueRampDormantPanel = new THREE.Mesh(
+      new THREE.BoxGeometry(dormantPanel.width, dormantPanel.height, dormantPanel.depth),
+      new THREE.MeshStandardMaterial({
+        color: dormantPanel.color,
+        emissive: dormantPanel.color,
+        emissiveIntensity: 0.08,
+        roughness: 0.58,
+        metalness: 0.04,
+        transparent: true,
+        opacity: dormantPanel.opacity,
+        depthWrite: false
+      })
+    );
+    blueRampDormantPanel.position.set(dormantPanel.position.x, dormantPanel.y, dormantPanel.position.z);
+    blueRampDormantPanel.userData.levelTwoAsset = dormantPanel.id;
+    blueRampDormantPanel.userData.visualOnly = true;
+    blueRampDormantPanel.userData.baseOpacity = dormantPanel.opacity;
+    sceneGroups.levelTwo.add(blueRampDormantPanel);
+    levelTwoMeshes.push(blueRampDormantPanel);
+    levelTwoInteractiveMeshes.blueRampDormantPanel = blueRampDormantPanel;
+  }
+
   const blueRamp = placeAsset(sceneGroups.levelTwo, LEVEL_TWO_BLUE_RAMP.asset, LEVEL_TWO_BLUE_RAMP.position, {
     y: SURFACE_Y,
     rotationY: LEVEL_TWO_BLUE_RAMP.rotationY,
@@ -201,6 +225,8 @@ export function buildLevelTwoScene({
     );
   }
   blueRamp.userData.levelTwoAsset = "blue-ramp";
+  blueRamp.userData.basePositionY = SURFACE_Y;
+  blueRamp.userData.baseScale = blueRamp.scale.clone();
   blueRamp.visible = false;
   levelTwoMeshes.push(blueRamp);
   levelTwoInteractiveMeshes.blueRamp = blueRamp;

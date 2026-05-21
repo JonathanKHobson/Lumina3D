@@ -18,6 +18,8 @@ Lumina3D is a Vite + Three.js cozy 3D puzzle-adventure prototype. It uses import
 
 Do not guess transforms, object IDs, collider labels, trigger names, surface IDs, or asset orientation from prose. For collision, orientation, positioning, trigger, walkable-surface, or scene-flow tasks, request or gather a structured context packet before changing code.
 
+When object identity is ambiguous, use `docs/architecture/naming-conventions.md`: keep asset keys, source stems, canonical IDs, display names, roles, and collider labels separate.
+
 Start with:
 
 - `window.render_game_to_text()` output from the running game when available.

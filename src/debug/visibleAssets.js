@@ -55,6 +55,7 @@ export function currentVisibleAssetsForState(state, sceneIds) {
       "frog-cubeling",
       state.levelTwo.elephantSpawned ? "elephant-cubeling-real-awake-actor" : null,
       "kaykit-platformer-button-blue-level-two",
+      !state.levelTwo.blueRampActive || state.levelTwo.blueRampRevealActive ? "generated-blue-ramp-dormant-panel-visual-only" : null,
       state.levelTwo.blueRampActive ? "kaykit-platformer-blue-ramp" : null,
       state.levelTwo.elephantEchoVisible && !state.levelTwo.elephantAwake ? "elephant-echo-transparent-spawn-marker" : null,
       state.levelTwo.elephantEchoVisible ? "elephant-echo-muted-grey-ground-circle" : null,

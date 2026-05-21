@@ -24,16 +24,6 @@ const ACTOR_SOURCE_HINTS = {
   elephant_totem: "src/scenes/levelTwoScene.js"
 };
 
-const LEVEL_TWO_TERRAIN_ASSETS = new Set([
-  "central-mountain",
-  "central-mountain-support",
-  "frog-side-ledge",
-  "blue-button-ledge",
-  "elephant-totem-hill",
-  "red-elevator-a-top-connector",
-  "human-love-letter-route"
-]);
-
 const DISPLAY_NAMES_BY_CATEGORY = {
   character: "Human",
   frog: "Frog",
@@ -45,6 +35,13 @@ const DISPLAY_NAMES_BY_CATEGORY = {
 };
 
 const DISPLAY_NAMES_BY_ASSET = {
+  groundTile: "Ground Tile",
+  pathTile: "Path Tile",
+  waterTile: "Water Tile",
+  barrier: "Barrier",
+  barrierColumnHalf: "Barrier End Cap",
+  spellbookClosed: "Love Letter Closed",
+  spellbookOpen: "Love Letter Open",
   "blue-button": "Blue Button",
   "blue-ramp": "Blue Ramp",
   "red-button-a": "Red Button A",
@@ -116,6 +113,8 @@ function arrayFromQuaternion(quaternion, digits = 4) {
 
 function inferAsset(object, scenePrefix) {
   const key = object.userData.devEditorAsset ||
+    object.userData.runtimeAssetKey ||
+    object.userData.assetKey ||
     object.userData.homeAsset ||
     object.userData.levelOneAsset ||
     object.userData.levelTwoAsset ||
@@ -132,6 +131,15 @@ function inferAsset(object, scenePrefix) {
 
 function inferCategory(object, assetKey) {
   if (object.userData.devEditorCategory) return object.userData.devEditorCategory;
+  if (
+    object.userData.homeTile !== undefined ||
+    object.userData.levelOneTile !== undefined ||
+    object.userData.levelOneWater !== undefined ||
+    object.userData.levelTwoTile !== undefined ||
+    object.userData.levelTwoTileX !== undefined ||
+    /groundTile|pathTile|waterTile/i.test(assetKey)
+  ) return "terrain_tile";
+  if (/barrier/i.test(assetKey)) return "terrain_barrier";
   if (object.userData.homeAsset?.startsWith("home") || /house|home/i.test(assetKey)) return "house";
   if (/button/i.test(assetKey)) return "button";
   if (/bridge/i.test(assetKey)) return "bridge";
@@ -168,6 +176,8 @@ function inferCollisionExpected(object, category, assetKey) {
     category === "bush" ||
     category === "platform" ||
     category === "ramp" ||
+    category === "terrain_tile" ||
+    category === "terrain_barrier" ||
     /love|spellbook/i.test(assetKey || "")
   ) {
     return true;
@@ -178,15 +188,43 @@ function inferCollisionExpected(object, category, assetKey) {
 function shouldSkipObject(object) {
   return Boolean(
     object.userData.devEditorHelper ||
-    object.userData.homeTile ||
-    object.userData.levelOneTile ||
-    object.userData.levelTwoTile ||
-    object.userData.levelOneWater ||
-    object.userData.levelTwoTier !== undefined ||
-    object.userData.levelTwoTileX !== undefined ||
-    LEVEL_TWO_TERRAIN_ASSETS.has(object.userData.levelTwoAsset) ||
+    object.userData.devEditorExclude ||
     String(object.userData.levelTwoAsset || "").startsWith("reserved-")
   );
+}
+
+function tileCoordinateParts(object) {
+  const raw = object.userData.homeTile ||
+    object.userData.levelOneTile ||
+    object.userData.levelOneWater ||
+    object.userData.levelTwoTile ||
+    (object.userData.levelTwoTileX !== undefined && object.userData.levelTwoTileY !== undefined
+      ? `${object.userData.levelTwoTileX},${object.userData.levelTwoTileY}`
+      : "") ||
+    (object.userData.column !== undefined && object.userData.row !== undefined
+      ? `${object.userData.column},${object.userData.row}`
+      : "");
+  return String(raw || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function inferredStableRuntimeId(sceneId, object, category, assetKey) {
+  const coords = tileCoordinateParts(object);
+  if (category === "terrain_tile" && coords.length >= 2) {
+    const tileKind = /water/i.test(assetKey) ? "water_tile" : "terrain_tile";
+    return `${sceneId}.${tileKind}.${slug(coords[0])}.${slug(coords[1])}`;
+  }
+  if (category === "terrain_barrier" && object.userData.endCapLabel) {
+    return `${sceneId}.terrain.barrier_cap.${slug(object.userData.endCapLabel)}`;
+  }
+  if (category === "terrain_barrier" && object.userData.row !== undefined) {
+    return `${sceneId}.terrain.barrier.${slug(object.userData.column ?? "wall")}.${slug(object.userData.row)}`;
+  }
+  if (category === "love_letter" && /open/i.test(assetKey)) return `${sceneId}.love_letter.open`;
+  if (category === "love_letter" && /closed/i.test(assetKey)) return `${sceneId}.love_letter.closed`;
+  return "";
 }
 
 function makeStableId(sceneId, object, category, counters, seen) {
@@ -197,6 +235,13 @@ function makeStableId(sceneId, object, category, counters, seen) {
       seen.add(base);
       return base;
     }
+  }
+
+  const inferred = inferredStableRuntimeId(sceneId, object, category, inferAsset(object, scenePrefixFor(sceneId)).key);
+  if (inferred && !seen.has(inferred)) {
+    seen.add(inferred);
+    object.userData.devEditorId = inferred;
+    return inferred;
   }
 
   const base = `${sceneId}.${slug(category)}`;
@@ -257,6 +302,16 @@ function sourceHintFor(sceneId, object, category) {
 function displayNameFor(object, name, category, assetKey) {
   if (object.userData.devEditorDisplayName) return object.userData.devEditorDisplayName;
   if (DISPLAY_NAMES_BY_CATEGORY[category]) return DISPLAY_NAMES_BY_CATEGORY[category];
+  if (category === "terrain_tile") {
+    const coords = tileCoordinateParts(object);
+    const base = /water/i.test(assetKey) ? "Water Tile" : /path/i.test(assetKey) ? "Path Tile" : "Ground Tile";
+    return coords.length >= 2 ? `${base} ${coords[0]},${coords[1]}` : base;
+  }
+  if (category === "terrain_barrier") {
+    if (object.userData.endCapLabel) return humanizeKey(object.userData.endCapLabel);
+    if (object.userData.row !== undefined) return `Barrier ${object.userData.column ?? "wall"},${object.userData.row}`;
+    return "Barrier";
+  }
   if (DISPLAY_NAMES_BY_ASSET[assetKey]) return DISPLAY_NAMES_BY_ASSET[assetKey];
   if (/tree/i.test(category) || /tree/i.test(assetKey)) return "Tree";
   if (/bush/i.test(category) || /bush/i.test(assetKey)) return "Bush";

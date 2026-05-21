@@ -48,6 +48,16 @@ export function createLoveLetterMessageState(id = TUTORIAL_LOVE_LETTER_ID) {
   };
 }
 
+export function createTutorialRecoveryState() {
+  return {
+    stranded: false,
+    startedAt: -Infinity,
+    lastPromptAt: -Infinity,
+    resetPromptShown: false,
+    characterLineShown: false
+  };
+}
+
 export function createCelebrationState(overrides = {}) {
   return {
     active: false,
@@ -123,6 +133,8 @@ export function createLevelTwoState(phase = "inactive") {
     humanSurfaceId: null,
     blueButtonPressed: false,
     blueRampActive: false,
+    blueRampRevealActive: false,
+    blueRampRevealElapsed: 0,
     elephantEchoVisible: phase !== "inactive",
     elephantEchoPromptIndex: 0,
     lastElephantEchoPromptAt: -Infinity,
@@ -139,6 +151,11 @@ export function createLevelTwoState(phase = "inactive") {
     lastElephantTransferPromptAt: -Infinity,
     redButtons: {},
     redPlatforms: {},
+    redElevatorAStartGate: {
+      released: false,
+      delayRemaining: 2.5,
+      waitingReason: "waiting-for-human-approach-or-elephant-possession"
+    },
     lastRedButtonInvalidPromptAt: -Infinity,
     lastFrogJumpResult: "none",
     lastFrogJumpReason: "",

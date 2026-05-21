@@ -9,6 +9,7 @@ Use it for collision, orientation, positioning, trigger, walkable-surface, ramp,
 1. User observes a spatial bug.
 2. User captures context using:
    - F2 Dev Editor `Copy AI Context` output when available
+   - F2 Dev Editor selected-object annotations or `Copy Transform Delta` output
    - `window.render_game_to_text()`
    - level manifest CLI output
    - level object list CLI output
@@ -19,10 +20,14 @@ Use it for collision, orientation, positioning, trigger, walkable-surface, ramp,
 5. AI proposes a minimal patch and exact verification commands.
 6. Developer verifies with build, smoke tests, fixtures, and collider validators as appropriate.
 
+If a prompt has unclear object identity, use `docs/architecture/naming-conventions.md` to separate the current tooling ID from the asset key, asset source stem, display name, role, and collider label.
+
 The runtime F2 Dev Editor is the inspection and AI-context lane. The separate
-`/editor/` route is a transform-patch editor lane. Neither tool writes source
-files directly from the browser; the workflow is capture/export, propose a
-minimal source patch, human review, then build/smoke/validator checks.
+`/editor/` route is a transform-patch editor lane. The runtime Dev Editor can
+handoff selected object context into `/editor/`, but neither tool writes source
+files directly from the browser. The workflow is inspect, annotate, copy or
+handoff, propose a minimal source patch, human review, then build/smoke/validator
+checks.
 
 ## Start Here
 
@@ -54,8 +59,10 @@ Do not use `home` in CLI commands unless the tooling catalog changes.
 ## Runtime Dev Editor Payloads
 
 - Copy AI Context schema: `lumina3d.dev.aiContext.v1`.
-- Copy Selection Delta schema: `lumina3d.dev.selectionDelta.v1`.
+- Copy Transform Delta schema: `lumina3d.dev.selectionDelta.v1`.
 - Export Patch Draft schema: `lumina3d.dev.scenePatch.v1`.
+- Runtime object annotation schema: `lumina3d.dev.objectAnnotations.v1`.
+- Runtime-to-editor handoff schema: `lumina3d.dev.editorHandoff.v1`.
 - Separate `/editor/` transform patch schema: `lumina3d.editor.transformPatch.v1`.
 - Older names such as `lumina.dev.aiContext.v1`, `lumina.dev.scenePatch.v1`,
   and `lumina3d-ai-context-v1` are legacy references only.

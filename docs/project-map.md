@@ -40,8 +40,12 @@ Use the current structure this way:
 | `src/state/` | State factories and local persistence | Rendering or input handling |
 | `src/ui/` | HUD refs, labels, modals, overlays, speech placement | Game physics or level layouts |
 | `src/debug/` | Dev editor, AI context capture, dev entity registry, debug shortcuts, render-text/test hooks, visible asset summaries | Player-facing gameplay logic |
-| `src/editor/` | Separate browser level-editor app, editor adapters, transform patch/state export, editor-only metadata | Gameplay orchestration or direct source-file writes |
+| `src/editor/` | Separate browser level-editor app, level adapters, read-only asset catalog including generated external reference records, note intent/reference helpers, transform patch/state export, AI prompt handoff, editor-only metadata | Gameplay orchestration or direct source-file writes |
+| `src/editor/timeline/` | Inactive editor timeline/scrubber data-model prep for future solution previews | Playable runtime simulation or behavior source of truth |
+| `mcp/` | Local stdio MCP server and AI-facing tool registration for read-only context and allowlisted validation | Gameplay behavior, browser editor UI, arbitrary shell tools, source-writing patch application |
 | `scripts/` | Deterministic CLI checks and level inspection tooling | Runtime gameplay code |
+| `scripts/lib/` | Shared tooling logic for level catalogs, command allowlists, validation suites, editor-state reads, and archetype contracts | Browser UI state, runtime-only rendering, unchecked file access |
+| `docs/architecture/` | Architecture notes such as naming conventions, audits, and migration plans | Runtime source-of-truth behavior |
 | `docs/game-design-handbook/` | Design intent, mechanic backlog, level plans, smoke-test notes | Source-of-truth runtime logic |
 
 ## Asset Map
@@ -70,6 +74,8 @@ Important asset lanes:
 - `public/assets/kaykit/medieval/home-blue/`: Home Intro house.
 - `public/assets/kaykit/adventurers/spellbook/`: spellbook props.
 - `public/assets/animals-farm/background/`: background/cloud imagery.
+- `src/editor/EditorExternalAssetCatalog.generated.js`: generated read-only
+  editor reference index for focused local 3D packs outside the game project.
 
 Rules:
 
@@ -159,15 +165,26 @@ Runtime Dev Editor or AI-context debug change:
 npm run build
 npm run tools:list-levels -- --pretty
 npm run tools:run-scene-smoke -- level_two --pretty
+npm run tools:run-dev-editor-selectability-smoke -- --pretty
 ```
 
 - In local dev/test runs, `window.__luminaDevEditor` exposes browser-safe
   context helpers for `lumina3d.dev.aiContext.v1`,
-  `lumina3d.dev.selectionDelta.v1`, and `lumina3d.dev.scenePatch.v1`.
+  `lumina3d.dev.selectionDelta.v1`, `lumina3d.dev.scenePatch.v1`, selected
+  object annotations, and runtime-to-editor handoff payloads.
 - The F2 Dev Editor collider toggle should show actual runtime collider
   proxies separately from the selected visual bounds helper.
 - While the F2 Dev Editor is open, debug-camera input owns `W/A/S/D`, `Q/E`,
   `R/F`, and zoom so gameplay actors do not move during inspection.
+- Runtime Dev Editor annotations use `lumina3d.dev.objectAnnotations.v1`.
+  Delete/replace markers are intent only and must never remove objects, swap
+  assets, or write source files from the browser.
+- Runtime Dev Editor object selection should expose all real scene objects,
+  including terrain tiles, while keeping tiles hidden from the default object
+  list unless `Show Tiles` or the object filter is used.
+- `Open in Level Editor` uses `lumina3d.dev.editorHandoff.v1` localStorage
+  handoffs. `/editor/` may select a matching supported editor object,
+  otherwise it should show a read-only summary.
 
 Level Two layout or asset change:
 
@@ -203,9 +220,50 @@ npm run tools:run-editor-smoke -- --pretty
 - Confirm `window.render_editor_to_text()` reports the selected object, camera state, and dirty patch summary.
 - Confirm editor transform patches use `lumina3d.editor.transformPatch.v1`.
 - Confirm editor state exports use `lumina3d.editor.stateExport.v1`.
+- Confirm `Copy AI Prompt` produces Markdown with local-first rules and fenced state JSON.
+- Confirm object-list filters report visible/total counts, keep selection stable,
+  and clearly distinguish movable elevated tiles from locked base terrain.
+- Timeline support is data/docs-only until its visible UI slice is explicitly
+  scheduled.
+- Confirm the read-only Assets tab can search/filter local asset registry
+  entries and exports only selected-asset context, not placement/source writes.
+- Confirm the level picker can load Tutorial, Home Intro, Level One, and Level Two.
+- Confirm note `@intent` typeahead works and static note chips are absent.
+- Confirm `Mark Delete` and `Mark Replace` are mutually exclusive export-only flags.
+- Confirm `Reset Level` clears current-level transforms and editor metadata after confirmation.
 - Confirm editor camera pan, yaw, pitch, and zoom work before relying on a placement screenshot.
-- Confirm object notes, delete marks, reset selected, and play-in-game handoff still work.
+- Confirm `Show Colliders` displays editor-only collider/proxy helpers and that
+  exported state treats them as handoff context, not editable collider source.
+- For Level Two, confirm source-backed mechanism proxies are present for the
+  blue ramp, buttons/platforms, Elephant Echo/Totem, and major route/transition
+  areas before considering collider editing controls.
+- Confirm floor/path/sand/grass terrain preview tiles can be selected for
+  read-only AI handoff notes.
+- Confirm clicking empty viewport space clears object selection and enables
+  level/map notes in Copy State JSON and Copy AI Prompt.
+- Confirm object notes, delete/replace marks, reset selected, reset level, and play-in-game handoff still work.
+
+Local MCP tooling change:
+
+```bash
+npm run build
+npm run tools:list-levels -- --pretty
+npm run tools:get-level-manifest -- level_two --pretty
+npm run tools:list-level-objects -- level_two --pretty
+npm run tools:explain-editor-patch -- docs/tooling/fixtures/editor-transform-patch-example.json
+npm run mcp:smoke
+```
+
+- Keep MCP stdout reserved for stdio protocol messages.
+- Do not add source-writing, patch-apply, arbitrary-shell, or object-scaffold tools without a separate explicit phase.
+- Full command output belongs in ignored `tmp/lumina-mcp/logs/`; MCP responses should stay compact by default.
+- Confirm runtime handoffs from the F2 Dev Editor load as selection/focus when
+  supported and read-only summaries when unsupported.
 - Inspect an editor screenshot before calling the tool usable.
+
+Editor usage and AI handoff guidance live in `docs/editor/level-editor.md`,
+`docs/tooling/editor-ai-handoff.md`, and
+`docs/tooling/editor-patch-workflow.md`.
 
 ## Current Non-Goals
 

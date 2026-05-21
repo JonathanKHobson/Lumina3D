@@ -107,7 +107,8 @@ import {
   createLevelOneState,
   createLevelTwoState,
   createLoveLetterAttentionState,
-  createLoveLetterMessageState
+  createLoveLetterMessageState,
+  createTutorialRecoveryState
 } from "./state/gameState.js";
 import { loadCubelingUnlocks as loadCubelingUnlocksFromStorage, saveCubelingUnlocks as saveCubelingUnlocksToStorage } from "./state/persistence.js";
 import {
@@ -186,6 +187,8 @@ import {
   LEVEL_TWO_RED_BUTTON_INVALID_COOLDOWN,
   LEVEL_TWO_RED_BUTTONS,
   LEVEL_TWO_RED_BUTTON_B_TERRACE_TILES,
+  LEVEL_TWO_RED_ELEVATOR_A_GROUND_CLEARANCE_TILES,
+  LEVEL_TWO_RED_ELEVATOR_A_START_DELAY_SECONDS,
   LEVEL_TWO_RED_ELEVATOR_SIDE_APPROACH_ZONE,
   LEVEL_TWO_RED_ELEVATOR_TOP_EXIT_ZONE,
   LEVEL_TWO_RED_PLATFORMS,
@@ -259,7 +262,15 @@ import {
   renderSpeechBubbleElement
 } from "./ui/hud.js";
 
+const TUTORIAL_RECOVERY_RESET_LESSON_SECONDS = 5.5;
+const TUTORIAL_RECOVERY_RESCUE_NUDGE_SECONDS = 10.0;
+const TUTORIAL_RECOVERY_PROMPT_COOLDOWN_SECONDS = 3.2;
+const TUTORIAL_RECOVERY_PROMPT = "Frog is across the wall. Press R to reset the tutorial, or wait and Frog may step on the button.";
+const TUTORIAL_RECOVERY_RESCUE_PROMPT = "Frog may still solve this. Press R to reset, or wait a little longer.";
+const TUTORIAL_RECOVERY_CHARACTER_LINE = "Oh no. How am I gonna reach the Love Letter now?";
+
 const hud = createHudRefs();
+let tutorialBannerAttentionKey = "";
 
 const state = {
   ready: false,
@@ -324,6 +335,8 @@ const state = {
     humanSurfaceId: null,
     blueButtonPressed: false,
     blueRampActive: false,
+    blueRampRevealActive: false,
+    blueRampRevealElapsed: 0,
     elephantEchoVisible: false,
     elephantEchoPromptIndex: 0,
     lastElephantEchoPromptAt: -Infinity,
@@ -340,6 +353,11 @@ const state = {
     lastElephantTransferPromptAt: -Infinity,
     redButtons: {},
     redPlatforms: {},
+    redElevatorAStartGate: {
+      released: false,
+      delayRemaining: LEVEL_TWO_RED_ELEVATOR_A_START_DELAY_SECONDS,
+      waitingReason: "waiting-for-human-approach-or-elephant-possession"
+    },
     lastRedButtonInvalidPromptAt: -Infinity,
     lastFrogJumpResult: "none",
     lastFrogJumpReason: "",
@@ -393,6 +411,7 @@ const state = {
   loveLetterAttention: createLoveLetterAttentionState(),
   skipModal: { visible: false, reason: "", anchor: "human" },
   skipNudge: { id: "", count: 0, lastAt: -Infinity },
+  tutorialRecovery: createTutorialRecoveryState(),
   speech: { text: "", anchor: "human", until: 0 },
   secondarySpeech: { text: "", anchor: "", until: 0 },
   speechQueue: [],
@@ -411,6 +430,9 @@ const state = {
   overridePrompt: null,
   cameraYaw: 0,
   targetCameraYaw: 0,
+  cameraActiveSurfaceLift: 0,
+  cameraHighElevationZoomActive: false,
+  cameraTargetY: SURFACE_Y,
   frogAi: {
     enabled: true,
     everPossessed: false,
@@ -551,6 +573,7 @@ const levelTwoInteractiveMeshes = {
   blueButton: null,
   blueButtonTop: null,
   blueRamp: null,
+  blueRampDormantPanel: null,
   elephantEcho: null,
   elephantEchoRing: null,
   elephantTotem: null,
@@ -844,7 +867,17 @@ function handleKeyDown(event) {
 
 function getCurrentEditableSceneMeshes() {
   if (state.scene.id === SCENES.TUTORIAL) {
-    return { actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant }, markers: [markerMeshes.frogEcho, markerMeshes.frogTotem, markerMeshes.button], arrays: [] };
+    return {
+      actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant },
+      markers: [
+        markerMeshes.frogEcho,
+        markerMeshes.frogTotem,
+        markerMeshes.button,
+        markerMeshes.spellbookClosed,
+        markerMeshes.spellbookOpen
+      ],
+      arrays: [floorMeshes, barrierMeshes, barrierEndCapMeshes]
+    };
   }
   if (state.scene.id === SCENES.HOME) {
     return { actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant }, markers: [markerMeshes.frogEcho, markerMeshes.frogTotem], arrays: [homeMeshes] };
@@ -1221,6 +1254,17 @@ function updateLevelOneFlowEffects(dt) {
 
 function updateLevelTwoScene(dt) {
   updateLevelTwoSceneFlow(levelTwoFlowContext(), dt);
+  updateLevelTwoBlueRampReveal(dt);
+}
+
+function updateLevelTwoBlueRampReveal(dt) {
+  if (!state.levelTwo.blueRampRevealActive) return;
+  state.levelTwo.blueRampRevealElapsed += dt;
+  const revealSeconds = LEVEL_TWO_BLUE_RAMP.revealSeconds || 0.72;
+  if (state.levelTwo.blueRampRevealElapsed >= revealSeconds) {
+    state.levelTwo.blueRampRevealElapsed = revealSeconds;
+    state.levelTwo.blueRampRevealActive = false;
+  }
 }
 
 function updateLevelTwoInteractions(dt = 0) {
@@ -1230,6 +1274,7 @@ function updateLevelTwoInteractions(dt = 0) {
   if (
     actorCanPressButton({
       activeActor: state.active,
+      actorKey: "frog",
       actor: state.frog,
       button: LEVEL_TWO_POINTS.blueButton,
       radius: BUTTON_RADIUS,
@@ -1241,6 +1286,8 @@ function updateLevelTwoInteractions(dt = 0) {
   ) {
     state.levelTwo.blueButtonPressed = true;
     state.levelTwo.blueRampActive = true;
+    state.levelTwo.blueRampRevealActive = true;
+    state.levelTwo.blueRampRevealElapsed = 0;
     showPrompt("Button pressed. A blue ramp appeared.", 1.8);
     showSpeech("frog", "That opened a path.", 1.6);
     spawnRevealSparkles(particleContext, LEVEL_TWO_BLUE_RAMP.position.x, LEVEL_TWO_BLUE_RAMP.position.z, 0x75c8ff, 18);
@@ -1313,12 +1360,22 @@ function resetLevelTwoRedMechanismState() {
       pauseRemaining: 0,
       releaseTarget: null,
       wasActive: false,
+      hasActivated: false,
       moving: "idle",
       heldBy: "",
       linkedButtonId: platform.linkedButtonId
     };
   });
+  state.levelTwo.redElevatorAStartGate = createLevelTwoRedElevatorAStartGate();
   state.levelTwo.lastRedButtonInvalidPromptAt = -Infinity;
+}
+
+function createLevelTwoRedElevatorAStartGate() {
+  return {
+    released: false,
+    delayRemaining: LEVEL_TWO_RED_ELEVATOR_A_START_DELAY_SECONDS,
+    waitingReason: "waiting-for-human-approach-or-elephant-possession"
+  };
 }
 
 function ensureLevelTwoRedMechanismState() {
@@ -1346,6 +1403,7 @@ function ensureLevelTwoRedMechanismState() {
         pauseRemaining: 0,
         releaseTarget: null,
         wasActive: false,
+        hasActivated: false,
         moving: "idle",
         heldBy: "",
         linkedButtonId: platform.linkedButtonId
@@ -1358,10 +1416,23 @@ function ensureLevelTwoRedMechanismState() {
       if (!Number.isFinite(platformState.pauseRemaining)) platformState.pauseRemaining = 0;
       if (platformState.releaseTarget !== null && !Number.isFinite(platformState.releaseTarget)) platformState.releaseTarget = null;
       if (typeof platformState.wasActive !== "boolean") platformState.wasActive = false;
+      if (typeof platformState.hasActivated !== "boolean") platformState.hasActivated = false;
     }
   });
   if (!Number.isFinite(state.levelTwo.lastRedButtonInvalidPromptAt)) {
     state.levelTwo.lastRedButtonInvalidPromptAt = -Infinity;
+  }
+  if (!state.levelTwo.redElevatorAStartGate || typeof state.levelTwo.redElevatorAStartGate !== "object") {
+    state.levelTwo.redElevatorAStartGate = createLevelTwoRedElevatorAStartGate();
+  }
+  if (!Number.isFinite(state.levelTwo.redElevatorAStartGate.delayRemaining)) {
+    state.levelTwo.redElevatorAStartGate.delayRemaining = LEVEL_TWO_RED_ELEVATOR_A_START_DELAY_SECONDS;
+  }
+  if (typeof state.levelTwo.redElevatorAStartGate.released !== "boolean") {
+    state.levelTwo.redElevatorAStartGate.released = false;
+  }
+  if (!state.levelTwo.redElevatorAStartGate.waitingReason) {
+    state.levelTwo.redElevatorAStartGate.waitingReason = "waiting-for-human-approach-or-elephant-possession";
   }
 }
 
@@ -1391,7 +1462,14 @@ function updateLevelTwoRedMechanisms(dt = 0) {
     const platformState = state.levelTwo.redPlatforms[platform.id];
     const buttonState = state.levelTwo.redButtons[platform.linkedButtonId];
     const buttonActive = Boolean(buttonState?.active);
+    if (buttonActive) platformState.hasActivated = true;
     if (platform.movementRule === "cycle-while-held") {
+      if (platform.id === "red-elevator-a" && updateLevelTwoRedElevatorAStartGate(platform, platformState, buttonActive, dt)) {
+        platformState.lift = platformState.progress * platform.maxLift;
+        platformState.heldBy = buttonState?.heldActor || "";
+        platformState.wasActive = buttonActive;
+        return;
+      }
       updateLevelTwoCyclingRedPlatform(platform, platformState, buttonActive, dt);
     } else {
       const target = buttonState?.active
@@ -1414,6 +1492,42 @@ function updateLevelTwoRedMechanisms(dt = 0) {
     platformState.heldBy = buttonState?.heldActor || "";
     platformState.wasActive = buttonActive;
   });
+}
+
+function updateLevelTwoRedElevatorAStartGate(platform, platformState, buttonActive, dt = 0) {
+  const gate = state.levelTwo.redElevatorAStartGate || createLevelTwoRedElevatorAStartGate();
+  state.levelTwo.redElevatorAStartGate = gate;
+  if (gate.released || !state.levelTwo.elephantSpawned) return false;
+
+  if (buttonActive) {
+    gate.released = true;
+    gate.delayRemaining = 0;
+    gate.waitingReason = "released-by-red-button-a";
+    return false;
+  }
+
+  const gateTriggered = state.active === "elephant" ||
+    levelTwoRedElevatorSideApproachSafeAt(state.human, state.human.radius);
+  if (gateTriggered) {
+    gate.waitingReason = "start-delay";
+    gate.delayRemaining = Math.max(0, gate.delayRemaining - Math.max(0, dt));
+    if (gate.delayRemaining <= 0) {
+      gate.released = true;
+      gate.waitingReason = "released";
+      return false;
+    }
+  } else {
+    gate.delayRemaining = LEVEL_TWO_RED_ELEVATOR_A_START_DELAY_SECONDS;
+    gate.waitingReason = "waiting-for-human-approach-or-elephant-possession";
+  }
+
+  if (!buttonActive) return false;
+  platformState.progress = platform.initialProgress ?? 1;
+  platformState.direction = platform.initialDirection || "down";
+  platformState.pauseRemaining = 0;
+  platformState.releaseTarget = null;
+  platformState.moving = gateTriggered ? "gate-delay" : "gate-wait";
+  return true;
 }
 
 function moveLevelTwoRedPlatformToward(platform, platformState, target, dt = 0) {
@@ -1445,7 +1559,9 @@ function updateLevelTwoCyclingRedPlatform(platform, platformState, buttonActive,
   }
 
   if (platformState.wasActive && platformState.releaseTarget === null) {
-    if (platformState.moving === "pause-bottom" || platformState.progress <= 0.001) {
+    if (platform.releaseBehavior === "return-to-bottom") {
+      platformState.releaseTarget = 0;
+    } else if (platformState.moving === "pause-bottom" || platformState.progress <= 0.001) {
       platformState.releaseTarget = 0;
     } else if (platformState.moving === "pause-top" || platformState.progress >= 0.999) {
       platformState.releaseTarget = 1;
@@ -1455,7 +1571,7 @@ function updateLevelTwoCyclingRedPlatform(platform, platformState, buttonActive,
   }
 
   platformState.pauseRemaining = 0;
-  const target = platformState.releaseTarget ?? platform.inactiveProgress ?? platform.initialProgress ?? 1;
+  const target = platformState.releaseTarget ?? levelTwoRedPlatformInactiveTarget(platform, platformState);
   if (Math.abs(platformState.progress - target) > 0.001) {
     moveLevelTwoRedPlatformToward(platform, platformState, target, dt);
     platformState.moving = target > platformState.progress ? "up" : target < platformState.progress ? "down" : "idle";
@@ -1467,7 +1583,14 @@ function updateLevelTwoCyclingRedPlatform(platform, platformState, buttonActive,
 }
 
 function updateLevelTwoRedPlatformCycle(platform, platformState, dt = 0) {
-  const pauseSeconds = platform.endpointPauseSeconds ?? 0.6;
+  if (
+    !platformState.wasActive &&
+    platformState.progress <= 0.001 &&
+    platformState.direction === "up" &&
+    platformState.pauseRemaining <= 0
+  ) {
+    platformState.pauseRemaining = platform.bottomPauseSeconds ?? platform.endpointPauseSeconds ?? 0.6;
+  }
   if (platformState.pauseRemaining > 0) {
     platformState.pauseRemaining = Math.max(0, platformState.pauseRemaining - dt);
     platformState.moving = platformState.progress <= 0.001 ? "pause-bottom" : "pause-top";
@@ -1480,7 +1603,9 @@ function updateLevelTwoRedPlatformCycle(platform, platformState, dt = 0) {
   const target = platformState.direction === "up" ? 1 : 0;
   if (Math.abs(platformState.progress - target) <= 0.001) {
     platformState.progress = target;
-    platformState.pauseRemaining = pauseSeconds;
+    platformState.pauseRemaining = target <= 0
+      ? platform.bottomPauseSeconds ?? platform.endpointPauseSeconds ?? 0.6
+      : platform.topPauseSeconds ?? platform.endpointPauseSeconds ?? 0.6;
     platformState.moving = target <= 0 ? "pause-bottom" : "pause-top";
     return;
   }
@@ -1489,9 +1614,16 @@ function updateLevelTwoRedPlatformCycle(platform, platformState, dt = 0) {
   platformState.moving = platformState.direction;
   if (Math.abs(platformState.progress - target) <= 0.001) {
     platformState.progress = target;
-    platformState.pauseRemaining = pauseSeconds;
+    platformState.pauseRemaining = target <= 0
+      ? platform.bottomPauseSeconds ?? platform.endpointPauseSeconds ?? 0.6
+      : platform.topPauseSeconds ?? platform.endpointPauseSeconds ?? 0.6;
     platformState.moving = target <= 0 ? "pause-bottom" : "pause-top";
   }
+}
+
+function levelTwoRedPlatformInactiveTarget(platform, platformState) {
+  if (platform.releaseBehavior === "return-to-bottom" && platformState.hasActivated) return 0;
+  return platform.inactiveProgress ?? platform.initialProgress ?? 1;
 }
 
 function activeIneligibleActorOnRedButton() {
@@ -1571,6 +1703,91 @@ function updateLevelOneHints(dt) {
   }
 }
 
+function resetTutorialRecoveryState() {
+  state.tutorialRecovery = createTutorialRecoveryState();
+}
+
+function tutorialFrogStrandedCandidate() {
+  return state.scene.id === SCENES.TUTORIAL &&
+    !state.tutorialSkipped &&
+    !state.tutorialComplete &&
+    state.active === "human" &&
+    state.reveals.frog &&
+    state.reveals.button &&
+    !state.buttonPressed &&
+    !state.doorwayOpen &&
+    frogCurrentSide() === "right";
+}
+
+function tutorialRecoveryElapsed() {
+  if (!state.tutorialRecovery?.stranded) return 0;
+  return Math.max(0, state.elapsed - state.tutorialRecovery.startedAt);
+}
+
+function tutorialRecoveryPhase() {
+  if (!state.tutorialRecovery?.stranded) return "inactive";
+  const elapsed = tutorialRecoveryElapsed();
+  if (elapsed < TUTORIAL_RECOVERY_RESET_LESSON_SECONDS) return "reset_lesson";
+  if (elapsed < TUTORIAL_RECOVERY_RESCUE_NUDGE_SECONDS) return "wait_for_frog";
+  return "rescue_nudge";
+}
+
+function tutorialRecoveryAutoPressAllowed() {
+  return !state.tutorialRecovery?.stranded ||
+    tutorialRecoveryElapsed() >= TUTORIAL_RECOVERY_RESET_LESSON_SECONDS;
+}
+
+function tutorialRecoveryRescueNudgeActive() {
+  return Boolean(state.tutorialRecovery?.stranded) &&
+    tutorialRecoveryElapsed() >= TUTORIAL_RECOVERY_RESCUE_NUDGE_SECONDS;
+}
+
+function tutorialUnpossessedFrogButtonSuppressed() {
+  return state.scene.id === SCENES.TUTORIAL &&
+    state.active !== "frog" &&
+    state.tutorialRecovery?.stranded &&
+    !tutorialRecoveryAutoPressAllowed();
+}
+
+function pointIsInTutorialRecoveryButtonBuffer(x, z) {
+  return state.scene.id === SCENES.TUTORIAL &&
+    state.tutorialRecovery?.stranded &&
+    !tutorialRecoveryAutoPressAllowed() &&
+    distance2D({ x, z }, TUTORIAL_BUTTON) <= BUTTON_RADIUS + state.frog.radius + 0.18;
+}
+
+function updateTutorialRecovery() {
+  if (tutorialFrogStrandedCandidate()) {
+    if (!state.tutorialRecovery?.stranded) {
+      state.tutorialRecovery = {
+        stranded: true,
+        startedAt: state.elapsed,
+        lastPromptAt: -Infinity,
+        resetPromptShown: false,
+        characterLineShown: false
+      };
+    }
+    if (!state.tutorialRecovery.characterLineShown) {
+      showSpeech("human", TUTORIAL_RECOVERY_CHARACTER_LINE, 2.6);
+      state.tutorialRecovery.characterLineShown = true;
+    }
+    const phase = tutorialRecoveryPhase();
+    const promptText = phase === "reset_lesson"
+      ? TUTORIAL_RECOVERY_PROMPT
+      : TUTORIAL_RECOVERY_RESCUE_PROMPT;
+    const promptDue = !state.tutorialRecovery.resetPromptShown ||
+      state.elapsed - state.tutorialRecovery.lastPromptAt >= TUTORIAL_RECOVERY_PROMPT_COOLDOWN_SECONDS;
+    if (promptDue) {
+      showPrompt(promptText, TUTORIAL_RECOVERY_PROMPT_COOLDOWN_SECONDS);
+      state.tutorialRecovery.lastPromptAt = state.elapsed;
+      state.tutorialRecovery.resetPromptShown = true;
+    }
+    return;
+  }
+
+  if (state.tutorialRecovery?.stranded) resetTutorialRecoveryState();
+}
+
 function spawnTrailHintParticles() {
   state.home.trailHintBursts += 1;
   // The previous Home heart stream read as noisy motion clutter. Keep the
@@ -1586,6 +1803,7 @@ function update(dt) {
   state.actorCollisionBlocked = false;
   updateSceneFlow(dt);
   updateActiveMovement(dt);
+  updateTutorialRecovery(dt);
   updateFrogAi(dt);
   updateElephantIdle(dt);
   updateFrogJump(dt);
@@ -1654,7 +1872,7 @@ function frogAiContext() {
     canFrogPatrolStandAt,
     clampPointToPatrolZone,
     buttonPoint,
-    chooseFrogPatrolTarget: chooseFrogPatrolTargetSystem,
+    chooseFrogPatrolTarget: chooseFrogPatrolTargetForAi,
     chooseFrogDoorwayClearTarget: chooseFrogDoorwayClearTargetSystem,
     chooseFrogCelebrationPerch: chooseFrogCelebrationPerchSystem,
     chooseFrogCelebrationHopTarget: chooseFrogCelebrationHopTargetSystem,
@@ -1701,8 +1919,20 @@ function updateElephantIdle(dt) {
   moveActor(state.elephant, vector.x * step, vector.z * step);
 }
 
+function chooseFrogPatrolTargetForAi(context, side = frogCurrentSide()) {
+  if (
+    state.scene.id === SCENES.TUTORIAL &&
+    tutorialRecoveryRescueNudgeActive() &&
+    side === "right" &&
+    canFrogPatrolStandAt(TUTORIAL_BUTTON.x, TUTORIAL_BUTTON.z, side, "rescue_nudge")
+  ) {
+    return { x: TUTORIAL_BUTTON.x, z: TUTORIAL_BUTTON.z };
+  }
+  return chooseFrogPatrolTargetSystem(context, side);
+}
+
 function chooseFrogPatrolTarget(side = frogCurrentSide()) {
-  return chooseFrogPatrolTargetSystem(frogAiContext(), side);
+  return chooseFrogPatrolTargetForAi(frogAiContext(), side);
 }
 
 function chooseFrogDoorwayClearTarget() {
@@ -1723,6 +1953,7 @@ function canFrogPatrolStandAt(x, z, side = frogCurrentSide(), source = "patrol")
   if (z < bounds.minZ + state.frog.radius || z > bounds.maxZ - state.frog.radius) return false;
   const zone = frogPatrolZone(side);
   if (x < zone.minX - 0.05 || x > zone.maxX + 0.05 || z < zone.minZ - 0.05 || z > zone.maxZ + 0.05) return false;
+  if (pointIsInTutorialRecoveryButtonBuffer(x, z)) return false;
   if (distance2D({ x, z }, state.human) < state.human.radius + state.frog.radius + ACTOR_BLOCK_PADDING + 0.38) return false;
   if (state.doorwayOpen && source !== "celebration_perch" && pointInDoorwayZone({ x, z }, state.frog.radius + 0.12)) return false;
   if (loveLetterBlocksFrogAt(x, z)) return false;
@@ -1801,12 +2032,14 @@ function updateInteractions(dt = 0) {
 
   if (state.reveals.button && actorCanPressButton({
     activeActor: state.active,
+    actorKey: "frog",
     actor: state.frog,
     button: buttonPoint(),
     radius: BUTTON_RADIUS,
     pressed: state.buttonPressed,
     requiredActor: "frog"
   })) {
+    if (tutorialUnpossessedFrogButtonSuppressed()) return;
     if (maybeRequestSkip(
       "press_button",
       "You reached the button before the guided lesson asked for it.",
@@ -1845,6 +2078,7 @@ function updateInteractions(dt = 0) {
 function updateLevelOneInteractions() {
   if (state.reveals.button && actorCanPressButton({
     activeActor: state.active,
+    actorKey: "frog",
     actor: state.frog,
     button: buttonPoint(),
     radius: BUTTON_RADIUS,
@@ -2087,6 +2321,10 @@ function switchActor() {
     state.frogAi.usesHumanAsTarget = false;
     state.frogAi.celebrationPerch = null;
     spawnTransferParticles(particleContext, state.frog, state.human);
+    if (tutorialFrogStrandedCandidate()) {
+      updateTutorialRecovery();
+      return;
+    }
     const loveLetterWaiting = state.reveals.spellbook && !state.spellbookCollected;
     advanceTutorial("return_human");
     advanceTutorial("return_after_button");
@@ -2140,6 +2378,7 @@ function switchActor() {
     return;
   }
   state.active = "frog";
+  resetTutorialRecoveryState();
   state.frogAi.everPossessed = true;
   state.frogAi.timer = 0;
   state.frogAi.currentSide = frogCurrentSide();
@@ -2418,7 +2657,9 @@ function getLevelOneFrogJump() {
 }
 
 function pressButton() {
+  const tutorialPressedWhileHuman = state.scene.id === SCENES.TUTORIAL && state.active === "human";
   state.buttonPressed = true;
+  resetTutorialRecoveryState();
   if (state.scene.id === SCENES.LEVEL_ONE) {
     state.levelOne.bridgeComplete = true;
     state.levelOne.bridgeRevealActive = true;
@@ -2433,16 +2674,29 @@ function pressButton() {
     const door = barrierMeshes.get(DOOR_ROW);
     if (door) door.visible = false;
     advanceTutorial("press_button");
-    showPrompt("Button pressed. A doorway opened.", 1.5);
+    if (tutorialPressedWhileHuman) {
+      advanceTutorial("return_after_button");
+      showPrompt("Button pressed. Walk through the doorway and collect the Love Letter.", 2.4);
+    } else {
+      showPrompt("Button pressed. A doorway opened.", 1.5);
+    }
   }
   state.loveLetterAttention.buttonReactionCount += 1;
   triggerLoveLetterAttention("button_pressed", "strong");
   if (state.scene.id === SCENES.TUTORIAL) {
-    queueSpeech([
-      { anchor: "loveLetter", text: "Come back as yourself and collect me!", seconds: 2.4 },
-      { anchor: "", text: "", seconds: 0.9 },
-      { anchor: "human", text: "I need that Love Letter.", seconds: 2.0 }
-    ]);
+    if (tutorialPressedWhileHuman) {
+      queueSpeech([
+        { anchor: "loveLetter", text: "Doorway's open. Come collect me!", seconds: 2.3 },
+        { anchor: "", text: "", seconds: 0.7 },
+        { anchor: "human", text: "Now I can walk through.", seconds: 1.9 }
+      ]);
+    } else {
+      queueSpeech([
+        { anchor: "loveLetter", text: "Come back as yourself and collect me!", seconds: 2.4 },
+        { anchor: "", text: "", seconds: 0.9 },
+        { anchor: "human", text: "I need that Love Letter.", seconds: 2.0 }
+      ]);
+    }
   }
 }
 
@@ -2616,6 +2870,13 @@ function sceneColliderBlocks(actor, x, z) {
 }
 
 function levelTwoWalkableSurfaceAllows(actor, x, z, collider) {
+  if (
+    (actor === state.human || actor === state.frog) &&
+    collider.label.startsWith("level-two-red-elevator-a-top-connector") &&
+    levelTwoRedElevatorAGroundClearanceSafeAt({ x, z }, actor.radius)
+  ) {
+    return true;
+  }
   if (actor === state.frog) {
     const ledge = levelTwoLedgeForCollider(collider);
     return Boolean(
@@ -2637,12 +2898,28 @@ function levelTwoWalkableSurfaceAllows(actor, x, z, collider) {
     collider.label.startsWith("level-two-central-mountain") &&
     Number.isFinite(collider.levelTwoTier)
   ) {
-    return levelTwoHumanLoveLetterRouteSafeAt({ x, z }, actor.radius);
+    return levelTwoHumanElevatorARouteSafeAt({ x, z }, actor.radius) ||
+      levelTwoHumanLoveLetterRouteSafeAt({ x, z }, actor.radius);
+  }
+  if (
+    actor === state.human &&
+    (
+      collider.label.startsWith("level-two-red-elevator-a-top-connector") ||
+      collider.label.startsWith("level-two-reserved-red-elevator-a-top-connector")
+    )
+  ) {
+    return levelTwoHumanElevatorARouteSafeAt({ x, z }, actor.radius);
   }
   if (actor === state.elephant && collider.label.startsWith("level-two-central-mountain")) {
     return levelTwoElephantCanUseMountainCollider({ x, z }, collider);
   }
-  if (actor === state.elephant && collider.label.startsWith("level-two-reserved-red-elevator-a-top-connector")) {
+  if (
+    actor === state.elephant &&
+    (
+      collider.label.startsWith("level-two-red-elevator-a-top-connector") ||
+      collider.label.startsWith("level-two-reserved-red-elevator-a-top-connector")
+    )
+  ) {
     return levelTwoElephantHasTopRouteAccess() &&
       levelTwoElephantEchoTerraceSafeAt({ x, z }, actor.radius);
   }
@@ -2773,6 +3050,14 @@ function levelTwoRedPlatformCanAttachActor(actor, platform) {
   if (levelTwoRedPlatformIsGroundAligned(platform)) return true;
   if (
     actor === state.human &&
+    platform.id === "red-elevator-a" &&
+    state.levelTwo.humanSurfaceId === "tier-3-elephant-route" &&
+    levelTwoRedPlatformIsTopAligned(platform)
+  ) {
+    return true;
+  }
+  if (
+    actor === state.human &&
     state.levelTwo.humanSurfaceId === LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_ID &&
     levelTwoRedPlatformIsTopAligned(platform)
   ) {
@@ -2811,6 +3096,17 @@ function levelTwoElephantEchoTerraceSafeAt(point, actorRadius = 0) {
   const safePadding = -Math.max(0, actorRadius * 0.45);
   return pointInLevelTwoTiles(point, LEVEL_TWO_ELEPHANT_ECHO_TERRACE_TILES, safePadding) ||
     levelTwoRedElevatorTopExitSafeAt(point, actorRadius);
+}
+
+function levelTwoHumanElevatorARouteAccessible() {
+  if (state.levelTwo.humanSurfaceId === "tier-3-elephant-route") return true;
+  if (state.levelTwo.humanSurfaceId !== "red-elevator-a") return false;
+  return levelTwoRedPlatformProgressById("red-elevator-a") >= 0.92;
+}
+
+function levelTwoHumanElevatorARouteSafeAt(point, actorRadius = 0) {
+  if (!levelTwoHumanElevatorARouteAccessible()) return false;
+  return levelTwoElephantEchoTerraceSafeAt(point, actorRadius);
 }
 
 function levelTwoHumanLoveLetterRouteAccessible() {
@@ -2866,6 +3162,13 @@ function levelTwoRaisedSurfaceBlocksTransition(actor, x, z) {
     if (targetPlatform && levelTwoRedPlatformIsTopAligned(targetPlatform)) return false;
     return true;
   }
+  if (actor === state.human && state.levelTwo.humanSurfaceId === "tier-3-elephant-route") {
+    const target = { x, z };
+    const targetPlatform = levelTwoRedPlatformAt(target);
+    if (levelTwoHumanElevatorARouteSafeAt(target, actor.radius)) return false;
+    if (targetPlatform?.id === "red-elevator-a" && levelTwoRedPlatformIsTopAligned(targetPlatform)) return false;
+    return true;
+  }
   if (actor !== state.human || !state.levelTwo.blueRampActive) return false;
   const target = { x, z };
   const currentSurface = state.levelTwo.humanSurfaceId;
@@ -2900,7 +3203,10 @@ function levelTwoRedPlatformBlocksTransition(actor, target) {
     if (
       actor === state.human &&
       levelTwoRedPlatformIsTopAligned(currentPlatform) &&
-      levelTwoHumanLoveLetterRouteSafeAt(target, actor.radius)
+      (
+        levelTwoHumanElevatorARouteSafeAt(target, actor.radius) ||
+        levelTwoHumanLoveLetterRouteSafeAt(target, actor.radius)
+      )
     ) {
       return false;
     }
@@ -2908,6 +3214,7 @@ function levelTwoRedPlatformBlocksTransition(actor, target) {
   }
 
   if (!targetPlatform || !levelTwoActorCanRideRedPlatform(actor, targetPlatform)) return null;
+  if (levelTwoRedElevatorAGroundClearanceSafeAt(target, actor.radius)) return false;
   if (levelTwoRedPlatformIsGroundAligned(targetPlatform)) return false;
   if (
     actor === state.elephant &&
@@ -2923,7 +3230,23 @@ function levelTwoRedPlatformBlocksTransition(actor, target) {
   ) {
     return false;
   }
-  return true;
+  if (
+    actor === state.human &&
+    state.levelTwo.humanSurfaceId === "tier-3-elephant-route" &&
+    targetPlatform.id === "red-elevator-a" &&
+    levelTwoRedPlatformIsTopAligned(targetPlatform)
+  ) {
+    return false;
+  }
+  return false;
+}
+
+function levelTwoRedElevatorAGroundClearanceSafeAt(point, actorRadius = 0) {
+  return pointInLevelTwoTiles(
+    point,
+    LEVEL_TWO_RED_ELEVATOR_A_GROUND_CLEARANCE_TILES,
+    Math.max(0.02, actorRadius * 0.05)
+  );
 }
 
 function levelTwoTotemHillWalkableAt(point, actorRadius = 0) {
@@ -2956,6 +3279,9 @@ function levelTwoActorLiftAt(actor, point = actor) {
     }
     if (levelTwoHumanHillSafeAt(point, actor.radius)) return Math.max(LEVEL_TWO_ELEPHANT_TOTEM_HILL.heightAboveGround, redPlatformLift);
   }
+  if (actor === state.human && levelTwoHumanElevatorARouteSafeAt(point, actor.radius + 0.04)) {
+    return Math.max(LEVEL_TWO_ELEPHANT_ECHO_HEIGHT, redPlatformLift);
+  }
   if (actor === state.human && levelTwoHumanLoveLetterRouteSafeAt(point, actor.radius + 0.04)) {
     return Math.max(LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_HEIGHT, redPlatformLift);
   }
@@ -2977,6 +3303,7 @@ function updateLevelTwoSurfaceState() {
   }
   const humanRedPlatform = levelTwoRedPlatformAt(state.human);
   const humanOnLoveLetterRoute = levelTwoHumanLoveLetterRouteSafeAt(state.human, state.human.radius + 0.06);
+  const humanOnElevatorATopRoute = levelTwoHumanElevatorARouteSafeAt(state.human, state.human.radius + 0.06);
   if (
     humanOnLoveLetterRoute &&
     (
@@ -2985,8 +3312,18 @@ function updateLevelTwoSurfaceState() {
     )
   ) {
     state.levelTwo.humanSurfaceId = LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_ID;
+  } else if (
+    humanOnElevatorATopRoute &&
+    (
+      state.levelTwo.humanSurfaceId === "tier-3-elephant-route" ||
+      (state.levelTwo.humanSurfaceId === "red-elevator-a" && levelTwoRedPlatformProgressById("red-elevator-a") >= 0.92)
+    )
+  ) {
+    state.levelTwo.humanSurfaceId = "tier-3-elephant-route";
   } else if (humanRedPlatform && levelTwoRedPlatformCanAttachActor(state.human, humanRedPlatform)) {
     state.levelTwo.humanSurfaceId = humanRedPlatform.id;
+  } else if (humanOnElevatorATopRoute) {
+    state.levelTwo.humanSurfaceId = "tier-3-elephant-route";
   } else if (humanOnLoveLetterRoute) {
     state.levelTwo.humanSurfaceId = LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_ID;
   } else if (state.levelTwo.blueRampActive) {
@@ -3262,6 +3599,7 @@ function applyRevealVisibility() {
     doorRow: DOOR_ROW,
     levelOneBridgeVisualY: LEVEL_ONE_BRIDGE_VISUAL_Y,
     levelOneBridgeDeckY: LEVEL_ONE_BRIDGE_DECK_Y,
+    levelTwoBlueRamp: LEVEL_TWO_BLUE_RAMP,
     rightFloorProgress,
     barrierSegmentProgress,
     easeOutCubic,
@@ -3285,8 +3623,9 @@ function updateCamera(dt) {
     return;
   }
   const activeActor = state.celebration.active || state.celebration.modalVisible ? state.human : getActiveActor();
+  const activeSurfaceLift = levelOneBridgeLiftAt(activeActor) + levelTwoActorLiftAt(activeActor);
   const bounds = activeWorldBounds();
-  applyCameraUpdate(camera, state, dt, activeActor, bounds);
+  applyCameraUpdate(camera, state, dt, activeActor, bounds, activeSurfaceLift);
 }
 
 function rotateCamera(direction) {
@@ -3319,12 +3658,15 @@ function resize() {
 
 function updateHud() {
   const stepId = currentStepId();
+  const stepLabel = currentStepLabel();
+  const prompt = currentPrompt(stepId);
   renderHudBase(hud, {
     activeLabel: activeActorLabel(),
     goalLabel: currentGoalLabel(),
-    stepLabel: currentStepLabel(),
-    prompt: currentPrompt(stepId)
+    stepLabel,
+    prompt
   });
+  updateTutorialBannerAttention(stepLabel, prompt);
   updateSkipModal();
   updateControlsPanel();
   updateDevEditorPanel();
@@ -3333,6 +3675,27 @@ function updateHud() {
   updateContinuePrompt();
   updateSpeechBubble();
   updateSceneOverlays();
+}
+
+function updateTutorialBannerAttention(stepLabel, prompt) {
+  if (!hud.tutorialBanner) return;
+  if (state.scene.id !== SCENES.TUTORIAL || state.scene.titleCardVisible) {
+    tutorialBannerAttentionKey = "";
+    hud.tutorialBanner.classList.remove("tutorial-banner-attention");
+    return;
+  }
+  const nextKey = [
+    state.scene.id,
+    state.tutorialIndex,
+    stepLabel,
+    prompt,
+    tutorialRecoveryPhase()
+  ].join(":");
+  if (nextKey === tutorialBannerAttentionKey) return;
+  tutorialBannerAttentionKey = nextKey;
+  hud.tutorialBanner.classList.remove("tutorial-banner-attention");
+  void hud.tutorialBanner.offsetWidth;
+  hud.tutorialBanner.classList.add("tutorial-banner-attention");
 }
 
 function activeActorLabel() {
@@ -4095,7 +4458,20 @@ function renderGameToText() {
       id: state.skipNudge.id,
       count: state.skipNudge.count,
       lastAt: Number(state.skipNudge.lastAt.toFixed(2))
+    },
+    recovery: {
+      stranded: Boolean(state.tutorialRecovery?.stranded),
+      phase: tutorialRecoveryPhase(),
+      elapsed: Number(tutorialRecoveryElapsed().toFixed(2)),
+      autoPressAllowed: tutorialRecoveryAutoPressAllowed(),
+      rescueNudgeActive: tutorialRecoveryRescueNudgeActive(),
+      resetPromptShown: Boolean(state.tutorialRecovery?.resetPromptShown),
+      characterLineShown: Boolean(state.tutorialRecovery?.characterLineShown)
     }
+  },
+  hud: {
+    tutorialBannerAttentionKey,
+    tutorialBannerAnimating: Boolean(hud.tutorialBanner?.classList.contains("tutorial-banner-attention"))
   },
   controlsPanel: {
     open: state.controlsOpen,
@@ -4212,6 +4588,10 @@ function renderGameToText() {
   camera: {
     yaw: Number(state.cameraYaw.toFixed(3)),
     targetYaw: Number(state.targetCameraYaw.toFixed(3)),
+    zoom: Number(camera.zoom.toFixed(3)),
+    activeSurfaceLift: Number((state.cameraActiveSurfaceLift || 0).toFixed(2)),
+    highElevationZoomActive: Boolean(state.cameraHighElevationZoomActive),
+    targetY: Number((state.cameraTargetY || SURFACE_Y).toFixed(2)),
     movement: state.devEditor.open ? "dev-editor-free-camera" : "camera-relative",
     devEditor: devCameraSnapshot(state)
   },
@@ -4466,6 +4846,25 @@ function renderGameToText() {
       asset: "kaykit-platformer-blue-ramp",
       id: LEVEL_TWO_BLUE_RAMP.id,
       walkableBy: state.levelTwo.blueRampActive ? "human" : "none",
+      revealActive: Boolean(state.levelTwo.blueRampRevealActive),
+      revealProgress: Number(clamp(
+        (state.levelTwo.blueRampRevealElapsed || 0) / (LEVEL_TWO_BLUE_RAMP.revealSeconds || 0.72),
+        0,
+        1
+      ).toFixed(2)),
+      dormantPanel: LEVEL_TWO_BLUE_RAMP.dormantPanel ? {
+        id: LEVEL_TWO_BLUE_RAMP.dormantPanel.id,
+        visible: state.scene.id === SCENES.LEVEL_TWO &&
+          (!state.levelTwo.blueRampActive || state.levelTwo.blueRampRevealActive),
+        visualOnly: true,
+        walkableBy: "none",
+        collider: "none",
+        x: Number(LEVEL_TWO_BLUE_RAMP.dormantPanel.position.x.toFixed(2)),
+        y: Number(LEVEL_TWO_BLUE_RAMP.dormantPanel.y.toFixed(2)),
+        z: Number(LEVEL_TWO_BLUE_RAMP.dormantPanel.position.z.toFixed(2)),
+        width: Number(LEVEL_TWO_BLUE_RAMP.dormantPanel.width.toFixed(2)),
+        depth: Number(LEVEL_TWO_BLUE_RAMP.dormantPanel.depth.toFixed(2))
+      } : null,
       minX: Number(LEVEL_TWO_BLUE_RAMP.minX.toFixed(2)),
       maxX: Number(LEVEL_TWO_BLUE_RAMP.maxX.toFixed(2)),
       minZ: Number(LEVEL_TWO_BLUE_RAMP.minZ.toFixed(2)),
@@ -4594,6 +4993,7 @@ function renderGameToText() {
         direction: platformState.direction || platform.initialDirection || "",
         pauseRemaining: Number((platformState.pauseRemaining || 0).toFixed(2)),
         releaseTarget: Number.isFinite(platformState.releaseTarget) ? Number(platformState.releaseTarget.toFixed(2)) : null,
+        hasActivated: Boolean(platformState.hasActivated),
         heldBy: platformState.heldBy || "",
         walkableBy: platform.walkableBy,
         x: Number(platform.position.x.toFixed(2)),
@@ -4609,6 +5009,8 @@ function renderGameToText() {
         movementRule: platform.movementRule,
         releaseBehavior: platform.releaseBehavior || "",
         endpointPauseSeconds: platform.endpointPauseSeconds || 0,
+        topPauseSeconds: platform.topPauseSeconds ?? platform.endpointPauseSeconds ?? 0,
+        bottomPauseSeconds: platform.bottomPauseSeconds ?? platform.endpointPauseSeconds ?? 0,
         riderActors: ["human", "frog", "elephant"].filter((actorKey) =>
           levelTwoActorIsOnRedPlatformSurface(state[actorKey], platform)
         )
@@ -4651,6 +5053,12 @@ function renderGameToText() {
       connectedToLoveLetterRoute: false,
       invalidFeedback: "Only the Elephant Cubeling is heavy enough for red buttons."
     },
+    redElevatorAStartGate: {
+      released: Boolean(state.levelTwo.redElevatorAStartGate?.released),
+      delayRemaining: Number((state.levelTwo.redElevatorAStartGate?.delayRemaining || 0).toFixed(2)),
+      waitingReason: state.levelTwo.redElevatorAStartGate?.waitingReason || "",
+      armed: state.levelTwo.elephantSpawned && !state.levelTwo.redElevatorAStartGate?.released
+    },
     redElevatorB: {
       visible: state.scene.id === SCENES.LEVEL_TWO,
       teachingSequence: "Elephant holds west-side Red Button B while the human rides Red Elevator B to the Love Letter route.",
@@ -4677,6 +5085,15 @@ function renderGameToText() {
       tier: station.tier,
       tileCount: station.tiles.length
     })),
+    redElevatorAGroundClearance: {
+      tileCount: LEVEL_TWO_RED_ELEVATOR_A_GROUND_CLEARANCE_TILES.length,
+      tiles: LEVEL_TWO_RED_ELEVATOR_A_GROUND_CLEARANCE_TILES.map((tile) => ({
+        x: tile.x,
+        y: tile.y,
+        worldX: Number(sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, tile.x, tile.y, TILE).x.toFixed(2)),
+        worldZ: Number(sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, tile.x, tile.y, TILE).z.toFixed(2))
+      }))
+    },
     reservedTerraceTileCount: LEVEL_TWO_RESERVED_TERRACE_TILES.length,
     hasElephantEcho: state.scene.id === SCENES.LEVEL_TWO && state.levelTwo.elephantEchoVisible,
     hasElephantTotem: state.scene.id === SCENES.LEVEL_TWO && state.levelTwo.elephantTotemVisible && !state.levelTwo.elephantTotemCollected,
@@ -4754,7 +5171,11 @@ installTestHooks({
   levelTwoPoints: LEVEL_TWO_POINTS,
   update,
   renderFrame,
+  startLevelOne,
   startLevelTwo,
+  tutorialButton: TUTORIAL_BUTTON,
+  tutorialStart: START,
+  levelOneButton: LEVEL_ONE_BUTTON,
   levelTwoRedButtonSurfaceY,
   updateLevelTwoSurfaceState,
   resetLevelTwoRedMechanismState,
@@ -4763,5 +5184,6 @@ installTestHooks({
   updateHud,
   clearSpeechQueue,
   directionName,
+  setTutorialStep,
   renderGameToText
 });

@@ -13,6 +13,16 @@ import {
   FLOOR_EDGE_MIN_Z
 } from "../levels/tutorialLevel.js";
 
+function tagDevEditorObject(object, spec) {
+  object.userData.devEditorId = spec.id;
+  object.userData.devEditorName = spec.name;
+  object.userData.devEditorDisplayName = spec.name;
+  object.userData.devEditorAsset = spec.asset;
+  object.userData.devEditorCategory = spec.category;
+  object.userData.devEditorCollisionExpected = true;
+  object.userData.devEditorSource = "src/scenes/tutorialScene.js or src/levels/tutorialLevel.js";
+}
+
 export function buildTutorialScene({
   scene,
   sceneGroups,
@@ -30,6 +40,12 @@ export function buildTutorialScene({
       floor.position.set(gridPoint(x, y, LEVEL_WIDTH, LEVEL_HEIGHT, TILE).x, 0, gridPoint(x, y, LEVEL_WIDTH, LEVEL_HEIGHT, TILE).z);
       floor.userData.column = x;
       floor.userData.row = y;
+      tagDevEditorObject(floor, {
+        id: `tutorial.ground_tile.${x}.${y}`,
+        name: `Ground Tile ${x},${y}`,
+        asset: "groundTile",
+        category: "terrain_tile"
+      });
       sceneGroups.tutorial.add(floor);
       floorMeshes.push(floor);
     }
@@ -40,6 +56,12 @@ export function buildTutorialScene({
     const barrier = cloneAsset("barrier");
     barrier.position.set(point.x, SURFACE_Y, point.z);
     barrier.rotation.y = Math.PI / 2;
+    tagDevEditorObject(barrier, {
+      id: `tutorial.terrain.barrier.${WALL_COLUMN}.${row}`,
+      name: `Barrier ${WALL_COLUMN},${row}`,
+      asset: "barrier",
+      category: "terrain_barrier"
+    });
     sceneGroups.tutorial.add(barrier);
     barrierMeshes.set(row, barrier);
     barrierColliders.push({
@@ -78,6 +100,12 @@ export function buildTutorialScene({
     mesh.userData.endCapLabel = cap.label;
     mesh.userData.boundaryZ = cap.boundaryZ;
     mesh.userData.columnEdgeOffset = BARRIER_END_CAP_COLUMN_EDGE_OFFSET;
+    tagDevEditorObject(mesh, {
+      id: `tutorial.terrain.barrier_cap.${cap.label.startsWith("start") ? "start" : "end"}`,
+      name: cap.label.startsWith("start") ? "Start Barrier End Cap" : "End Barrier End Cap",
+      asset: cap.key,
+      category: "terrain_barrier"
+    });
     sceneGroups.tutorial.add(mesh);
     barrierEndCapMeshes.push(mesh);
   });
@@ -87,5 +115,17 @@ export function buildTutorialScene({
   markerMeshes.spellbookClosed = cloneAsset("spellbookClosed");
   markerMeshes.spellbookOpen = cloneAsset("spellbookOpen");
   markerMeshes.spellbookOpen.visible = false;
+  tagDevEditorObject(markerMeshes.spellbookClosed, {
+    id: "tutorial.love_letter.closed",
+    name: "Love Letter Closed",
+    asset: "spellbookClosed",
+    category: "love_letter"
+  });
+  tagDevEditorObject(markerMeshes.spellbookOpen, {
+    id: "tutorial.love_letter.open",
+    name: "Love Letter Open",
+    asset: "spellbookOpen",
+    category: "love_letter"
+  });
   scene.add(markerMeshes.spellbookClosed, markerMeshes.spellbookOpen);
 }

@@ -14,6 +14,7 @@ export function applySceneRevealVisibility({
   doorRow,
   levelOneBridgeVisualY,
   levelOneBridgeDeckY,
+  levelTwoBlueRamp,
   rightFloorProgress,
   barrierSegmentProgress,
   easeOutCubic,
@@ -72,8 +73,39 @@ export function applySceneRevealVisibility({
   if (levelTwoInteractiveMeshes.blueButton) {
     levelTwoInteractiveMeshes.blueButton.visible = state.scene.id === sceneIds.LEVEL_TWO;
   }
+  const isLevelTwo = state.scene.id === sceneIds.LEVEL_TWO;
+  const blueRampRevealSeconds = levelTwoBlueRamp?.revealSeconds || 0.72;
+  const blueRampRevealProgress = state.levelTwo.blueRampRevealActive
+    ? easeOutCubic(clamp((state.levelTwo.blueRampRevealElapsed || 0) / blueRampRevealSeconds, 0, 1))
+    : 1;
+  if (levelTwoInteractiveMeshes.blueRampDormantPanel) {
+    const panel = levelTwoInteractiveMeshes.blueRampDormantPanel;
+    panel.visible = isLevelTwo && (!state.levelTwo.blueRampActive || state.levelTwo.blueRampRevealActive);
+    const material = panel.material;
+    if (material && material.opacity !== undefined) {
+      const baseOpacity = panel.userData.baseOpacity ?? material.opacity;
+      material.opacity = state.levelTwo.blueRampRevealActive
+        ? baseOpacity * (1 - blueRampRevealProgress * 0.45)
+        : baseOpacity;
+    }
+  }
   if (levelTwoInteractiveMeshes.blueRamp) {
-    levelTwoInteractiveMeshes.blueRamp.visible = state.scene.id === sceneIds.LEVEL_TWO && state.levelTwo.blueRampActive;
+    const blueRamp = levelTwoInteractiveMeshes.blueRamp;
+    blueRamp.visible = isLevelTwo && state.levelTwo.blueRampActive;
+    const baseY = blueRamp.userData.basePositionY ?? surfaceY;
+    const baseScale = blueRamp.userData.baseScale;
+    if (baseScale) {
+      const revealProgress = state.levelTwo.blueRampRevealActive ? blueRampRevealProgress : 1;
+      const revealStartYOffset = levelTwoBlueRamp?.revealStartYOffset ?? -0.34;
+      blueRamp.position.y = baseY + (1 - revealProgress) * revealStartYOffset;
+      blueRamp.scale.set(
+        baseScale.x,
+        baseScale.y * (0.18 + revealProgress * 0.82),
+        baseScale.z
+      );
+    } else {
+      blueRamp.position.y = baseY;
+    }
   }
   if (levelTwoInteractiveMeshes.elephantEcho) {
     levelTwoInteractiveMeshes.elephantEcho.visible = state.scene.id === sceneIds.LEVEL_TWO && state.levelTwo.elephantEchoVisible && !state.levelTwo.elephantAwake;

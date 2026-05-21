@@ -1,3 +1,6 @@
+import { editorRecordContext } from "./EditorRecordMetadata.js";
+import { transformTargetForRecord } from "./EditorTransformUtils.js";
+
 const TRANSFORM_EPSILON = 0.0001;
 export const EDITOR_TRANSFORM_PATCH_SCHEMA = "lumina3d.editor.transformPatch.v1";
 export const LEGACY_EDITOR_TRANSFORM_PATCH_TYPE = "lumina3d.editor.transformPatch";
@@ -43,7 +46,7 @@ export function dirtyRecords(records) {
   return records
     .map((record) => ({
       ...record,
-      changes: diffTransform(record.originalTransform, snapshotTransform(record.object))
+      changes: diffTransform(record.originalTransform, snapshotTransform(transformTargetForRecord(record)))
     }))
     .filter((record) => record.changes.length > 0);
 }
@@ -65,6 +68,7 @@ export function buildEditorPatch({ levelId, records, selectedId }) {
       objectId: record.id,
       name: record.name,
       category: record.category,
+      ...editorRecordContext(record),
       sourceRef: record.sourceRef,
       changes: record.changes
     }))

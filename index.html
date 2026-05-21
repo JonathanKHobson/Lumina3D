@@ -51,7 +51,61 @@
             <div class="dev-editor-section">
               <div class="dev-editor-title">Objects</div>
               <div id="devEditorSelectionSummary" class="dev-editor-summary">No object selected.</div>
+              <div class="dev-editor-object-tools">
+                <label class="dev-editor-field dev-editor-filter-field" for="devEditorObjectFilter">
+                  <span>Filter</span>
+                  <input id="devEditorObjectFilter" type="search" placeholder="name, id, type, asset">
+                </label>
+                <button type="button" class="small dev-editor-toggle" id="devEditorShowTilesToggle" title="Show or hide floor, water, path, and terrain tiles in the object list">Show Tiles: Off</button>
+              </div>
               <div id="devEditorObjectList" class="dev-editor-object-list"></div>
+            </div>
+
+            <div class="dev-editor-section dev-editor-annotation-section">
+              <div class="dev-editor-title">Selected Object Notes</div>
+              <label class="dev-editor-field" for="devEditorAnnotationNotes">
+                <span>Notes</span>
+                <textarea id="devEditorAnnotationNotes" rows="3" placeholder="Add issue notes or AI handoff context"></textarea>
+              </label>
+              <div class="dev-editor-controls-grid dev-editor-check-grid">
+                <label class="dev-editor-check">
+                  <input id="devEditorAnnotationDeleteCandidate" type="checkbox">
+                  <span>Delete candidate</span>
+                </label>
+                <label class="dev-editor-check">
+                  <input id="devEditorAnnotationReplaceCandidate" type="checkbox">
+                  <span>Replace candidate</span>
+                </label>
+                <label class="dev-editor-check">
+                  <input id="devEditorAnnotationCollisionIssue" type="checkbox">
+                  <span>Collision issue</span>
+                </label>
+                <label class="dev-editor-check">
+                  <input id="devEditorAnnotationOrientationIssue" type="checkbox">
+                  <span>Orientation issue</span>
+                </label>
+                <label class="dev-editor-check">
+                  <input id="devEditorAnnotationPositioningIssue" type="checkbox">
+                  <span>Positioning issue</span>
+                </label>
+                <label class="dev-editor-field dev-editor-field-compact" for="devEditorAnnotationPriority">
+                  <span>Priority</span>
+                  <select id="devEditorAnnotationPriority">
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                    <option value="low">Low</option>
+                  </select>
+                </label>
+              </div>
+              <label class="dev-editor-field" for="devEditorAnnotationReplacementAsset">
+                <span>Replacement asset key</span>
+                <input id="devEditorAnnotationReplacementAsset" type="text" placeholder="asset key only">
+              </label>
+              <label class="dev-editor-field" for="devEditorAnnotationReplacementReason">
+                <span>Replacement reason</span>
+                <input id="devEditorAnnotationReplacementReason" type="text" placeholder="why replacement is being considered">
+              </label>
+              <button type="button" class="small" id="devEditorAnnotationClear">Clear Annotation</button>
             </div>
 
             <div class="dev-editor-section">
@@ -65,6 +119,9 @@
                 <button type="button" data-dev-transform-mode="translate">Move</button>
                 <button type="button" data-dev-transform-mode="rotate">Rotate</button>
                 <button type="button" data-dev-transform-mode="scale">Scale</button>
+              </div>
+              <div class="dev-editor-button-row dev-editor-single-action">
+                <button type="button" id="devEditorUndoTransform" title="Undo the last Dev Editor transform" disabled>Undo Transform</button>
               </div>
               <div class="dev-editor-button-row">
                 <button type="button" data-dev-move="x" data-dev-delta="-1">−X</button>
@@ -82,14 +139,16 @@
               </div>
             </div>
 
-            <div class="dev-editor-section">
+            <div class="dev-editor-section dev-editor-export-section">
               <div class="dev-editor-title">Debug / Export</div>
-              <div class="dev-editor-button-row">
-                <button type="button" id="devEditorColliderToggle">Colliders: Off</button>
-                <button type="button" id="devEditorExportLayout">Copy Layout JSON</button>
-                <button type="button" id="devEditorCopySelectionDelta">Copy Selection Delta</button>
-                <button type="button" id="devEditorCopyAiContext">Copy AI Context</button>
-                <button type="button" id="devEditorExportPatchDraft">Export Patch Draft</button>
+              <p class="dev-editor-help">Snapshot = scene list. Transform Delta = selected object before/after. AI Context = bug report bundle. Patch Draft = reviewed source-edit request.</p>
+              <div class="dev-editor-button-row dev-editor-export-buttons">
+                <button type="button" id="devEditorColliderToggle" title="Show or hide actual runtime collider proxies">Colliders: Off</button>
+                <button type="button" id="devEditorExportLayout" title="Copy a JSON snapshot of editable runtime objects">Copy Layout Snapshot</button>
+                <button type="button" id="devEditorCopySelectionDelta" title="Copy selected object original/current transform and delta">Copy Transform Delta</button>
+                <button type="button" id="devEditorCopyAiContext" title="Copy selected object, nearby objects, colliders, camera, actors, and notes">Copy AI Context</button>
+                <button type="button" id="devEditorExportPatchDraft" title="Copy a source-patch draft for human/Codex review">Export Patch Draft</button>
+                <button type="button" id="devEditorOpenLevelEditor" title="Open the separate /editor/ route with this selected object handoff">Open in Level Editor</button>
               </div>
             </div>
           </section>

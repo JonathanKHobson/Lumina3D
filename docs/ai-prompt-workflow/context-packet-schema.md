@@ -15,6 +15,8 @@ Related runtime export schemas:
 ```txt
 lumina3d.dev.selectionDelta.v1
 lumina3d.dev.scenePatch.v1
+lumina3d.dev.objectAnnotations.v1
+lumina3d.dev.editorHandoff.v1
 ```
 
 Older `lumina3d-ai-context-v1` references are legacy documentation labels only.
@@ -51,14 +53,37 @@ Older `lumina3d-ai-context-v1` references are legacy documentation labels only.
     "rotationY": null,
     "collisionExpected": null,
     "colliderLabel": null,
-    "mechanismLink": null
+    "mechanismLink": null,
+    "annotation": {
+      "schema": "lumina3d.dev.objectAnnotations.v1",
+      "notes": "",
+      "flags": {
+        "deleteCandidate": false,
+        "replaceCandidate": false,
+        "collisionIssue": false,
+        "orientationIssue": false,
+        "positioningIssue": false
+      },
+      "replacement": {
+        "assetKey": "",
+        "reason": ""
+      },
+      "priority": "normal"
+    }
   },
   "nearbyObjects": [],
   "selectionDelta": {
     "schema": "lumina3d.dev.selectionDelta.v1",
     "original": null,
     "current": null,
-    "delta": null
+    "delta": null,
+    "annotation": null
+  },
+  "editorHandoff": {
+    "schema": "lumina3d.dev.editorHandoff.v1",
+    "handoffId": "",
+    "expiresAt": "",
+    "browserMayWriteSourceFiles": false
   },
   "colliderContext": {
     "suspectedColliderIds": [],
