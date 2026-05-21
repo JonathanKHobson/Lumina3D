@@ -60,10 +60,12 @@ npm run build
 For gameplay changes, also run the relevant smoke:
 
 ```bash
+npm run tools:validate-level-registry -- --pretty
 npm run tools:run-scene-smoke -- tutorial
 npm run tools:run-scene-smoke -- home_intro
 npm run tools:run-scene-smoke -- level_one
 npm run tools:run-scene-smoke -- level_two
+npm run tools:run-scene-smoke -- level_three
 ```
 
 For Level Two surface/collision changes:
@@ -73,6 +75,15 @@ npm run tools:validate-missing-colliders -- level_two
 npm run tools:validate-float-colliders -- level_two
 node test-output/level-two-frog-totem/smoke.mjs
 node test-output/level-two-ramp-access/smoke.mjs
+```
+
+For new-level wiring changes:
+
+```bash
+npm run tools:list-levels -- --pretty
+npm run tools:validate-level-registry -- --pretty
+npm run tools:get-level-manifest -- <level_id> --pretty
+npm run tools:run-scene-smoke -- <level_id> --pretty
 ```
 
 For Home/Level One flow changes:
@@ -124,10 +135,11 @@ Before creating a public playable build or landing page:
 
 ## Immediate Development Order
 
-Current next work after the initial GitHub setup:
+Current next work after the Level Three Phase 1 lake/island shell and Phase 1.5 documentation/editor prep:
 
-1. Verify the raised-terrain/ramp recovery fix is still good.
-2. Clean up Home house doorway collision.
-3. Implement only the Elephant Totem/Echo unlock/spawn slice.
+1. Implement Level Three Phase 2 only: Frog moving-lily-pad lane, lane-specific splash reset, repeatable `level3TotemGreenButton`, Crocodile Totem raft winch states, Human Totem collection, and awakened Crocodile Echo.
+2. Keep Crocodile control, central bridge cycling, cargo stones, red-button systems, moving platforms, elevators, and the final Love Letter route out of Phase 2.
+3. Human-review the current Level Two Red Button B / Elevator B route in browser before adding more Level Two mechanics.
+4. Clean up Home house doorway collision if it still feels visibly wrong.
 
-Do not jump to Elephant movement, red buttons, elevators, Cubeling Recall, or final Level Two Love Letter routing until that slice is reviewed.
+Do not add a broad collision refactor, Red Button C chain, city/desert/restaurant sequence, Crocodile control, or final Level Three route while the Phase 2 opening puzzle is the active lane.

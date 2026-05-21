@@ -45,6 +45,7 @@ More detail: `docs/github-workflow.md`.
 - Asset registry: `src/config/assets.js`
 - Shared constants and tutorial copy: `src/config/constants.js`
 - Scene IDs: `src/config/scenes.js`
+- Level registry: `src/config/levelRegistry.js`
 - Grid helpers: `src/core/grid.js`
 - Level layout data: `src/levels/`
 - Scene construction: `src/scenes/`
@@ -67,10 +68,13 @@ More detail: `docs/github-workflow.md`.
 1. Add layout constants in `src/levels/newLevel.js`.
 2. Add build logic in `src/scenes/newLevelScene.js`.
 3. Add a scene ID in `src/config/scenes.js`.
-4. Wire the new scene through `src/main.js`.
-5. Add smoke coverage under `test-output/`.
+4. Add registry metadata in `src/config/levelRegistry.js`.
+5. Add catalog/tooling coverage in `scripts/lib/levelCatalog.js`.
+6. Add editor adapter support in `src/editor/levels/` when the level should be inspectable.
+7. Wire only the smallest needed runtime handoff through `src/main.js`.
+8. Add scene smoke coverage, then run `npm run tools:validate-level-registry -- --pretty`.
 
-Before adding Level Two or any later level, read `docs/game-design-handbook/00_overview.md` and the level-specific planning docs in that folder.
+Before adding Level Two or any later level, read `docs/game-design-handbook/00_overview.md` and the level-specific planning docs in that folder. Level Three currently exists as a Phase 1 lake/island shell only; do not treat it as a finished route. Its working design plan is `docs/game-design-handbook/15_level_three_crocodile_lake_plan.md`.
 
 ## Debug Shortcuts
 
@@ -79,6 +83,8 @@ Temporary QA shortcuts are defined in `src/debug/debugLevelSelect.js`:
 - `1`: Tutorial
 - `2`: Home Story Intro
 - `3`: Level One
+- `4`: Level Two
+- `5`: Level Three
 - `R`: restart the current scene/level
 
 These are development shortcuts, not final player-facing UI.

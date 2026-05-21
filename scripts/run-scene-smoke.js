@@ -75,9 +75,11 @@ function buildInvariantChecks(state, targetLevel) {
 
   if (targetLevel === "level_one") {
     checks.push({
-      name: "level_one_bridge_asset",
-      pass: state?.levelOne?.bridgeAsset === "partial-bridge",
-      details: state?.levelOne?.bridgeAsset || "missing bridge asset"
+      name: "level_one_blue_bloom_start",
+      pass: state?.levelOne?.bridgeAsset === "blue-bloom-crossing-held" &&
+        state?.levelOne?.blueBloomDocked === false &&
+        state?.levelOne?.loveLetterVisibleFromStart === false,
+      details: `asset=${state?.levelOne?.bridgeAsset || "missing"}, docked=${Boolean(state?.levelOne?.blueBloomDocked)}, loveLetterVisibleFromStart=${Boolean(state?.levelOne?.loveLetterVisibleFromStart)}`
     });
   }
 
@@ -86,6 +88,45 @@ function buildInvariantChecks(state, targetLevel) {
       name: "level_two_placeholder_visible",
       pass: Boolean(state?.levelTwo?.placeholderLoveLetterVisible),
       details: `placeholderLoveLetterVisible=${Boolean(state?.levelTwo?.placeholderLoveLetterVisible)}`
+    });
+  }
+
+  if (targetLevel === "level_three") {
+    checks.push({
+      name: "level_three_placeholder_visible",
+      pass: Boolean(state?.levelThree?.placeholderLoveLetterVisible),
+      details: `placeholderLoveLetterVisible=${Boolean(state?.levelThree?.placeholderLoveLetterVisible)}`
+    });
+    checks.push({
+      name: "level_three_mostly_water_lake_shell",
+      pass: Boolean(state?.levelThree?.mostlyWater) &&
+        String(state?.levelThree?.mapShape || "").includes("lake-islands"),
+      details: `mapShape=${state?.levelThree?.mapShape || "missing"}, water=${state?.levelThree?.waterTileCount || 0}, land=${state?.levelThree?.landTileCount || 0}`
+    });
+    checks.push({
+      name: "level_three_phase_one_placeholders_present",
+      pass: Array.isArray(state?.levelThree?.placeholders) &&
+        ["level3StartIsland", "level3TotemGreenButton", "level3BridgeGreenButton", "level3TotemRaft", "level3CrocodileEcho", "level3LoveLetterCliff"].every((id) =>
+          state.levelThree.placeholders.includes(id) ||
+          state.levelThree.islands?.some((island) => island.id === id)
+        ),
+      details: `placeholderCount=${state?.levelThree?.placeholders?.length || 0}, islandCount=${state?.levelThree?.islandCount || 0}`
+    });
+    checks.push({
+      name: "level_three_green_buttons_distinct_inactive",
+      pass: Array.isArray(state?.levelThree?.greenButtons) &&
+        state.levelThree.greenButtons.some((button) => button.id === "level3TotemGreenButton" && button.behaviorImplemented === false) &&
+        state.levelThree.greenButtons.some((button) => button.id === "level3BridgeGreenButton" && button.behaviorImplemented === false),
+      details: `greenButtons=${(state?.levelThree?.greenButtons || []).map((button) => button.id).join(",")}`
+    });
+    checks.push({
+      name: "level_three_editor_marker_debug_output",
+      pass: Array.isArray(state?.levelThree?.islandMarkers) &&
+        state.levelThree.islandMarkers.some((marker) => marker.id === "level3StartIsland" && marker.editorSelectable === true) &&
+        Array.isArray(state?.levelThree?.editorSelectableIds) &&
+        state.levelThree.editorSelectableIds.includes("level3TotemGreenButton") &&
+        state.levelThree.editorSelectableIds.includes("level3LoveLetterCliff"),
+      details: `editorIds=${(state?.levelThree?.editorSelectableIds || []).length}, islandMarkers=${(state?.levelThree?.islandMarkers || []).length}`
     });
   }
 
@@ -98,6 +139,32 @@ function buildInvariantChecks(state, targetLevel) {
   }
 
   return checks;
+}
+
+function buildTitleChecks(initialState, finalState, targetLevel) {
+  const titleByLevel = {
+    level_one: "Level One",
+    level_two: "Level Two",
+    level_three: "Level Three"
+  };
+  const expectedTitle = titleByLevel[targetLevel];
+  if (!expectedTitle) return [];
+  const visibleTitle = initialState?.scene?.titleCardVisible ? initialState?.scene?.titleCardText || "" : "";
+  return [
+    {
+      name: `${targetLevel}_title_during_arrival`,
+      pass: initialState?.scene?.phase === "arrival" && visibleTitle === expectedTitle,
+      details: `phase=${initialState?.scene?.phase || "missing"} title=${visibleTitle || "hidden"}`
+    },
+    {
+      name: `${targetLevel}_title_never_level_one_fallback`,
+      pass: targetLevel === "level_one" || (
+        initialState?.scene?.titleCardText !== "Level One" &&
+        finalState?.scene?.titleCardText !== "Level One"
+      ),
+      details: `initial=${initialState?.scene?.titleCardText || ""} final=${finalState?.scene?.titleCardText || ""}`
+    }
+  ];
 }
 
 async function jumpDirect(page, targetLevel) {
@@ -156,14 +223,17 @@ async function run() {
     await setPaused(page, true);
     await advance(page, 120);
 
-    await jumpDirect(page, target);
+    const initialState = await jumpDirect(page, target);
     const state = await ensureAtLeastPlay(page, target);
 
-    // Let physics settle briefly for deterministic smoke reads.
-    for (let i = 0; i < 6; i++) await advance(page, 120);
+    // Let title timing and arrival motion settle enough to catch fade-frame title regressions.
+    for (let i = 0; i < 16; i++) await advance(page, 120);
 
     const finalState = await readState(page);
-    const checks = buildInvariantChecks(finalState, target);
+    const checks = [
+      ...buildInvariantChecks(finalState, target),
+      ...buildTitleChecks(initialState, finalState, target)
+    ];
     const failed = checks.find((check) => !check.pass);
 
     const payload = {

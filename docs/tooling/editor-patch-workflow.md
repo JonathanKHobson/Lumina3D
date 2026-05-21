@@ -45,9 +45,10 @@ Current transform patches use:
 ## Editor State Export Shape
 
 `Copy State JSON` exports the broader handoff payload for planning source edits. It
-still does not write files. The state export includes only affected objects:
-objects that moved, rotated, scaled, received a note, or were marked for
-delete/replace.
+still does not write files. The source-backed object list includes only affected
+objects: objects that moved, rotated, scaled, received a note, were marked for
+delete/replace, or received a structured replacement candidate. Draft placements
+export separately as add-intent records and never enter transform patch JSON.
 
 ```json
 {
@@ -56,6 +57,10 @@ delete/replace.
   "levelId": "level_two",
   "selectedId": "level_two.blue_ramp",
   "affectedObjectCount": 2,
+  "draftPlacementCount": 1,
+  "replacementCandidateCount": 1,
+  "draftPlacements": [],
+  "colliderDiagnostics": {},
   "objects": [
     {
       "objectId": "level_two.blue_ramp",
@@ -75,6 +80,7 @@ delete/replace.
       "noteIntents": [],
       "markedForDelete": false,
       "markedForReplace": false,
+      "replacementCandidate": null,
       "actionIntent": "none"
     }
   ]
@@ -84,6 +90,11 @@ delete/replace.
 Object notes persist in browser `localStorage` under
 `lumina3d.editor.objectMeta.v1:<levelId>`. Delete and replace marks are
 export-only intent; they do not remove, hide, or swap objects in the editor.
+Draft placement records persist under
+`lumina3d.editor.draftPlacements.v1:<levelId>` and are export-only add intent.
+Use `Remove Draft` on a selected draft ghost/marker to delete that draft and its
+draft note metadata from editor storage. Source-backed objects still use
+`Mark Delete` for handoff intent; they are not removed by the browser editor.
 
 ## Copy And Export
 
@@ -95,7 +106,7 @@ npm run editor
 
 2. Open `/editor/`.
 3. Select an object from the object list or viewport.
-4. Move or rotate it with the transform controls.
+4. Move, rotate, or resize it with the transform controls.
 5. Add an object note with `@intent` typeahead when the change needs human/AI context.
 6. Use `Mark Delete` when an object should be removed in a later reviewed edit.
 7. Use `Mark Replace` when an object should be replaced rather than simply deleted.
@@ -267,7 +278,7 @@ Then open `/editor/` and confirm the changed object appears where expected.
 - Level picker shows Tutorial, Home Intro, Level One, and Level Two.
 - Object list selection works.
 - Viewport click selection works.
-- Move and rotate controls update the inspector.
+- Move, rotate, and resize controls update the inspector.
 - Camera pan, yaw, and zoom controls still work.
 - Camera tilt buttons and `[` / `]` shortcuts change camera pitch.
 - Snap toggle still changes transform behavior.

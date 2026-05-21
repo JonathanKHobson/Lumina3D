@@ -88,6 +88,7 @@
               </div>
             </details>
             <div id="assetList" class="editor-object-list editor-asset-list"></div>
+            <button id="placeGhost" type="button" class="editor-button editor-button-wide" title="Place an editor-only draft ghost or marker for the selected asset">Place Ghost</button>
             <div id="assetDetail" class="asset-detail" aria-live="polite"></div>
           </section>
         </aside>
@@ -114,6 +115,7 @@
             <div class="editor-toolbar" role="toolbar" aria-label="Transform mode">
               <button id="translateMode" type="button" class="editor-button is-active" title="Translate selected object">Move</button>
               <button id="rotateMode" type="button" class="editor-button" title="Rotate selected object">Rotate</button>
+              <button id="scaleMode" type="button" class="editor-button" title="Resize selected object">Resize</button>
               <button id="frameSelected" type="button" class="editor-button" title="Frame selected object">Frame</button>
             </div>
             <div class="editor-section-heading editor-subheading">
@@ -136,11 +138,26 @@
                 <input id="showColliders" type="checkbox">
                 <span>Show Colliders</span>
               </label>
+              <label class="editor-field editor-field-inline editor-collider-view" for="colliderView">
+                <span>Collider View</span>
+                <select id="colliderView">
+                  <option value="off">Off</option>
+                  <option value="all">All</option>
+                  <option value="blocking">Blocking</option>
+                  <option value="walkable">Walkable</option>
+                  <option value="triggers">Triggers</option>
+                  <option value="visual">Visual Bounds</option>
+                  <option value="actor_walkability">Actor Walkability</option>
+                  <option value="problems">Problems Only</option>
+                </select>
+              </label>
             </div>
             <div class="editor-state-toolbar" role="toolbar" aria-label="Selected object state">
               <button id="resetSelected" type="button" class="editor-button" title="Restore selected object to its load-time transform">Reset Selected</button>
               <button id="markDelete" type="button" class="editor-button" title="Mark selected object for deletion in copied editor state">Mark Delete</button>
               <button id="markReplace" type="button" class="editor-button" title="Mark selected object for replacement in copied editor state">Mark Replace</button>
+              <button id="useReplacementAsset" type="button" class="editor-button" title="Use the currently selected asset as the replacement candidate for this object">Use Asset</button>
+              <button id="removeDraft" type="button" class="editor-button editor-button-danger" title="Completely remove the selected draft ghost or marker from this editor level">Remove Draft</button>
               <button id="resetLevel" type="button" class="editor-button" title="Reset current editor level transforms and metadata">Reset Level</button>
             </div>
             <label class="editor-field" for="objectNote">

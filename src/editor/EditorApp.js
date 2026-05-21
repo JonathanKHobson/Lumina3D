@@ -23,6 +23,15 @@ import {
   summarizeEditorAssetCatalog
 } from "./EditorAssetCatalog.js";
 import { EditorColliderOverlay } from "./EditorColliderOverlay.js";
+import { buildColliderDiagnostics } from "./EditorColliderDiagnostics.js";
+import {
+  createDraftPlacement,
+  createDraftPlacementObject,
+  draftPlacementExportFromRecord,
+  loadEditorDraftPlacements,
+  makeDraftPlacementRecord,
+  saveEditorDraftPlacements
+} from "./EditorDraftPlacements.js";
 import { findIntentSuggestions } from "./EditorNoteIntents.js";
 import {
   extractNoteReferenceTokens,
@@ -38,6 +47,10 @@ import {
   normalizeObjectFilterState,
   saveObjectFilterState
 } from "./EditorObjectFilters.js";
+import {
+  ensureReplacementNote,
+  replacementCandidateForAsset
+} from "./EditorReplacementIntent.js";
 import {
   buildEditorStateExport,
   loadEditorLevelMeta,
@@ -62,6 +75,7 @@ const VIEW_HEIGHT = 42;
 const CAMERA_OFFSET = new THREE.Vector3(28, 30, 28);
 const TRANSLATE_SNAP = 0.25;
 const ROTATION_SNAP = Math.PI / 12;
+const SCALE_SNAP = 0.05;
 
 export class EditorApp {
   constructor({ root, canvas }) {
@@ -78,6 +92,7 @@ export class EditorApp {
     this.level = null;
     this.adapters = LEVEL_EDITOR_ADAPTERS;
     this.activeAdapter = null;
+    this.sourceRecords = [];
     this.records = [];
     this.visibleRecords = [];
     this.objectFilterState = loadObjectFilterState();
@@ -85,6 +100,10 @@ export class EditorApp {
     this.levelMeta = normalizeLevelMeta();
     this.timeline = createEmptyEditorTimeline("level_two");
     this.assetCatalog = buildEditorAssetCatalog(ASSETS);
+    this.draftPlacements = [];
+    this.draftRecords = [];
+    this.draftGroup = new THREE.Group();
+    this.draftColliderProxies = [];
     this.activePanelTab = "objects";
     this.assetFilterState = normalizeAssetFilterState();
     this.selectedAssetKey = "";
@@ -178,10 +197,12 @@ export class EditorApp {
       assetQuickFilters: this.root.querySelector("#assetQuickFilters"),
       assetList: this.root.querySelector("#assetList"),
       assetDetail: this.root.querySelector("#assetDetail"),
+      placeGhost: this.root.querySelector("#placeGhost"),
       dirtyCount: this.root.querySelector("#dirtyCount"),
       playInGame: this.root.querySelector("#playInGame"),
       translateMode: this.root.querySelector("#translateMode"),
       rotateMode: this.root.querySelector("#rotateMode"),
+      scaleMode: this.root.querySelector("#scaleMode"),
       frameSelected: this.root.querySelector("#frameSelected"),
       zoomOutCamera: this.root.querySelector("#zoomOutCamera"),
       zoomInCamera: this.root.querySelector("#zoomInCamera"),
@@ -190,12 +211,15 @@ export class EditorApp {
       resetCamera: this.root.querySelector("#resetCamera"),
       cameraReadout: this.root.querySelector("#cameraReadout"),
       showColliders: this.root.querySelector("#showColliders"),
+      colliderView: this.root.querySelector("#colliderView"),
       colliderReadout: this.root.querySelector("#colliderReadout"),
       snapToggle: this.root.querySelector("#snapToggle"),
       resetSelected: this.root.querySelector("#resetSelected"),
       resetLevel: this.root.querySelector("#resetLevel"),
       markDelete: this.root.querySelector("#markDelete"),
       markReplace: this.root.querySelector("#markReplace"),
+      useReplacementAsset: this.root.querySelector("#useReplacementAsset"),
+      removeDraft: this.root.querySelector("#removeDraft"),
       noteLabel: this.root.querySelector("#noteLabel"),
       objectNote: this.root.querySelector("#objectNote"),
       noteIntentSuggestions: this.root.querySelector("#noteIntentSuggestions"),
@@ -240,11 +264,13 @@ export class EditorApp {
     this.transformControls.setMode("translate");
     this.transformControls.setTranslationSnap(TRANSLATE_SNAP);
     this.transformControls.setRotationSnap(ROTATION_SNAP);
+    this.transformControls.setScaleSnap?.(SCALE_SNAP);
     this.transformControls.addEventListener("dragging-changed", (event) => {
       this.isDraggingTransform = event.value;
       this.updateUi();
     });
     this.transformControls.addEventListener("objectChange", () => {
+      this.syncDraftPlacementTransforms();
       this.updateSelectionHelpers();
       this.syncColliderOverlay();
       this.updateUi();
@@ -316,8 +342,10 @@ export class EditorApp {
     this.dom.assetFolderFilter?.addEventListener("change", () => {
       this.updateAssetFilters({ folderPath: this.dom.assetFolderFilter.value });
     });
+    this.dom.placeGhost?.addEventListener("click", () => this.placeSelectedAssetGhost());
     this.dom.translateMode.addEventListener("click", () => this.setTransformMode("translate"));
     this.dom.rotateMode.addEventListener("click", () => this.setTransformMode("rotate"));
+    this.dom.scaleMode?.addEventListener("click", () => this.setTransformMode("scale"));
     this.dom.frameSelected.addEventListener("click", () => this.frameSelected());
     this.dom.zoomOutCamera.addEventListener("click", () => this.zoomCamera("out"));
     this.dom.zoomInCamera.addEventListener("click", () => this.zoomCamera("in"));
@@ -325,11 +353,14 @@ export class EditorApp {
     this.dom.pitchUpCamera.addEventListener("click", () => this.tiltCamera("up"));
     this.dom.resetCamera.addEventListener("click", () => this.resetCamera());
     this.dom.showColliders.addEventListener("change", () => this.setColliderOverlayVisible(this.dom.showColliders.checked));
+    this.dom.colliderView?.addEventListener("change", () => this.setColliderViewMode(this.dom.colliderView.value));
     this.dom.snapToggle.addEventListener("change", () => this.updateSnap());
     this.dom.resetSelected.addEventListener("click", () => this.resetSelectedObject());
     this.dom.resetLevel.addEventListener("click", () => this.resetLevelState());
     this.dom.markDelete.addEventListener("click", () => this.toggleDeleteMark());
     this.dom.markReplace.addEventListener("click", () => this.toggleReplaceMark());
+    this.dom.useReplacementAsset?.addEventListener("click", () => this.useSelectedAssetAsReplacement());
+    this.dom.removeDraft?.addEventListener("click", () => this.removeSelectedDraftPlacement());
     this.dom.objectNote.addEventListener("input", () => {
       this.updateSelectedNote(this.dom.objectNote.value);
       this.updateNoteTypeahead();
@@ -384,8 +415,7 @@ export class EditorApp {
       placeAsset: (group, key, point, options) => placeLoadedAsset(this.assetCache, group, key, point, options)
     });
     this.scene.add(this.level.group);
-    this.records = this.level.editableObjects;
-    this.visibleRecords = this.records;
+    this.sourceRecords = this.level.editableObjects;
     this.objectMeta = loadEditorObjectMeta(levelId);
     this.levelMeta = loadEditorLevelMeta(levelId);
     this.timeline = createEmptyEditorTimeline(levelId);
@@ -393,11 +423,11 @@ export class EditorApp {
     if (!this.assetCatalog.records.some((record) => record.assetKey === this.selectedAssetKey)) {
       this.selectedAssetKey = this.assetCatalog.records[0]?.assetKey || "";
     }
-    this.colliderOverlay.rebuild({
-      records: this.records,
-      proxies: this.level.colliderProxies || []
-    });
-    this.colliderOverlay.setVisible(Boolean(this.dom.showColliders?.checked));
+    this.draftPlacements = loadEditorDraftPlacements(levelId);
+    this.rebuildDraftPlacementRecords();
+    this.records = [...this.sourceRecords, ...this.draftRecords];
+    this.visibleRecords = this.records;
+    this.rebuildColliderOverlay();
     this.handoffMatchedId = "";
     this.handoffMessage = "";
     if (this.dom.levelSelect.value !== levelId) this.dom.levelSelect.value = levelId;
@@ -453,6 +483,169 @@ export class EditorApp {
     this.activePanelTab = "assets";
     this.outputMode = "state";
     this.updateUi();
+  }
+
+  nextDraftIndex(assetKey = "") {
+    const slug = String(assetKey || "").toLowerCase();
+    return this.draftPlacements.filter((draft) => String(draft.assetKey || "").toLowerCase() === slug).length + 1;
+  }
+
+  clearDraftPlacementObjects() {
+    if (this.draftGroup?.parent) this.scene.remove(this.draftGroup);
+    this.draftGroup.traverse((child) => {
+      child.geometry?.dispose?.();
+      if (Array.isArray(child.material)) {
+        child.material.forEach((material) => material?.dispose?.());
+      } else {
+        child.material?.dispose?.();
+      }
+      child.userData?.disposeTexture?.dispose?.();
+    });
+    this.draftGroup.clear();
+    this.draftColliderProxies = [];
+  }
+
+  rebuildDraftPlacementRecords() {
+    this.clearDraftPlacementObjects();
+    this.draftGroup = new THREE.Group();
+    this.draftGroup.name = `${this.level?.id || "level"} Draft Placements`;
+    this.draftRecords = [];
+    this.draftPlacements.forEach((draft) => {
+      const asset = this.assetCatalog.records.find((record) => record.assetKey === draft.assetKey) || draft;
+      const object = createDraftPlacementObject({
+        draft,
+        asset,
+        cloneAsset: (key) => cloneLoadedAsset(this.assetCache, key)
+      });
+      const record = makeDraftPlacementRecord(draft, object);
+      if (!record) return;
+      this.draftGroup.add(object);
+      this.draftRecords.push(record);
+    });
+    this.draftColliderProxies = this.draftRecords.map((record) => ({
+      id: `${record.id}.draft_visual_proxy`,
+      label: `${record.name} draft footprint`,
+      ownerId: record.id,
+      category: "draft_visual_bounds",
+      source: "manual-review",
+      sourceRef: null,
+      deriveFromObject: true,
+      active: true,
+      generated: true,
+      metadata: {
+        draftPlacement: true,
+        previewOnly: true,
+        sourceScope: record.draftPlacementData?.sourceScope || "in-project",
+        referenceOnly: Boolean(record.draftPlacementData?.referenceOnly)
+      }
+    }));
+    this.scene.add(this.draftGroup);
+  }
+
+  rebuildColliderOverlay() {
+    const proxies = [
+      ...(this.level?.colliderProxies || []),
+      ...this.draftColliderProxies
+    ];
+    this.colliderOverlay.rebuild({
+      records: this.records,
+      proxies
+    });
+    const mode = this.dom.colliderView?.value || (this.dom.showColliders?.checked ? "all" : "off");
+    this.colliderOverlay.setViewMode?.(mode);
+    this.colliderOverlay.setVisible(mode !== "off");
+    if (this.dom.showColliders) this.dom.showColliders.checked = mode !== "off";
+  }
+
+  syncDraftPlacementTransforms() {
+    let changed = false;
+    this.draftPlacements = this.draftPlacements.map((draft) => {
+      const record = this.draftRecords.find((item) => item.id === draft.draftId);
+      if (!record) return draft;
+      const snapshot = snapshotTransform(record.transformTarget || record.object);
+      changed = true;
+      return {
+        ...draft,
+        transform: snapshot
+      };
+    });
+    if (changed) saveEditorDraftPlacements(this.level?.id || "level_two", this.draftPlacements);
+  }
+
+  currentDraftPlacementExports() {
+    return this.draftRecords
+      .map((record) => draftPlacementExportFromRecord(record, normalizeObjectMeta(this.objectMeta[record.id])))
+      .filter(Boolean);
+  }
+
+  defaultDraftPosition() {
+    const selected = this.selectedRecord();
+    if (selected?.object && !selected.draftPlacement) {
+      const box = new THREE.Box3().setFromObject(selected.object);
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+      return { x: center.x + 1.5, y: Math.max(0, center.y), z: center.z };
+    }
+    this.pointer.set(0, 0);
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+    const hit = this.raycaster.intersectObjects(this.sourceRecords.map((record) => record.object), true)[0];
+    if (hit?.point) return { x: hit.point.x, y: hit.point.y, z: hit.point.z };
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const point = new THREE.Vector3();
+    if (this.raycaster.ray.intersectPlane(plane, point)) {
+      return { x: point.x, y: point.y, z: point.z };
+    }
+    const target = this.cameraController?.state()?.target || { x: 0, y: 0, z: 0 };
+    return { x: target.x, y: 0, z: target.z };
+  }
+
+  placeSelectedAssetGhost() {
+    const asset = this.selectedAsset();
+    if (!asset?.assetKey) {
+      this.showToast("Select an asset first");
+      return;
+    }
+    const draft = createDraftPlacement({
+      levelId: this.level?.id || "level_two",
+      asset,
+      position: this.defaultDraftPosition(),
+      index: this.nextDraftIndex(asset.assetKey)
+    });
+    if (!draft) return;
+    this.draftPlacements = [...this.draftPlacements, draft];
+    saveEditorDraftPlacements(this.level?.id || "level_two", this.draftPlacements);
+    this.rebuildDraftPlacementRecords();
+    this.records = [...this.sourceRecords, ...this.draftRecords];
+    this.rebuildColliderOverlay();
+    this.selectObject(draft.draftId);
+    this.outputMode = "state";
+    this.showToast(asset.sourceScope === "external"
+      ? "Draft marker placed"
+      : asset.sourceScope === "procedural" ? "Procedural ghost placed" : "Draft ghost placed");
+  }
+
+  removeSelectedDraftPlacement() {
+    const record = this.selectedRecord();
+    if (!record?.draftPlacement) {
+      this.showToast("Select a draft ghost or marker first");
+      return false;
+    }
+
+    const draftId = record.id;
+    this.draftPlacements = this.draftPlacements.filter((draft) => draft.draftId !== draftId);
+    const nextObjectMeta = { ...this.objectMeta };
+    delete nextObjectMeta[draftId];
+    this.objectMeta = nextObjectMeta;
+    saveEditorDraftPlacements(this.level?.id || "level_two", this.draftPlacements);
+    saveEditorObjectMeta(this.level?.id || "level_two", this.objectMeta);
+    this.rebuildDraftPlacementRecords();
+    this.records = [...this.sourceRecords, ...this.draftRecords];
+    this.rebuildColliderOverlay();
+    this.clearSelection();
+    this.outputMode = "state";
+    this.updateUi();
+    this.showToast("Draft removed");
+    return true;
   }
 
   revealSelectedInObjectList() {
@@ -726,20 +919,31 @@ export class EditorApp {
   }
 
   setTransformMode(mode) {
+    if (!["translate", "rotate", "scale"].includes(mode)) return;
     this.transformControls.setMode(mode);
     this.dom.translateMode.classList.toggle("is-active", mode === "translate");
     this.dom.rotateMode.classList.toggle("is-active", mode === "rotate");
+    this.dom.scaleMode?.classList.toggle("is-active", mode === "scale");
     this.updateSnap();
+    this.updateUi();
   }
 
   updateSnap() {
     const snap = Boolean(this.dom.snapToggle.checked);
     this.transformControls.setTranslationSnap(snap ? TRANSLATE_SNAP : null);
     this.transformControls.setRotationSnap(snap ? ROTATION_SNAP : null);
+    this.transformControls.setScaleSnap?.(snap ? SCALE_SNAP : null);
   }
 
   setColliderOverlayVisible(visible) {
-    this.colliderOverlay?.setVisible(visible);
+    const mode = visible ? (this.dom.colliderView?.value === "off" ? "all" : this.dom.colliderView?.value || "all") : "off";
+    this.setColliderViewMode(mode);
+  }
+
+  setColliderViewMode(mode) {
+    if (this.dom.colliderView && this.dom.colliderView.value !== mode) this.dom.colliderView.value = mode;
+    this.colliderOverlay?.setViewMode?.(mode);
+    if (this.dom.showColliders) this.dom.showColliders.checked = mode !== "off";
     this.syncColliderOverlay();
     this.outputMode = "state";
     this.updateUi();
@@ -747,6 +951,16 @@ export class EditorApp {
 
   syncColliderOverlay() {
     this.colliderOverlay?.sync(this.selectedId);
+  }
+
+  currentColliderDiagnostics(colliderSummary = null) {
+    const selected = this.selectedRecord();
+    return buildColliderDiagnostics({
+      selectedRecord: selected,
+      selectedProxies: selected ? this.colliderOverlay?.proxySummariesForObject(selected.id) || [] : [],
+      allProxies: this.colliderOverlay?.proxies || [],
+      viewMode: colliderSummary?.viewMode || this.colliderOverlay?.viewMode || "off"
+    });
   }
 
   resetSelectedObject() {
@@ -767,8 +981,13 @@ export class EditorApp {
     this.records.forEach((record) => applySnapshotTransform(transformTargetForRecord(record), record.originalTransform));
     this.objectMeta = {};
     this.levelMeta = normalizeLevelMeta();
+    this.draftPlacements = [];
+    this.rebuildDraftPlacementRecords();
+    this.records = [...this.sourceRecords, ...this.draftRecords];
+    this.rebuildColliderOverlay();
     saveEditorObjectMeta(this.level.id, this.objectMeta);
     saveEditorLevelMeta(this.level.id, this.levelMeta);
+    saveEditorDraftPlacements(this.level.id, this.draftPlacements);
     this.clearSelection();
     const defaultId = this.activeAdapter?.defaultSelectedId || this.records[0]?.id || "";
     if (defaultId) this.selectObject(defaultId);
@@ -795,14 +1014,20 @@ export class EditorApp {
   setObjectMeta(objectId, updates) {
     if (!objectId) return;
     const mergedUpdates = { ...updates };
-    if (mergedUpdates.markedForDelete) mergedUpdates.markedForReplace = false;
+    if (mergedUpdates.markedForDelete) {
+      mergedUpdates.markedForReplace = false;
+      mergedUpdates.replacementCandidate = null;
+    }
     if (mergedUpdates.markedForReplace) mergedUpdates.markedForDelete = false;
+    if (Object.prototype.hasOwnProperty.call(mergedUpdates, "markedForReplace") && !mergedUpdates.markedForReplace) {
+      mergedUpdates.replacementCandidate = null;
+    }
     const nextMeta = normalizeObjectMeta({
       ...this.objectMeta[objectId],
       ...mergedUpdates,
       updatedAt: new Date().toISOString()
     });
-    const hasContent = nextMeta.note.trim() || nextMeta.markedForDelete || nextMeta.markedForReplace;
+    const hasContent = nextMeta.note.trim() || nextMeta.markedForDelete || nextMeta.markedForReplace || nextMeta.replacementCandidate;
     if (hasContent) {
       this.objectMeta = {
         ...this.objectMeta,
@@ -840,6 +1065,10 @@ export class EditorApp {
 
   toggleDeleteMark() {
     if (!this.selectedId) return;
+    if (this.selectedRecord()?.draftPlacement) {
+      this.showToast("Use Remove Draft for ghosts and markers");
+      return;
+    }
     const meta = this.selectedMeta();
     this.setObjectMeta(this.selectedId, {
       markedForDelete: !meta.markedForDelete,
@@ -849,11 +1078,43 @@ export class EditorApp {
 
   toggleReplaceMark() {
     if (!this.selectedId) return;
+    if (this.selectedRecord()?.draftPlacement) {
+      this.showToast("Use Remove Draft for ghosts and markers");
+      return;
+    }
+    const meta = this.selectedMeta();
+    const turningOn = !meta.markedForReplace;
+    const asset = turningOn && this.activePanelTab === "assets" ? this.selectedAsset() : null;
+    this.setObjectMeta(this.selectedId, {
+      markedForReplace: turningOn,
+      markedForDelete: false,
+      replacementCandidate: turningOn ? replacementCandidateForAsset(asset) : null,
+      note: turningOn ? ensureReplacementNote(meta.note, asset) : meta.note
+    });
+  }
+
+  useSelectedAssetAsReplacement() {
+    if (!this.selectedId) {
+      this.showToast("Select an object first");
+      return;
+    }
+    if (this.selectedRecord()?.draftPlacement) {
+      this.showToast("Drafts cannot be replacement targets");
+      return;
+    }
+    const asset = this.selectedAsset();
+    if (!asset?.assetKey) {
+      this.showToast("Select an asset first");
+      return;
+    }
     const meta = this.selectedMeta();
     this.setObjectMeta(this.selectedId, {
-      markedForReplace: !meta.markedForReplace,
-      markedForDelete: false
+      markedForReplace: true,
+      markedForDelete: false,
+      replacementCandidate: replacementCandidateForAsset(asset),
+      note: ensureReplacementNote(meta.note, asset)
     });
+    this.showToast("Replacement candidate set");
   }
 
   saveSelectedNote() {
@@ -1096,6 +1357,7 @@ export class EditorApp {
 
   currentStateExport() {
     this.syncColliderOverlay();
+    const colliderOverlay = this.colliderOverlay?.summary(this.selectedId) || null;
     return buildEditorStateExport({
       levelId: this.level?.id || "level_two",
       records: this.records,
@@ -1104,7 +1366,7 @@ export class EditorApp {
       levelMeta: this.levelMeta,
       camera: this.cameraController?.state() || null,
       supportedLevelIds: getSupportedLevelIds(),
-      colliderOverlay: this.colliderOverlay?.summary(this.selectedId) || null,
+      colliderOverlay,
       getColliderProxiesForObject: (objectId) => this.colliderOverlay?.proxySummariesForObject(objectId) || [],
       objectFilter: this.currentObjectFilterSummary(),
       timeline: summarizeEditorTimeline(this.timeline),
@@ -1112,7 +1374,9 @@ export class EditorApp {
         selectedAsset: this.selectedAsset(),
         filter: this.currentAssetFilterSummary()
       }),
-      referenceAssetCatalog: this.assetCatalog
+      referenceAssetCatalog: this.assetCatalog,
+      draftPlacements: this.currentDraftPlacementExports(),
+      colliderDiagnostics: this.currentColliderDiagnostics(colliderOverlay)
     });
   }
 
@@ -1218,7 +1482,10 @@ export class EditorApp {
       totalExternalAssetCount: data.totalExternalAssetCount,
       visibleProjectAssetCount: data.visibleProjectAssetCount,
       totalProjectAssetCount: data.totalProjectAssetCount,
-      placementEnabled: false
+      visibleProceduralAssetCount: data.visibleProceduralAssetCount,
+      totalProceduralAssetCount: data.totalProceduralAssetCount,
+      placementEnabled: false,
+      draftPlacementEnabled: true
     };
   }
 
@@ -1361,6 +1628,7 @@ export class EditorApp {
         "editor-object-row",
         "editor-asset-row",
         record.sourceScope === "external" ? "is-external" : "is-project",
+        record.sourceScope === "procedural" ? "is-procedural" : "",
         record.assetKey === this.selectedAssetKey ? "is-selected" : ""
       ].filter(Boolean).join(" ");
       row.dataset.editorAssetKey = record.assetKey;
@@ -1392,8 +1660,9 @@ export class EditorApp {
     if (!selected) {
       this.dom.assetDetail.innerHTML = `
         <div><span>Selection</span><code>No asset selected</code></div>
-        <div><span>Placement</span><code>Disabled for this slice</code></div>
+        <div><span>Placement</span><code>Select an asset to place a draft ghost</code></div>
       `;
+      if (this.dom.placeGhost) this.dom.placeGhost.disabled = true;
       return;
     }
     const footprint = selected.targetFootprint !== null && selected.targetFootprint !== undefined
@@ -1405,6 +1674,11 @@ export class EditorApp {
     const sourceDisplay = selected.sourceScope === "external"
       ? selected.relativePath || selected.source || "unknown"
       : selected.source || "unknown";
+    const placementLabel = selected.sourceScope === "external"
+      ? "Draft marker only; import/register before runtime use"
+      : selected.sourceScope === "procedural"
+        ? "Procedural editor model; Codex materializes runtime source later"
+        : "Draft ghost enabled; Codex materializes source later";
     this.dom.assetDetail.innerHTML = `
       <div><span>Asset</span><code>${this.escapeHtml(selected.assetKey)}</code></div>
       <div><span>Token</span><code>${this.escapeHtml(referenceTokenForAsset(selected))}</code></div>
@@ -1414,8 +1688,12 @@ export class EditorApp {
       <div><span>Source</span><code title="${this.escapeHtml(selected.source || "unknown")}">${this.escapeHtml(sourceDisplay)}</code></div>
       <div><span>Bounds</span><code>footprint ${this.escapeHtml(footprint)} / height ${this.escapeHtml(height)}</code></div>
       <div><span>Tags</span><code>${this.escapeHtml((selected.tags || []).join(", ") || "none")}</code></div>
-      <div><span>Placement</span><code>${selected.sourceScope === "external" ? "External reference only; not imported or placeable" : "Read-only catalog; placement is future scope"}</code></div>
+      <div><span>Placement</span><code>${placementLabel}</code></div>
     `;
+    if (this.dom.placeGhost) {
+      this.dom.placeGhost.disabled = !selected;
+      this.dom.placeGhost.textContent = selected?.sourceScope === "external" ? "Place Marker" : "Place Ghost";
+    }
   }
 
   updateUi() {
@@ -1449,6 +1727,9 @@ export class EditorApp {
     this.dom.editorStatus.classList.toggle("is-ready", this.status === "Ready");
     this.dom.editorStatus.classList.toggle("is-error", /failed|unsupported/i.test(this.status));
     if (this.dom.showColliders) this.dom.showColliders.checked = colliderSummary.visible;
+    if (this.dom.colliderView && this.dom.colliderView.value !== (colliderSummary.viewMode || "off")) {
+      this.dom.colliderView.value = colliderSummary.viewMode || "off";
+    }
     this.updateHandoffUi();
 
     this.dom.objectList.innerHTML = "";
@@ -1520,6 +1801,8 @@ export class EditorApp {
       this.dom.markReplace.disabled = true;
       this.dom.markReplace.classList.remove("is-active");
       this.dom.markReplace.textContent = "Mark Replace";
+      if (this.dom.useReplacementAsset) this.dom.useReplacementAsset.disabled = true;
+      if (this.dom.removeDraft) this.dom.removeDraft.disabled = true;
       if (this.dom.noteLabel) this.dom.noteLabel.textContent = "Level Note";
       this.dom.objectNote.disabled = false;
       this.dom.objectNote.placeholder = "Type @ for map intents or # for references";
@@ -1532,6 +1815,7 @@ export class EditorApp {
       this.renderColliderReadout(null, colliderSummary);
     } else {
       const transform = snapshotTransform(transformTargetForRecord(selected));
+      const isDraft = Boolean(selected.draftPlacement);
       this.dom.selectionSummary.textContent = `${selected.name} / ${selected.id}`;
       const sourceLabel = selected.sourceRef
         ? `${selected.sourceRef.exportName}:${selected.sourceRef.path}`
@@ -1543,22 +1827,31 @@ export class EditorApp {
           : selected.readOnly
             ? "read-only handoff target"
             : "editable transform target";
+      const replacementLabel = selectedMeta.replacementCandidate
+        ? `${selectedMeta.replacementCandidate.token} / ${selectedMeta.replacementCandidate.sourceScope}`
+        : "none";
       this.dom.transformReadout.innerHTML = `
         <div><span>Position</span><code>${this.formatAxes(transform.position)}</code></div>
         <div><span>Rotation</span><code>${this.formatAxes(transform.rotation)}</code></div>
         <div><span>Scale</span><code>${this.formatAxes(transform.scale)}</code></div>
         <div><span>Source</span><code>${sourceLabel}</code></div>
         <div><span>Status</span><code>${statusLabel}</code></div>
+        <div><span>Replacement</span><code>${this.escapeHtml(replacementLabel)}</code></div>
         <div><span>Tags</span><code>${(selected.tags || []).join(", ") || "none"}</code></div>
       `;
       this.dom.resetSelected.disabled = !this.recordAllowsTransform(selected);
       this.dom.resetLevel.disabled = false;
-      this.dom.markDelete.disabled = false;
+      this.dom.markDelete.disabled = isDraft;
       this.dom.markDelete.classList.toggle("is-active", selectedMeta.markedForDelete);
       this.dom.markDelete.textContent = selectedMeta.markedForDelete ? "Unmark Delete" : "Mark Delete";
-      this.dom.markReplace.disabled = false;
+      this.dom.markReplace.disabled = isDraft;
       this.dom.markReplace.classList.toggle("is-active", selectedMeta.markedForReplace);
       this.dom.markReplace.textContent = selectedMeta.markedForReplace ? "Unmark Replace" : "Mark Replace";
+      if (this.dom.useReplacementAsset) {
+        this.dom.useReplacementAsset.disabled = isDraft || !this.selectedAsset();
+        this.dom.useReplacementAsset.classList.toggle("is-active", Boolean(selectedMeta.replacementCandidate));
+      }
+      if (this.dom.removeDraft) this.dom.removeDraft.disabled = !isDraft;
       if (this.dom.noteLabel) this.dom.noteLabel.textContent = "Object Note";
       this.dom.objectNote.disabled = false;
       this.dom.objectNote.placeholder = "Type @ for intents or # for references";
@@ -1597,31 +1890,53 @@ export class EditorApp {
   renderColliderReadout(selected, colliderSummary) {
     if (!this.dom.colliderReadout) return;
     const levelCount = colliderSummary?.proxyCount || 0;
+    const visibleCount = colliderSummary?.visibleProxyCount || 0;
+    const viewMode = colliderSummary?.viewMode || "off";
     if (!selected) {
       this.dom.colliderReadout.innerHTML = `
         <div><span>Level proxies</span><code>${levelCount}</code></div>
+        <div><span>Visible</span><code>${visibleCount} / ${this.escapeHtml(viewMode)}</code></div>
         <div><span>Selected</span><code>No selection</code></div>
       `;
       return;
     }
 
     const proxies = this.colliderOverlay?.proxySummariesForObject(selected.id) || [];
+    const diagnostics = this.currentColliderDiagnostics(colliderSummary);
     const details = proxies.length > 0
       ? proxies.map((proxy) => {
         const review = proxy.manualReview ? " / manual review" : "";
         return `
           <div>
             <span>${this.escapeHtml(proxy.source)}</span>
-            <code>${this.escapeHtml(proxy.label)}${review} / half ${this.formatAxes(proxy.halfExtents)}</code>
+            <code>${this.escapeHtml(proxy.semanticRole || "review")} / ${this.escapeHtml(proxy.label)}${review} / half ${this.formatAxes(proxy.halfExtents)}</code>
           </div>
         `;
       }).join("")
       : `<div><span>Selected</span><code>No collider proxy</code></div>`;
+    const matrix = diagnostics.actorWalkability.map((row) => `
+      <div>
+        <span>${this.escapeHtml(row.actor)}</span>
+        <code>blocks ${this.escapeHtml(row.blocks)} / walk ${this.escapeHtml(row.walkable)} / trigger ${this.escapeHtml(row.triggers)}</code>
+      </div>
+    `).join("");
+    const warnings = diagnostics.warnings.length > 0
+      ? diagnostics.warnings.slice(0, 4).map((warning) => `
+        <div>
+          <span>${this.escapeHtml(warning.severity)}</span>
+          <code>${this.escapeHtml(warning.message)}</code>
+        </div>
+      `).join("")
+      : `<div><span>Warnings</span><code>No selected-object warnings</code></div>`;
 
     this.dom.colliderReadout.innerHTML = `
       <div><span>Level proxies</span><code>${levelCount}</code></div>
+      <div><span>Visible</span><code>${visibleCount} / ${this.escapeHtml(viewMode)}</code></div>
       <div><span>Selected</span><code>${proxies.length}</code></div>
       ${details}
+      <div><span>Roles</span><code>${this.escapeHtml(diagnostics.selectedRoles.join(", ") || "none")}</code></div>
+      ${matrix}
+      ${warnings}
     `;
   }
 
@@ -1758,6 +2073,8 @@ export class EditorApp {
       totalExternalAssetCount: assetFilterData.totalExternalAssetCount,
       visibleProjectAssetCount: assetFilterData.visibleProjectAssetCount,
       totalProjectAssetCount: assetFilterData.totalProjectAssetCount,
+      visibleProceduralAssetCount: assetFilterData.visibleProceduralAssetCount,
+      totalProceduralAssetCount: assetFilterData.totalProceduralAssetCount,
       selectedAssetKey: this.selectedAssetKey || null,
       selectedAssetSourceScope: this.selectedAsset()?.sourceScope || null,
       selectedExternalAssetToken: this.selectedAsset()?.sourceScope === "external" ? referenceTokenForAsset(this.selectedAsset()) : null,
@@ -1767,7 +2084,17 @@ export class EditorApp {
       selectedPackFilter: assetFilterData.state.packName,
       selectedFolderFilter: assetFilterData.state.folderPath,
       placementEnabled: false,
+      draftPlacementEnabled: true,
       assetFilter: this.currentAssetFilterSummary(assetFilterData),
+      draftPlacementCount: this.draftRecords.length,
+      draftPlacements: this.currentDraftPlacementExports().map((draft) => ({
+        draftId: draft.draftId,
+        assetKey: draft.assetKey,
+        sourceScope: draft.sourceScope,
+        previewType: draft.previewType,
+        referenceOnly: draft.referenceOnly,
+        manualReview: draft.manualReview
+      })),
       terrainSelectableCount,
       elevatedTileCount: this.records.filter((record) => record.tileKind === "elevated").length,
       movableTileCount: this.records.filter((record) => record.type === "tile" && record.movable).length,
@@ -1786,6 +2113,7 @@ export class EditorApp {
       levelNotePresent: Boolean(levelMeta.note.trim()),
       deleteCount: stateExport.deleteCount,
       replaceCount: stateExport.replaceCount,
+      replacementCandidateCount: stateExport.replacementCandidateCount || 0,
       activeNoteTags: activeMeta.noteTags,
       activeNoteReferences,
       noteReferenceTypeaheadAvailable: Boolean(this.dom.noteIntentSuggestions),
@@ -1809,9 +2137,13 @@ export class EditorApp {
         this.dom.copyPrompt?.dataset.tooltip
       ),
       collidersVisible: colliderSummary.visible,
+      colliderViewMode: colliderSummary.viewMode || "off",
+      visibleColliderProxyCount: colliderSummary.visibleProxyCount || 0,
       colliderProxyCount: colliderSummary.proxyCount,
       selectedColliderProxyCount: colliderSummary.selectedProxyCount,
       selectedColliderLabels: colliderSummary.selectedColliderLabels,
+      colliderDiagnostics: stateExport.colliderDiagnostics,
+      problemWarningCount: stateExport.colliderDiagnostics?.problemWarningCount || 0,
       selectedMeta: this.selectedId ? this.selectedMeta() : null,
       selectedReadOnly: selected?.readOnly || false,
       selectedMovable: selected?.movable || false,
@@ -1820,6 +2152,9 @@ export class EditorApp {
       selectedTileKind: selected?.tileKind || "",
       selectedHiddenByFilters: filterData.selectedHidden,
       transformControlsAttached: Boolean(this.transformControls?.object),
+      transformMode: this.transformControls?.mode || "translate",
+      selectedDraftPlacement: Boolean(selected?.draftPlacement),
+      canRemoveSelectedDraft: Boolean(selected?.draftPlacement),
       handoff: {
         requested: Boolean(this.handoffRequest),
         loaded: Boolean(this.handoff),

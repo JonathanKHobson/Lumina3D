@@ -1,12 +1,9 @@
-import { SCENES } from "../config/scenes.js";
+import { registeredSceneForDebugKey, LEVEL_REGISTRY } from "../config/levelRegistry.js";
 
-export const DEBUG_SCENE_SHORTCUTS = {
-  Digit1: SCENES.TUTORIAL,
-  Digit2: SCENES.HOME,
-  Digit3: SCENES.LEVEL_ONE,
-  Digit4: SCENES.LEVEL_TWO
-};
+export const DEBUG_SCENE_SHORTCUTS = Object.fromEntries(
+  LEVEL_REGISTRY.map((entry) => [entry.debugKey, entry.sceneId])
+);
 
 export function debugSceneForCode(code) {
-  return DEBUG_SCENE_SHORTCUTS[code] || "";
+  return registeredSceneForDebugKey(code);
 }

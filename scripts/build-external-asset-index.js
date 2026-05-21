@@ -207,7 +207,7 @@ function recordFromFile(filePath, scope) {
       targetHeight: null,
       allowedLevels: [],
       placementEnabled: false,
-      usageNotes: "External local asset reference only; not imported into Lumina3D and not placeable in this editor slice."
+      usageNotes: "External local asset reference only; not imported into Lumina3D. Editor placement is marker-only draft intent."
     }
   };
 }

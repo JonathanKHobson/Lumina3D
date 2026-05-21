@@ -60,7 +60,7 @@ export const LEVEL_TWO_RED_PLATFORM_MAX_LIFT = LEVEL_TWO_ELEPHANT_ECHO_HEIGHT - 
 export const LEVEL_TWO_RED_PLATFORM_B_MAX_LIFT = LEVEL_TWO_MOUNTAIN_LAYER_COUNT >= 4
   ? tierBottomY(4) - LEVEL_TWO_RED_PLATFORM_B_SURFACE_OFFSET
   : LEVEL_TWO_RED_PLATFORM_MAX_LIFT;
-export const LEVEL_TWO_RED_PLATFORM_BASE_Y = SURFACE_Y - LEVEL_TWO_RED_PLATFORM_VISUAL_HEIGHT + LEVEL_TWO_RED_PLATFORM_SURFACE_OFFSET;
+export const LEVEL_TWO_RED_PLATFORM_BASE_Y = 1.0;
 export const LEVEL_TWO_RED_PLATFORM_B_BASE_Y = SURFACE_Y - LEVEL_TWO_RED_PLATFORM_VISUAL_HEIGHT + LEVEL_TWO_RED_PLATFORM_B_SURFACE_OFFSET;
 export const LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_ID = "level-two-love-letter-route";
 
@@ -91,7 +91,7 @@ export const LEVEL_TWO_POINTS = {
   placeholderLoveLetter: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 9.5, 9.5, TILE),
   blueButton: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 17.125, 16.125, TILE),
   elephantTotem: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 17.0, 3.0, TILE),
-  elephantEcho: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 16.375, 8.75, TILE),
+  elephantEcho: { x: -7.5, y: 1.75, z: 15.5 },
   blueRamp: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 14.1, 3.05, TILE),
   redElevatorA: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 15.625, 9.5, TILE),
   redButtonA: sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, 16.375, 8.75, TILE),
@@ -407,9 +407,9 @@ export const LEVEL_TWO_RED_BUTTONS = [
     position: LEVEL_TWO_POINTS.redButtonA,
     surfaceId: "red-elevator-a",
     platformId: "red-elevator-a",
-    surfaceTopY: SURFACE_Y + LEVEL_TWO_RED_PLATFORM_MAX_LIFT,
+    surfaceTopY: SURFACE_Y + LEVEL_TWO_RED_PLATFORM_SURFACE_OFFSET,
     radius: LEVEL_TWO_RED_BUTTON_RADIUS,
-    surfaceClearance: LEVEL_TWO_RED_BUTTON_SURFACE_CLEARANCE,
+    surfaceClearance: 0.01,
     requiredActor: "elephant",
     activationType: "held-weight",
     linkedPlatformId: "red-elevator-a",
@@ -450,11 +450,11 @@ export const LEVEL_TWO_RED_PLATFORMS = [
     endpointPauseSeconds: LEVEL_TWO_RED_PLATFORM_ENDPOINT_PAUSE_SECONDS,
     topPauseSeconds: LEVEL_TWO_RED_PLATFORM_ENDPOINT_PAUSE_SECONDS,
     bottomPauseSeconds: LEVEL_TWO_RED_PLATFORM_BOTTOM_PAUSE_SECONDS,
-    initialProgress: 1,
-    inactiveProgress: 1,
-    activeProgress: 0,
-    initialDirection: "down",
-    releaseBehavior: "return-to-bottom",
+    initialProgress: 0,
+    inactiveProgress: 0,
+    activeProgress: 1,
+    initialDirection: "up",
+    releaseBehavior: "finish-current-direction",
     movementRule: "cycle-while-held",
     walkableBy: ["human", "elephant"],
     linkedButtonId: "red-button-a",

@@ -11,7 +11,8 @@ const SOURCE_HINTS_BY_SCENE = {
   [SCENES.TUTORIAL]: "src/scenes/tutorialScene.js or src/levels/tutorialLevel.js",
   [SCENES.HOME]: "src/scenes/homeIntroScene.js or src/levels/homeIntroLevel.js",
   [SCENES.LEVEL_ONE]: "src/scenes/levelOneScene.js or src/levels/levelOne.js",
-  [SCENES.LEVEL_TWO]: "src/scenes/levelTwoScene.js or src/levels/levelTwo.js"
+  [SCENES.LEVEL_TWO]: "src/scenes/levelTwoScene.js or src/levels/levelTwo.js",
+  [SCENES.LEVEL_THREE]: "src/scenes/levelThreeScene.js or src/levels/levelThree.js"
 };
 
 const ACTOR_SOURCE_HINTS = {
@@ -56,6 +57,7 @@ const DISPLAY_NAMES_BY_ASSET = {
   "partial-bridge": "Partial Bridge",
   "complete-bridge": "Complete Bridge",
   "generated-door-note": "Door Note",
+  "generated-level-three-placeholder": "Level Three Placeholder",
   "building_home_A_blue": "Home"
 };
 
@@ -91,6 +93,7 @@ function scenePrefixFor(sceneId) {
   if (sceneId === SCENES.HOME) return "home";
   if (sceneId === SCENES.LEVEL_ONE) return "levelOne";
   if (sceneId === SCENES.LEVEL_TWO) return "levelTwo";
+  if (sceneId === SCENES.LEVEL_THREE) return "levelThree";
   return "tutorial";
 }
 
@@ -118,6 +121,7 @@ function inferAsset(object, scenePrefix) {
     object.userData.homeAsset ||
     object.userData.levelOneAsset ||
     object.userData.levelTwoAsset ||
+    object.userData.levelThreeAsset ||
     object.userData.levelTwoTier ||
     object.userData.levelTwoZone ||
     (typeof object.userData[`${scenePrefix}Asset`] === "string" ? object.userData[`${scenePrefix}Asset`] : "");
@@ -137,6 +141,7 @@ function inferCategory(object, assetKey) {
     object.userData.levelOneWater !== undefined ||
     object.userData.levelTwoTile !== undefined ||
     object.userData.levelTwoTileX !== undefined ||
+    object.userData.levelThreeTile !== undefined ||
     /groundTile|pathTile|waterTile/i.test(assetKey)
   ) return "terrain_tile";
   if (/barrier/i.test(assetKey)) return "terrain_barrier";
@@ -198,6 +203,7 @@ function tileCoordinateParts(object) {
     object.userData.levelOneTile ||
     object.userData.levelOneWater ||
     object.userData.levelTwoTile ||
+    object.userData.levelThreeTile ||
     (object.userData.levelTwoTileX !== undefined && object.userData.levelTwoTileY !== undefined
       ? `${object.userData.levelTwoTileX},${object.userData.levelTwoTileY}`
       : "") ||
@@ -222,12 +228,30 @@ function inferredStableRuntimeId(sceneId, object, category, assetKey) {
   if (category === "terrain_barrier" && object.userData.row !== undefined) {
     return `${sceneId}.terrain.barrier.${slug(object.userData.column ?? "wall")}.${slug(object.userData.row)}`;
   }
-  if (category === "love_letter" && /open/i.test(assetKey)) return `${sceneId}.love_letter.open`;
-  if (category === "love_letter" && /closed/i.test(assetKey)) return `${sceneId}.love_letter.closed`;
+  const loveLetterHints = [
+    assetKey,
+    object.userData.devEditorId,
+    object.userData.devEditorName,
+    object.userData.levelOneAsset,
+    object.userData.levelTwoAsset,
+    object.userData.levelThreeAsset,
+    object.name
+  ].join(" ");
+  if (category === "love_letter" || /love|spellbook/i.test(loveLetterHints)) {
+    if (/placeholder/i.test(loveLetterHints)) return `${sceneId}.love_letter.placeholder`;
+    if (/open/i.test(loveLetterHints)) return `${sceneId}.love_letter.open`;
+    return `${sceneId}.love_letter.closed`;
+  }
   return "";
 }
 
 function makeStableId(sceneId, object, category, counters, seen) {
+  const inferred = inferredStableRuntimeId(sceneId, object, category, inferAsset(object, scenePrefixFor(sceneId)).key);
+  if (inferred && category === "love_letter" && !seen.has(inferred)) {
+    seen.add(inferred);
+    return inferred;
+  }
+
   const existing = object.userData.devEditorId;
   if (existing) {
     const base = String(existing).includes(".") ? String(existing) : `${sceneId}.${slug(existing)}`;
@@ -237,7 +261,6 @@ function makeStableId(sceneId, object, category, counters, seen) {
     }
   }
 
-  const inferred = inferredStableRuntimeId(sceneId, object, category, inferAsset(object, scenePrefixFor(sceneId)).key);
   if (inferred && !seen.has(inferred)) {
     seen.add(inferred);
     object.userData.devEditorId = inferred;

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 
+import { registeredLevelForScene } from "../config/levelRegistry.js";
 import { SCENES } from "../config/scenes.js";
 import {
   collectDevEntities,
@@ -29,6 +30,7 @@ import {
 
 const DEG_15 = Math.PI / 12;
 const AI_CONTEXT_SCHEMA = "lumina3d.dev.aiContext.v1";
+const AUTHORING_PACKET_SCHEMA = "lumina3d.dev.levelAuthoringPacket.v1";
 const SCENE_PATCH_SCHEMA = "lumina3d.dev.scenePatch.v1";
 const SELECTION_DELTA_SCHEMA = "lumina3d.dev.selectionDelta.v1";
 const SELECTION_BOUND_COLOR = 0xffd166;
@@ -220,16 +222,16 @@ function canvasPointForEntity(objectId) {
 }
 
 function writeClipboardOrConsole(payload, successMessage, blockedMessage) {
-  const json = JSON.stringify(payload, null, 2);
-  console.log(json);
+  const text = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
+  console.log(text);
   if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-    navigator.clipboard.writeText(json)
+    navigator.clipboard.writeText(text)
       .then(() => { _onShowPrompt(successMessage, 1.4); })
       .catch(() => { _onShowPrompt(blockedMessage, 1.5); });
-    return json;
+    return text;
   }
-  _onShowPrompt("Clipboard unavailable. JSON logged in console.", 1.5);
-  return json;
+  _onShowPrompt("Clipboard unavailable. Export logged in console.", 1.5);
+  return text;
 }
 
 function getSelectedRow() {
@@ -624,6 +626,8 @@ export function initDevEditor({
   hud.devEditorCopySelectionDelta?.addEventListener("click", handleCopySelectionDelta);
   hud.devEditorUndoTransform?.addEventListener("click", () => undoLastTransform());
   hud.devEditorCopyAiContext?.addEventListener("click", handleCopyAiContext);
+  hud.devEditorCopyAuthoringJson?.addEventListener("click", handleCopyAuthoringJson);
+  hud.devEditorCopyAuthoringMarkdown?.addEventListener("click", handleCopyAuthoringMarkdown);
   hud.devEditorExportPatchDraft?.addEventListener("click", handleExportPatchDraft);
   hud.devEditorOpenLevelEditor?.addEventListener("click", handleOpenLevelEditor);
   hud.devEditorPanel?.addEventListener("click", handlePanelClick);
@@ -847,6 +851,145 @@ function handleCopyAiContext() {
     buildAiContextPayload(),
     "AI context copied to clipboard.",
     "Copy blocked. AI context logged in console."
+  );
+}
+
+function inferOptionalExpectation(row, pattern) {
+  const haystack = [
+    row?.id,
+    row?.name,
+    row?.displayName,
+    row?.category,
+    row?.asset?.key
+  ].join(" ");
+  return pattern.test(haystack) ? true : undefined;
+}
+
+function colliderLabelGuess(row) {
+  if (!row) return "";
+  if (row.collision?.labels?.length) return row.collision.labels[0];
+  const id = String(row.id || "").replace(/\./g, "-").replace(/_/g, "-");
+  if (id.includes("water")) return id.replace("level-three-terrain-water", "level-three-water");
+  if (id.includes("prop")) return id.replace(/\.prop\./g, "-");
+  return row.collision?.expected ? id : "";
+}
+
+function authoringObjectRow(row) {
+  return {
+    id: row.id,
+    name: row.displayName || row.name,
+    category: row.category,
+    asset: row.asset?.key || "",
+    position: {
+      x: row.transform.local.position[0],
+      y: row.transform.local.position[1],
+      z: row.transform.local.position[2]
+    },
+    rotationY: row.transform.local.rotationY,
+    scale: {
+      x: row.transform.local.scale[0],
+      y: row.transform.local.scale[1],
+      z: row.transform.local.scale[2]
+    },
+    collisionExpected: Boolean(row.collision?.expected),
+    triggerExpected: inferOptionalExpectation(row, /button|trigger|zone/i),
+    collectibleExpected: inferOptionalExpectation(row, /love|letter|totem|collect/i),
+    walkableExpected: inferOptionalExpectation(row, /ground|path|bridge|ramp|platform|ledge/i),
+    colliderLabelGuess: colliderLabelGuess(row),
+    sourceFileHint: row.sourceFileHint || row.notes?.sourceFileHint || "",
+    annotation: compactAnnotationForEntity(row)
+  };
+}
+
+function annotatedNotes(rows, predicate) {
+  return annotatedEntitiesForScene(rows)
+    .filter((entry) => predicate(findDevEntityById(rows, entry.entityId)))
+    .map((entry) => ({
+      objectId: entry.entityId,
+      notes: entry.annotation?.notes || "",
+      flags: entry.annotation?.flags || {},
+      priority: entry.annotation?.priority || "normal"
+    }));
+}
+
+function buildAuthoringPacketPayload() {
+  const rows = collectEditableObjects({ force: true });
+  const selected = findDevEntityById(rows, _state.devEditor.selectedObjectId);
+  const registryEntry = registeredLevelForScene(_state.scene.id);
+  const colliders = typeof _getSceneColliderDebugEntries === "function" ? _getSceneColliderDebugEntries() : [];
+  return {
+    schema: AUTHORING_PACKET_SCHEMA,
+    capturedAt: new Date().toISOString(),
+    levelId: registryEntry?.catalogId || _state.scene.id,
+    sceneId: _state.scene.id,
+    displayName: registryEntry?.displayName || _state.scene.id,
+    sourceFiles: registryEntry?.sourceFiles || [
+      selected?.sourceFileHint || "",
+      "scripts/lib/levelCatalog.js"
+    ].filter(Boolean),
+    selectedEntityId: selected?.id || "",
+    objects: rows.map(authoringObjectRow),
+    terrainNotes: annotatedNotes(rows, (row) => /terrain|water|ground|path/i.test(row?.category || row?.id || "")),
+    mechanismNotes: annotatedNotes(rows, (row) => /button|ramp|platform|bridge|mechanism/i.test(row?.category || row?.id || "")),
+    collisionNotes: {
+      colliderCount: colliders.length,
+      colliderLabels: colliders.map((collider) => collider.label || collider.id || ""),
+      annotatedIssues: annotatedNotes(rows, (row) => {
+        const annotation = compactAnnotationForEntity(row);
+        return Boolean(annotation?.flags?.collisionIssue);
+      })
+    },
+    authorInstructions: "Apply these layout changes only. Do not invent new mechanics.",
+    browserMayWriteSourceFiles: false
+  };
+}
+
+function buildAuthoringMarkdownPacket() {
+  const packet = buildAuthoringPacketPayload();
+  const sourceFiles = packet.sourceFiles.map((file) => `- ${file}`).join("\n");
+  const selected = packet.selectedEntityId ? `\n\nSelected entity: \`${packet.selectedEntityId}\`` : "";
+  return `# Lumina3D Level Authoring Packet
+
+Level: ${packet.displayName} (\`${packet.levelId}\`)
+Scene: \`${packet.sceneId}\`${selected}
+
+## Author Instructions
+
+${packet.authorInstructions}
+
+Do not make the browser/editor write source files directly. Apply changes in source after review, then run the validation commands.
+
+## Likely Source Files
+
+${sourceFiles}
+
+## Validation Commands
+
+- npm run build
+- npm run tools:run-scene-smoke -- ${packet.sceneId} --pretty
+- npm run tools:validate-level-registry -- --pretty
+
+## Packet JSON
+
+\`\`\`json
+${JSON.stringify(packet, null, 2)}
+\`\`\`
+`;
+}
+
+function handleCopyAuthoringJson() {
+  writeClipboardOrConsole(
+    buildAuthoringPacketPayload(),
+    "Authoring JSON copied to clipboard.",
+    "Copy blocked. Authoring JSON logged in console."
+  );
+}
+
+function handleCopyAuthoringMarkdown() {
+  writeClipboardOrConsole(
+    buildAuthoringMarkdownPacket(),
+    "Codex Markdown packet copied to clipboard.",
+    "Copy blocked. Codex Markdown packet logged in console."
   );
 }
 
@@ -1158,6 +1301,8 @@ function installDevEditorTestHooks() {
   if (typeof window === "undefined" || !import.meta.env.DEV) return;
   window.__luminaDevEditor = {
     buildAiContextPayload,
+    buildAuthoringMarkdownPacket,
+    buildAuthoringPacketPayload,
     buildPatchDraftPayload,
     buildSelectionDeltaPayload,
     buildTransformDeltaPayload,
@@ -1210,6 +1355,7 @@ function handlePanelClick(event) {
     if (targetScene === SCENES.HOME) _sceneNav.home();
     if (targetScene === SCENES.LEVEL_ONE) _sceneNav.levelOne();
     if (targetScene === SCENES.LEVEL_TWO) _sceneNav.levelTwo();
+    if (targetScene === SCENES.LEVEL_THREE) _sceneNav.levelThree();
     return;
   }
   if (button.dataset.devStep) {

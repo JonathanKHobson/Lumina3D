@@ -31,7 +31,7 @@
             <div class="control-row"><span>Rotate Camera</span><strong>Q / E</strong></div>
             <div class="control-row"><span>Frog Cubeling Jump</span><strong>Space</strong></div>
             <div class="control-row muted"><span>Reset</span><strong>R Testing Only</strong></div>
-            <div class="control-row muted"><span>Debug Jump</span><strong>1 / 2 / 3 / 4</strong></div>
+            <div class="control-row muted"><span>Debug Jump</span><strong>1 / 2 / 3 / 4 / 5</strong></div>
           </div>
 
           <button id="devEditorToggle" type="button" aria-expanded="false" aria-controls="devEditorPanel" class="dev-editor-toggle">
@@ -39,12 +39,13 @@
           </button>
           <section id="devEditorPanel" class="dev-editor-panel" hidden>
             <div class="dev-editor-section">
-              <div class="dev-editor-title">Quick Scene Jump (or use 1/2/3/4)</div>
+              <div class="dev-editor-title">Quick Scene Jump (or use 1/2/3/4/5)</div>
               <div class="dev-editor-button-row">
                 <button type="button" data-dev-scene="tutorial">Tutorial</button>
                 <button type="button" data-dev-scene="home_intro">Home</button>
                 <button type="button" data-dev-scene="level_one">Level One</button>
                 <button type="button" data-dev-scene="level_two">Level Two</button>
+                <button type="button" data-dev-scene="level_three">Level Three</button>
               </div>
             </div>
 
@@ -141,12 +142,14 @@
 
             <div class="dev-editor-section dev-editor-export-section">
               <div class="dev-editor-title">Debug / Export</div>
-              <p class="dev-editor-help">Snapshot = scene list. Transform Delta = selected object before/after. AI Context = bug report bundle. Patch Draft = reviewed source-edit request.</p>
+              <p class="dev-editor-help">Snapshot = scene list. Transform Delta = selected object before/after. AI Context = bug report bundle. Authoring Packet = editor-to-Codex layout handoff.</p>
               <div class="dev-editor-button-row dev-editor-export-buttons">
                 <button type="button" id="devEditorColliderToggle" title="Show or hide actual runtime collider proxies">Colliders: Off</button>
                 <button type="button" id="devEditorExportLayout" title="Copy a JSON snapshot of editable runtime objects">Copy Layout Snapshot</button>
                 <button type="button" id="devEditorCopySelectionDelta" title="Copy selected object original/current transform and delta">Copy Transform Delta</button>
                 <button type="button" id="devEditorCopyAiContext" title="Copy selected object, nearby objects, colliders, camera, actors, and notes">Copy AI Context</button>
+                <button type="button" id="devEditorCopyAuthoringJson" title="Copy a richer Level Authoring Packet as JSON">Export Authoring JSON</button>
+                <button type="button" id="devEditorCopyAuthoringMarkdown" title="Copy a Codex-ready Markdown Level Authoring Packet">Export Codex Markdown Packet</button>
                 <button type="button" id="devEditorExportPatchDraft" title="Copy a source-patch draft for human/Codex review">Export Patch Draft</button>
                 <button type="button" id="devEditorOpenLevelEditor" title="Open the separate /editor/ route with this selected object handoff">Open in Level Editor</button>
               </div>
@@ -159,7 +162,7 @@
       <div id="continuePrompt" class="continue-prompt" hidden>Press any key or click to continue</div>
       <div id="titleCard" class="title-card" hidden>
         <span class="label">Lumina</span>
-        <h1 id="titleCardText">Level One</h1>
+        <h1 id="titleCardText"></h1>
       </div>
       <div id="doorNotePanel" class="door-note-panel" hidden>
         <span class="label">Door Note</span>

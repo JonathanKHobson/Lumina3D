@@ -1,14 +1,52 @@
 # Lumina3D Backlog
 
-## Current Priority - Before The Next Level Two Feature Slice
+## Current Priority - Level Three Phase 1.5
 
-1. P1 - Home house collision/doorway cleanup
+1. P1 - Level 3 Phase 2: Crocodile Totem opening puzzle
+   - Current state: Level Three exists as a 26x22 mostly-water lake/island shell with named zones, placeholder objects, registry/catalog/editor/smoke coverage, and no active Level Three mechanics.
+   - Expected behavior: build the opening Frog lane and Crocodile Totem raft unlock only. Crocodile control waits until Phase 3.
+
+2. P1 - Human review the cleaned Level Two Red Button B / Elevator B route
+   - Current state: automated fixture coverage verifies the full Love Letter completion route.
+   - Expected behavior: the route should read clearly enough in browser before more Level Two mechanics are added.
+
+3. P1 - Human review the Level Three lake/island shell and authoring packet loop
+   - Current state: Phase 1 shell screenshots and smoke tests pass; Phase 1.5 adds documentation and editor prep.
+   - Expected behavior: the shell should be useful for small Phase 2 layout/mechanic edits without implying central bridge, cargo, red-button, or final route behavior.
+
+4. P1 - Home house collision/doorway cleanup
    - Current issue: the player can partially enter/clip into the house doorway, then hit an invisible blocker deeper inside.
    - Expected behavior: the house reads as solid; the player can approach the visible door note but cannot visually step into the house unless an interior is intentionally implemented later.
 
-2. P2 - Level Two blue ramp visual polish, if screenshots still show awkward clipping
+5. P2 - Level Two blue ramp visual polish, if screenshots still show awkward clipping
    - Current state: the P0 stuck-state blocker is fixed and the ramp smoke verifies walk-up, blocked edge probing, recovery, and walk-down.
    - Remaining polish: if future visual review still sees actor/ramp clipping, tune ramp mesh placement or actor visual clearance without changing puzzle behavior.
+
+## Next Level Three Feature Slice
+
+Current gate: implement only the opening Crocodile Totem puzzle.
+
+### Phase 2 - Crocodile Totem Opening Puzzle
+
+- Frog crosses a short moving-lily-pad timing lane.
+- If Frog misses during this intended lane, Frog splash-resets to the Frog Lane Start Perch.
+- This splash-reset behavior is Level Three lane-specific and must not globally change Frog water behavior.
+- Frog reaches Totem Winch Island.
+- Frog repeatedly presses `level3TotemGreenButton`.
+- Each green press moves/winches `level3TotemRaft` one state closer to Start Island.
+- After enough presses, the raft docks.
+- Human collects the Crocodile Totem.
+- Crocodile Echo wakes.
+- Crocodile control remains out of scope until Phase 3.
+
+### Later Level Three Phases
+
+- Phase 3: Crocodile actor plus amphibious land/water movement.
+- Phase 4: `level3BridgeGreenButton` plus central rotating/cycling bridge.
+- Phase 5: Elephant Island plus Red Button A plus horizontal platform.
+- Phase 6: Crocodile cargo stones plus Red Button B plus elevator activation.
+- Phase 7: final Love Letter route.
+- Phase 8: polish, Crocodile patrol, communication, and QA.
 
 ## Next Level Two Feature Slice
 
@@ -44,7 +82,7 @@ Stop there. Do not add Red Button C, optional collectibles, new Cubelings, or ex
 - P3 - Make Frog low-ledge landing feel less visibly snapped while keeping reliable landing positions.
 - P2 - Investigate grass tile/player grounding mismatch where the main character appears slightly floating over some grass tiles.
 - P2 - Revisit Level Two Frog spawn so Frog is discoverable through exploration, not immediate, and remains separated from the blue-button ledge.
-- P3 - Future pacing polish: level title cards should ideally appear during character walk-in, not as a separate pre-walk delay.
+- Fixed 2026-05-20 - Level One and Level Two title cards now appear during arrival/walk-in instead of as a separate pre-walk delay.
 - P3 - Add a reusable Cubeling Totem pickup celebration effect for Frog, Elephant, and future Cubelings, such as sparkles, a short character animation, and a more rewarding "Cubeling Found!" beat.
 
 ## Status Notes
@@ -52,6 +90,7 @@ Stop there. Do not add Red Button C, optional collectibles, new Cubelings, or ex
 - Level One title card timing is currently resolved. Keep the later pacing polish idea, but no immediate action is needed.
 - Level Two Red Elevator A and Red Elevator B are implemented with continuous cycling and automated smoke coverage. The next step is human review of the cleaned full Level Two route.
 - Git/GitHub setup is complete; continue local-first development with intentional commits/pushes after stable slices.
+- Level Three is a lake/island shell only. It has named islands, water blockers, placeholder Love Letter, Crocodile Echo/Totem raft placeholders, distinct green button placeholders, registry/catalog/editor/smoke wiring, and no active Level Three mechanics.
 
 ## Shipped In This Pass
 
@@ -78,6 +117,7 @@ Stop there. Do not add Red Button C, optional collectibles, new Cubelings, or ex
 - Continue Level Two in phases using `docs/game-design-handbook/07_level_two_phased_implementation_plan.md`.
 - Current Level Two state: shell, Frog low-ledge / blue-ramp / Elephant Totem access, Elephant Echo/Totem visuals, Elephant unlock/spawn/possession, Red Elevator A, Red Button B / Red Elevator B, Level Two Love Letter collection, and Level Two completion are functionally present.
 - Next feature slice after human review: polish blockers only, then decide whether Cubeling Recall belongs in Level Two or a later level.
+- Next Level Three slice after Phase 1.5: Phase 2 Crocodile Totem opening puzzle only, not Crocodile control, central bridge cycling, cargo, red-button systems, or the final Love Letter route.
 - Replace temporary Level One Love Letter copy with final writing.
 - Add a real level select/start-flow router so replaying Level One can skip the Home Space intro.
 - Move testing-only reset into a menu when the pause/menu surface exists.
@@ -86,13 +126,4 @@ Stop there. Do not add Red Button C, optional collectibles, new Cubelings, or ex
 - Revisit Level One complexity later only if needed: fairer button exploration, possible lily pads, a future water collectible, and a replayability hook that requires returning with another Cubeling.
 - Explore future Duck Cubeling Echo/Totem ideas, including a Duck Echo near water and optional earlier or alternate Duck Totem placement, but do not implement until the multi-Cubeling collectible system is in scope.
 - Low-priority timing polish (future):
-  - Add a Level One title card so Level One transitions match Level Two style.
-  - Fix title card sequencing so title appears during character walk-in (not fully before movement).
-  - Desired sequence:
-    - Level starts
-    - Character begins walking in
-    - Title card appears during the walk-in
-    - Title card fades
-    - Character completes entrance
-    - Player control begins
-  - This should preserve cinematic intent while removing extra idle dead-time between title and gameplay.
+  - Keep title-during-arrival behavior covered by smoke tests as more scenes are added.

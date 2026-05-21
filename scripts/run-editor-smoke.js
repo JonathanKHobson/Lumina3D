@@ -69,18 +69,27 @@ async function run() {
 
   try {
     const initialState = await waitForEditorReady(page);
-    const expectedLevelIds = ["tutorial", "home_intro", "level_one", "level_two"];
+    const baselineLevelIds = ["tutorial", "home_intro", "level_one", "level_two"];
+    const expectedLevelIds = [...new Set([
+      ...baselineLevelIds,
+      ...(Array.isArray(initialState?.supportedLevelIds) ? initialState.supportedLevelIds : [])
+    ])];
     await page.evaluate(() => {
       Object.keys(window.localStorage)
         .filter((key) => (
           key.startsWith("lumina3d.editor.objectMeta.v1:") ||
           key.startsWith("lumina3d.editor.levelMeta.v1:") ||
+          key.startsWith("lumina3d.editor.draftPlacements.v1:") ||
           key === "lumina3d.editor.objectFilters.v1"
         ))
         .forEach((key) => window.localStorage.removeItem(key));
       const app = window.__luminaEditorApp;
       app.objectMeta = {};
       app.levelMeta = { note: "", noteTags: [], updatedAt: "" };
+      app.draftPlacements = [];
+      app.rebuildDraftPlacementRecords();
+      app.records = [...app.sourceRecords, ...app.draftRecords];
+      app.rebuildColliderOverlay();
       app.objectFilterState = { query: "", activeFilter: "all", hideBaseGround: true };
       app.updateUi();
     });
@@ -144,25 +153,63 @@ async function run() {
         rotationAwareProxy: Boolean(fixedProxy)
       };
     });
-    const levelOneBridgeParity = await page.evaluate(() => {
+    const levelOneCrossingParity = await page.evaluate(() => {
       const app = window.__luminaEditorApp;
       app.loadLevel("level_one");
-      const partial = app.records.find((record) => record.id === "level_one.partial_bridge");
-      const completeA = app.records.find((record) => record.id === "level_one.complete_bridge_a");
-      const completeB = app.records.find((record) => record.id === "level_one.complete_bridge_b");
-      const partialDeck = app.level?.group?.getObjectByName("partial-bridge-walkable-deck");
-      const completeDeck = app.level?.group?.getObjectByName("complete-bridge-walkable-deck");
+      const lilyPadRecord = app.records.find((record) => record.id === "level_one.lily_pad");
+      const leftMatRecord = app.records.find((record) => record.id === "level_one.blue_bloom_mat.left");
+      const rightMatRecord = app.records.find((record) => record.id === "level_one.blue_bloom_mat.right");
+      const latchRecord = app.records.find((record) => record.id === "level_one.blue_bloom_latch");
+      const oldBridgeRecords = app.records.filter((record) => record.id.includes("partial_bridge") || record.id.includes("complete_bridge"));
+      const pathRecords = app.records.filter((record) => record.id.startsWith("level_one.terrain.path."));
+      const representativePathRecord = app.records.find((record) => record.id === "level_one.terrain.path.0.4") ||
+        app.records.find((record) => record.id === "level_one.terrain.path.3.5") ||
+        pathRecords[0] ||
+        null;
+      const loveLetterRecord = app.records.find((record) => record.id === "level_one.love_letter_spellbook");
+      if (lilyPadRecord) app.selectObject(lilyPadRecord.id);
+      const lilyPadSelectedState = JSON.parse(window.render_editor_to_text());
+      if (representativePathRecord) app.selectObject(representativePathRecord.id);
+      const pathSelectedState = JSON.parse(window.render_editor_to_text());
+      if (loveLetterRecord) app.selectObject(loveLetterRecord.id);
+      const loveLetterSelectedState = JSON.parse(window.render_editor_to_text());
       return {
-        partialScaleY: partial?.object?.scale?.y || 0,
-        completeAScaleY: completeA?.object?.scale?.y || 0,
-        completeBScaleY: completeB?.object?.scale?.y || 0,
-        partialRuntimeParity: partial?.object?.userData?.editorRuntimeParity || "",
-        completeARuntimeParity: completeA?.object?.userData?.editorRuntimeParity || "",
-        completeBRuntimeParity: completeB?.object?.userData?.editorRuntimeParity || "",
-        partialDeckVisible: partialDeck?.visible === true,
-        completeDeckVisible: completeDeck?.visible === true,
-        partialDeckY: partialDeck?.position?.y || 0,
-        completeDeckY: completeDeck?.position?.y || 0
+        oldBridgeRecordCount: oldBridgeRecords.length,
+        lilyPadRecordId: lilyPadRecord?.id || "",
+        lilyPadAssetKey: lilyPadRecord?.assetKey || "",
+        lilyPadCategory: lilyPadRecord?.category || "",
+        lilyPadLocked: lilyPadRecord?.locked === true,
+        lilyPadReadOnly: lilyPadRecord?.readOnly === true,
+        lilyPadSelected: lilyPadSelectedState?.selectedId === lilyPadRecord?.id,
+        lilyPadTransformControlsAttached: lilyPadSelectedState?.transformControlsAttached === true,
+        lilyPadSourceExport: lilyPadRecord?.sourceRef?.exportName || "",
+        leftMatRecordId: leftMatRecord?.id || "",
+        leftMatSourceExport: leftMatRecord?.sourceRef?.exportName || "",
+        leftMatSourcePath: leftMatRecord?.sourceRef?.path || "",
+        rightMatRecordId: rightMatRecord?.id || "",
+        rightMatSourceExport: rightMatRecord?.sourceRef?.exportName || "",
+        rightMatSourcePath: rightMatRecord?.sourceRef?.path || "",
+        latchRecordId: latchRecord?.id || "",
+        latchSourceExport: latchRecord?.sourceRef?.exportName || "",
+        pathRecordCount: pathRecords.length,
+        pathRecordIds: pathRecords.map((record) => record.id),
+        representativePathId: representativePathRecord?.id || "",
+        representativePathAssetKey: representativePathRecord?.assetKey || "",
+        representativePathCategory: representativePathRecord?.category || "",
+        representativePathTileKind: representativePathRecord?.tileKind || "",
+        representativePathLocked: representativePathRecord?.locked === true,
+        representativePathReadOnly: representativePathRecord?.readOnly === true,
+        representativePathSelected: pathSelectedState?.selectedId === representativePathRecord?.id,
+        representativePathTransformControlsAttached: pathSelectedState?.transformControlsAttached === true,
+        loveLetterRecordId: loveLetterRecord?.id || "",
+        loveLetterAssetKey: loveLetterRecord?.assetKey || "",
+        loveLetterCategory: loveLetterRecord?.category || "",
+        loveLetterLocked: loveLetterRecord?.locked === true,
+        loveLetterReadOnly: loveLetterRecord?.readOnly === true,
+        loveLetterSelected: loveLetterSelectedState?.selectedId === loveLetterRecord?.id,
+        loveLetterTransformControlsAttached: loveLetterSelectedState?.transformControlsAttached === true,
+        loveLetterSourceFile: loveLetterRecord?.sourceRef?.file || "",
+        loveLetterSourceExport: loveLetterRecord?.sourceRef?.exportName || ""
       };
     });
     await page.evaluate(() => window.__luminaEditorApp.loadLevel("level_two"));
@@ -207,6 +254,45 @@ async function run() {
         revealState
       };
     });
+    const levelThreePrepCheck = await page.evaluate(() => {
+      const app = window.__luminaEditorApp;
+      app.loadLevel("level_three");
+      const requiredIds = [
+        "level_three.level3StartIsland",
+        "level_three.level3FrogLaneStart",
+        "level_three.level3TotemWinchIsland",
+        "level_three.level3CenterHub",
+        "level_three.level3TotemGreenButton",
+        "level_three.level3TotemRaft",
+        "level_three.level3CrocodileEcho",
+        "level_three.level3BridgeGreenButton",
+        "level_three.level3AnchorStone1",
+        "level_three.level3RedButtonB",
+        "level_three.level3LoveLetterCliff",
+        "level_three.love_letter.placeholder"
+      ];
+      const records = requiredIds.map((id) => app.records.find((record) => record.id === id) || null);
+      const movableRecords = records.filter(Boolean).filter((record) => record.id !== "level_three.love_letter.placeholder");
+      const selectedId = "level_three.level3TotemGreenButton";
+      app.selectObject(selectedId);
+      const selectedState = JSON.parse(window.render_editor_to_text());
+      app.updateObjectFilters({ query: "tag:level-three", activeFilter: "movable", hideBaseGround: true });
+      const movableFilterState = JSON.parse(window.render_editor_to_text());
+      app.updateObjectFilters({ query: "level3CrocodileEcho", activeFilter: "all", hideBaseGround: true });
+      const searchState = JSON.parse(window.render_editor_to_text());
+      app.updateObjectFilters({ query: "", activeFilter: "all", hideBaseGround: true });
+      return {
+        requiredIds,
+        foundIds: records.filter(Boolean).map((record) => record.id),
+        missingIds: requiredIds.filter((id, index) => !records[index]),
+        movableIds: movableRecords.filter((record) => record.movable === true && record.locked === false).map((record) => record.id),
+        sourceBackedIds: movableRecords.filter((record) => record.sourceBacked === true).map((record) => record.id),
+        selectedId,
+        selectedState,
+        movableFilterState,
+        searchState
+      };
+    });
     const assetCatalogCheck = await page.evaluate(() => {
       const app = window.__luminaEditorApp;
       app.loadLevel("level_two");
@@ -221,6 +307,15 @@ async function run() {
       app.updateAssetFilters({ query: "", activeFilter: "terrain" });
       const terrainState = JSON.parse(window.render_editor_to_text());
       const terrainAssets = app.currentAssetFilterData().visibleRecords.map((record) => record.assetKey);
+      app.updateAssetFilters({
+        query: "lily",
+        activeFilter: "all",
+        sourceScope: "procedural",
+        packName: "all",
+        folderPath: "all"
+      });
+      const proceduralState = JSON.parse(window.render_editor_to_text());
+      const proceduralAssets = app.currentAssetFilterData().visibleRecords.map((record) => record.assetKey);
       app.updateAssetFilters({ query: "", activeFilter: "all" });
       app.selectAsset("blueRamp");
       const selectedAssetWithObject = JSON.parse(window.render_editor_to_text());
@@ -235,6 +330,8 @@ async function run() {
         buttonAssets,
         terrainState,
         terrainAssets,
+        proceduralState,
+        proceduralAssets,
         selectedAssetWithObject,
         selectedAssetWithoutObject,
         stateExportWithAsset
@@ -338,6 +435,107 @@ async function run() {
         promptIncludesExternalInstruction: prompt.includes("External asset references are metadata-only")
       };
     });
+    const editorBuildIntentCheck = await page.evaluate(() => {
+      const app = window.__luminaEditorApp;
+      app.loadLevel("level_two");
+      app.setPanelTab("assets");
+      app.selectAsset("blueRamp");
+      const patchBeforeDraft = app.currentPatch();
+      app.placeSelectedAssetGhost();
+      const ghostRecord = app.selectedRecord();
+      if (ghostRecord) {
+        ghostRecord.object.position.x += 0.75;
+        app.updateSelectionHelpers();
+        app.updateUi();
+      }
+      const ghostState = JSON.parse(window.render_editor_to_text());
+      const ghostStateExport = app.currentStateExport();
+      const ghostDraft = ghostStateExport.draftPlacements?.find((draft) => draft.assetKey === "blueRamp") || null;
+      const externalAsset = app.assetCatalog.records.find((record) => (
+        record.sourceScope === "external" &&
+        String(record.assetKey || "").includes("bridge")
+      )) || app.assetCatalog.records.find((record) => record.sourceScope === "external") || null;
+      if (externalAsset) {
+        app.selectAsset(externalAsset.assetKey);
+        app.placeSelectedAssetGhost();
+      }
+      const externalStateExport = app.currentStateExport();
+      const externalDraft = externalAsset
+        ? externalStateExport.draftPlacements?.find((draft) => draft.assetKey === externalAsset.assetKey) || null
+        : null;
+      app.selectAsset("procedural.lilyPad.tile");
+      app.placeSelectedAssetGhost();
+      const proceduralState = JSON.parse(window.render_editor_to_text());
+      const proceduralStateExport = app.currentStateExport();
+      const proceduralDraft = proceduralStateExport.draftPlacements?.find((draft) => (
+        draft.assetKey === "procedural.lilyPad.tile"
+      )) || null;
+      const patchAfterDrafts = app.currentPatch();
+      const draftCountBeforeRemove = app.currentStateExport().draftPlacementCount;
+      app.selectAsset("buttonBaseBlue");
+      app.placeSelectedAssetGhost();
+      const removableDraft = app.selectedRecord();
+      app.updateSelectedNote("@spawn temporary draft removal check");
+      const removableDraftState = JSON.parse(window.render_editor_to_text());
+      const removeDraftButtonEnabled = document.querySelector("#removeDraft")?.disabled === false;
+      const removeDraftResult = app.removeSelectedDraftPlacement();
+      const afterRemoveExport = app.currentStateExport();
+      const afterRemoveState = JSON.parse(window.render_editor_to_text());
+      const removedDraftStillExists = app.records.some((record) => record.id === removableDraft?.id) ||
+        app.draftPlacements.some((draft) => draft.draftId === removableDraft?.id);
+      const removedDraftMetaExists = Boolean(app.objectMeta[removableDraft?.id]);
+
+      app.selectObject("level_two.red-elevator-b");
+      app.setPanelTab("assets");
+      app.selectAsset("blueRamp");
+      app.useSelectedAssetAsReplacement();
+      const replacementMeta = app.selectedMeta();
+      const replacementStateExport = app.currentStateExport();
+      const replacementObject = replacementStateExport.objects.find((objectExport) => (
+        objectExport.objectId === "level_two.red-elevator-b"
+      ));
+
+      app.selectObject("level_two.red-button-b");
+      app.setPanelTab("assets");
+      app.selectAsset("buttonBaseBlue");
+      app.toggleReplaceMark();
+      const markReplaceMeta = app.selectedMeta();
+      const markReplaceStateExport = app.currentStateExport();
+      const markReplaceObject = markReplaceStateExport.objects.find((objectExport) => (
+        objectExport.objectId === "level_two.red-button-b"
+      ));
+
+      app.outputMode = "prompt";
+      app.updateUi();
+      const prompt = app.dom.patchOutput.value;
+
+      return {
+        patchBeforeDraftCount: patchBeforeDraft.objects.length,
+        patchAfterDraftCount: patchAfterDrafts.objects.length,
+        ghostState,
+        ghostDraft,
+        externalAssetKey: externalAsset?.assetKey || "",
+        externalDraft,
+        proceduralState,
+        proceduralDraft,
+        removableDraftId: removableDraft?.id || "",
+        removableDraftState,
+        removeDraftButtonEnabled,
+        removeDraftResult,
+        draftCountBeforeRemove,
+        draftCountAfterRemove: afterRemoveExport.draftPlacementCount,
+        afterRemoveState,
+        removedDraftStillExists,
+        removedDraftMetaExists,
+        finalDraftCount: markReplaceStateExport.draftPlacementCount,
+        replacementMeta,
+        replacementObject,
+        markReplaceMeta,
+        markReplaceObject,
+        promptIncludesDrafts: prompt.includes("draftPlacements"),
+        promptIncludesReplacementCandidate: prompt.includes("replacementCandidate")
+      };
+    });
     const elevatedTileMoveCheck = await page.evaluate(() => {
       const app = window.__luminaEditorApp;
       const elevated = app.records.find((record) => record.tileKind === "elevated" && record.movable);
@@ -376,6 +574,27 @@ async function run() {
         baseLocked: base.locked,
         baseLockReason: base.lockReason,
         baseSelectedState
+      };
+    });
+    const colliderModeCheck = await page.evaluate(() => {
+      const app = window.__luminaEditorApp;
+      app.loadLevel("level_two");
+      app.selectObject("level_two.blue_ramp");
+      app.setColliderViewMode("walkable");
+      const walkableState = JSON.parse(window.render_editor_to_text());
+      app.setColliderViewMode("blocking");
+      const blockingState = JSON.parse(window.render_editor_to_text());
+      app.setColliderViewMode("triggers");
+      const triggerState = JSON.parse(window.render_editor_to_text());
+      app.setColliderViewMode("problems");
+      const problemsState = JSON.parse(window.render_editor_to_text());
+      const problemsExport = app.currentStateExport();
+      return {
+        walkableState,
+        blockingState,
+        triggerState,
+        problemsState,
+        diagnostics: problemsExport.colliderDiagnostics
       };
     });
     const terrainSelectionSetup = await page.evaluate(() => {
@@ -578,6 +797,42 @@ async function run() {
       promptTooltip: document.querySelector("#copyPrompt")?.dataset.tooltip || "",
       renderState: JSON.parse(window.render_editor_to_text())
     }));
+    const resizeModeCheck = await page.evaluate(() => {
+      const app = window.__luminaEditorApp;
+      app.loadLevel("level_two");
+      app.selectObject("level_two.blue_ramp");
+      document.querySelector("#scaleMode")?.click();
+      const record = app.selectedRecord();
+      const target = record?.transformTarget || record?.object;
+      if (!record || !target) return { found: false };
+      const originalScale = {
+        x: target.scale.x,
+        y: target.scale.y,
+        z: target.scale.z
+      };
+      target.scale.set(originalScale.x + 0.15, originalScale.y + 0.15, originalScale.z + 0.15);
+      target.updateMatrixWorld(true);
+      app.updateSelectionHelpers();
+      app.updateUi();
+      const patchObject = app.currentPatch().objects.find((objectPatch) => objectPatch.objectId === record.id);
+      const stateObject = app.currentStateExport().objects.find((objectExport) => objectExport.objectId === record.id);
+      const renderState = JSON.parse(window.render_editor_to_text());
+      const scaleButtonActive = document.querySelector("#scaleMode")?.classList.contains("is-active") === true;
+      target.scale.set(originalScale.x, originalScale.y, originalScale.z);
+      target.updateMatrixWorld(true);
+      app.updateSelectionHelpers();
+      app.setTransformMode("translate");
+      app.updateUi();
+      return {
+        found: true,
+        objectId: record.id,
+        transformMode: renderState.transformMode,
+        scaleButtonActive,
+        transformControlsAttached: renderState.transformControlsAttached,
+        patchScalePaths: patchObject?.changes?.map((change) => change.path).filter((path) => path.startsWith("transform.scale.")) || [],
+        stateScalePaths: stateObject?.changes?.map((change) => change.path).filter((path) => path.startsWith("transform.scale.")) || []
+      };
+    });
 
     const patchAfterMove = await page.evaluate(() => {
       const app = window.__luminaEditorApp;
@@ -675,7 +930,10 @@ async function run() {
         noteCount: stateExport.noteCount,
         levelNoteCount: stateExport.levelNoteCount,
         deleteCount: stateExport.deleteCount,
-        replaceCount: stateExport.replaceCount
+        replaceCount: stateExport.replaceCount,
+        draftPlacementCount: stateExport.draftPlacementCount,
+        replacementCandidateCount: stateExport.replacementCandidateCount,
+        problemWarningCount: stateExport.colliderDiagnostics?.problemWarningCount || 0
       };
     });
     await page.evaluate(() => window.__luminaEditorApp.loadLevel("level_one"));
@@ -698,7 +956,7 @@ async function run() {
       check("render_hook", Boolean(initialState), "window.render_editor_to_text() returned JSON"),
       check("mode", initialState?.mode === "level-editor", `mode=${initialState?.mode || "missing"}`),
       check("level_picker_options", expectedLevelIds.every((id) => levelOptions.includes(id)), `options=${levelOptions.join(",")}`),
-      check("supported_level_ids", expectedLevelIds.every((id) => initialState?.supportedLevelIds?.includes(id)), `supported=${initialState?.supportedLevelIds?.join(",") || "missing"}`),
+      check("supported_level_ids", baselineLevelIds.every((id) => initialState?.supportedLevelIds?.includes(id)), `supported=${initialState?.supportedLevelIds?.join(",") || "missing"}`),
       check("level_switching", levelSwitchResults.every((entry) => entry.loadedLevelId === entry.levelId && entry.objectCount > 0), formatJson(levelSwitchResults)),
       check(
         "tutorial_barrier_rotation_parity",
@@ -739,20 +997,62 @@ async function run() {
         formatJson(tutorialBarrierParity || {})
       ),
       check(
-        "level_one_bridge_runtime_visual_parity",
-        levelOneBridgeParity?.partialScaleY > 0 &&
-          levelOneBridgeParity?.partialScaleY < 0.3 &&
-          levelOneBridgeParity?.completeAScaleY > 0 &&
-          levelOneBridgeParity?.completeAScaleY < 0.3 &&
-          levelOneBridgeParity?.completeBScaleY > 0 &&
-          levelOneBridgeParity?.completeBScaleY < 0.3 &&
-          levelOneBridgeParity?.partialRuntimeParity === "level-one-flat-bridge-preview" &&
-          levelOneBridgeParity?.completeARuntimeParity === "level-one-flat-bridge-preview" &&
-          levelOneBridgeParity?.completeBRuntimeParity === "level-one-flat-bridge-preview" &&
-          levelOneBridgeParity?.partialDeckVisible === true &&
-          levelOneBridgeParity?.completeDeckVisible === true &&
-          Math.abs((levelOneBridgeParity?.partialDeckY || 0) - (levelOneBridgeParity?.completeDeckY || 0)) < 0.001,
-        formatJson(levelOneBridgeParity || {})
+        "level_one_old_bridge_records_removed",
+        levelOneCrossingParity?.oldBridgeRecordCount === 0,
+        formatJson(levelOneCrossingParity || {})
+      ),
+      check(
+        "level_one_blue_bloom_crossing_preview_records",
+        levelOneCrossingParity?.lilyPadRecordId === "level_one.lily_pad" &&
+          levelOneCrossingParity?.lilyPadAssetKey === "generatedLilyPad" &&
+          levelOneCrossingParity?.lilyPadCategory === "crossing_surface" &&
+          levelOneCrossingParity?.lilyPadSelected === true &&
+          levelOneCrossingParity?.lilyPadReadOnly === true &&
+          levelOneCrossingParity?.lilyPadLocked === true &&
+          levelOneCrossingParity?.lilyPadTransformControlsAttached === false &&
+          levelOneCrossingParity?.lilyPadSourceExport === "LEVEL_ONE_LILY_PAD",
+        formatJson(levelOneCrossingParity || {})
+      ),
+      check(
+        "level_one_blue_bloom_mat_latch_records",
+        levelOneCrossingParity?.leftMatRecordId === "level_one.blue_bloom_mat.left" &&
+          levelOneCrossingParity?.rightMatRecordId === "level_one.blue_bloom_mat.right" &&
+          levelOneCrossingParity?.leftMatSourceExport === "LEVEL_ONE_BLUE_BLOOM_MATS" &&
+          levelOneCrossingParity?.rightMatSourceExport === "LEVEL_ONE_BLUE_BLOOM_MATS" &&
+          levelOneCrossingParity?.leftMatSourcePath === "left.docked" &&
+          levelOneCrossingParity?.rightMatSourcePath === "right.docked" &&
+          levelOneCrossingParity?.latchRecordId === "level_one.blue_bloom_latch" &&
+          levelOneCrossingParity?.latchSourceExport === "LEVEL_ONE_BLUE_BLOOM_LATCH",
+        formatJson(levelOneCrossingParity || {})
+      ),
+      check(
+        "level_one_path_tiles_visible_selectable_locked",
+        levelOneCrossingParity?.pathRecordCount === 14 &&
+          (levelOneCrossingParity?.pathRecordIds || []).includes("level_one.terrain.path.0.4") &&
+          (levelOneCrossingParity?.pathRecordIds || []).includes("level_one.terrain.path.13.4") &&
+          (levelOneCrossingParity?.pathRecordIds || []).includes("level_one.terrain.path.3.5") &&
+          !(levelOneCrossingParity?.pathRecordIds || []).includes("level_one.terrain.path.5.4") &&
+          levelOneCrossingParity?.representativePathAssetKey === "pathTile" &&
+          levelOneCrossingParity?.representativePathCategory === "terrain_path" &&
+          levelOneCrossingParity?.representativePathTileKind === "base_path" &&
+          levelOneCrossingParity?.representativePathSelected === true &&
+          levelOneCrossingParity?.representativePathReadOnly === true &&
+          levelOneCrossingParity?.representativePathLocked === true &&
+          levelOneCrossingParity?.representativePathTransformControlsAttached === false,
+        formatJson(levelOneCrossingParity || {})
+      ),
+      check(
+        "level_one_love_letter_visible_selectable_locked",
+        levelOneCrossingParity?.loveLetterRecordId === "level_one.love_letter_spellbook" &&
+          levelOneCrossingParity?.loveLetterAssetKey === "spellbookClosed" &&
+          levelOneCrossingParity?.loveLetterCategory === "love_letter" &&
+          levelOneCrossingParity?.loveLetterSelected === true &&
+          levelOneCrossingParity?.loveLetterReadOnly === true &&
+          levelOneCrossingParity?.loveLetterLocked === true &&
+          levelOneCrossingParity?.loveLetterTransformControlsAttached === false &&
+          levelOneCrossingParity?.loveLetterSourceFile === "src/levels/levelOne.js" &&
+          levelOneCrossingParity?.loveLetterSourceExport === "LEVEL_ONE_LOVE_LETTER_POINT",
+        formatJson(levelOneCrossingParity || {})
       ),
       check("object_count", initialState?.objectCount > 0, `objectCount=${initialState?.objectCount ?? "missing"}`),
       check("terrain_selectable_count", initialState?.terrainSelectableCount > 0, `terrainSelectableCount=${initialState?.terrainSelectableCount || 0}`),
@@ -765,6 +1065,45 @@ async function run() {
       check("object_filter_elevated", objectFilterCheck?.elevatedFilterState?.visibleObjectCount > 0 && objectFilterCheck?.elevatedFilterState?.objectFilter?.activeFilter === "elevated", formatJson(objectFilterCheck?.elevatedFilterState?.objectFilter || {})),
       check("object_filter_selected_hidden", objectFilterCheck?.selectedHiddenState?.selectedHiddenByFilters === true, `selectedHidden=${objectFilterCheck?.selectedHiddenState?.selectedHiddenByFilters || false}`),
       check("object_filter_reveal_selected", objectFilterCheck?.revealState?.selectedHiddenByFilters === false && objectFilterCheck?.revealState?.objectFilter?.hideBaseGround === false, formatJson(objectFilterCheck?.revealState?.objectFilter || {})),
+      check(
+        "level_three_editor_placeholders_present",
+        levelThreePrepCheck?.missingIds?.length === 0,
+        formatJson({
+          missingIds: levelThreePrepCheck?.missingIds,
+          foundIds: levelThreePrepCheck?.foundIds
+        })
+      ),
+      check(
+        "level_three_editor_placeholders_movable",
+        levelThreePrepCheck?.movableIds?.includes("level_three.level3StartIsland") &&
+          levelThreePrepCheck?.movableIds?.includes("level_three.level3TotemGreenButton") &&
+          levelThreePrepCheck?.movableIds?.includes("level_three.level3BridgeGreenButton") &&
+          levelThreePrepCheck?.movableIds?.includes("level_three.level3LoveLetterCliff") &&
+          levelThreePrepCheck?.sourceBackedIds?.includes("level_three.level3CrocodileEcho"),
+        formatJson({
+          movableIds: levelThreePrepCheck?.movableIds,
+          sourceBackedIds: levelThreePrepCheck?.sourceBackedIds
+        })
+      ),
+      check(
+        "level_three_editor_placeholder_selection",
+        levelThreePrepCheck?.selectedState?.selectedId === "level_three.level3TotemGreenButton" &&
+          levelThreePrepCheck?.selectedState?.transformControlsAttached === true,
+        formatJson({
+          selectedId: levelThreePrepCheck?.selectedState?.selectedId,
+          transformControlsAttached: levelThreePrepCheck?.selectedState?.transformControlsAttached
+        })
+      ),
+      check(
+        "level_three_editor_filter_finds_placeholders",
+        levelThreePrepCheck?.movableFilterState?.visibleObjectCount > 0 &&
+          levelThreePrepCheck?.searchState?.visibleObjectCount === 1,
+        formatJson({
+          movableFilter: levelThreePrepCheck?.movableFilterState?.objectFilter,
+          searchFilter: levelThreePrepCheck?.searchState?.objectFilter,
+          searchVisibleCount: levelThreePrepCheck?.searchState?.visibleObjectCount
+        })
+      ),
       check(
         "asset_tab_search_ramp",
         assetCatalogCheck?.rampState?.activePanelTab === "assets" &&
@@ -795,6 +1134,17 @@ async function run() {
         })
       ),
       check(
+        "procedural_asset_source_filter",
+        assetCatalogCheck?.proceduralState?.assetSourceScope === "procedural" &&
+          assetCatalogCheck?.proceduralState?.visibleProceduralAssetCount > 0 &&
+          assetCatalogCheck?.proceduralAssets?.includes("procedural.lilyPad.tile"),
+        formatJson({
+          assetSourceScope: assetCatalogCheck?.proceduralState?.assetSourceScope,
+          visibleProceduralAssetCount: assetCatalogCheck?.proceduralState?.visibleProceduralAssetCount,
+          proceduralAssets: assetCatalogCheck?.proceduralAssets
+        })
+      ),
+      check(
         "asset_selection_preserves_object",
         assetCatalogCheck?.selectedAssetWithObject?.selectedId === "level_two.blue_ramp" &&
           assetCatalogCheck?.selectedAssetWithObject?.selectedAssetKey === "blueRamp" &&
@@ -812,6 +1162,7 @@ async function run() {
         "state_export_selected_asset_context",
         assetCatalogCheck?.stateExportWithAsset?.assetCatalog?.selectedAsset?.assetKey === "blueRamp" &&
           assetCatalogCheck?.stateExportWithAsset?.assetCatalog?.placementEnabled === false &&
+          assetCatalogCheck?.stateExportWithAsset?.assetCatalog?.draftPlacementEnabled === true &&
           !Array.isArray(assetCatalogCheck?.stateExportWithAsset?.assetCatalog?.records),
         formatJson(assetCatalogCheck?.stateExportWithAsset?.assetCatalog || {})
       ),
@@ -866,9 +1217,10 @@ async function run() {
       check(
         "external_asset_reference_insert",
         externalAssetReferenceInsertCheck?.externalToken?.startsWith("#external.") &&
-          externalAssetReferenceInsertCheck?.reference?.type === "asset" &&
+        externalAssetReferenceInsertCheck?.reference?.type === "asset" &&
           externalAssetReferenceInsertCheck?.reference?.sourceScope === "external" &&
           externalAssetReferenceInsertCheck?.reference?.placementEnabled === false &&
+          externalAssetReferenceInsertCheck?.reference?.draftPlacementEnabled === true &&
           externalAssetReferenceInsertCheck?.reference?.referenceOnly === true,
         formatJson(externalAssetReferenceInsertCheck || {})
       ),
@@ -878,6 +1230,121 @@ async function run() {
           externalAssetReferenceInsertCheck?.renderState?.placementEnabled === false &&
           externalAssetReferenceInsertCheck?.renderState?.selectedExternalAssetToken?.startsWith("#external."),
         formatJson(externalAssetReferenceInsertCheck?.renderState || {})
+      ),
+      check(
+        "draft_ghost_export",
+        editorBuildIntentCheck?.ghostState?.selectedId?.startsWith("level_two.draft.") &&
+          editorBuildIntentCheck?.ghostState?.transformControlsAttached === true &&
+          editorBuildIntentCheck?.ghostDraft?.assetKey === "blueRamp" &&
+          editorBuildIntentCheck?.ghostDraft?.sourceScope === "in-project" &&
+          editorBuildIntentCheck?.ghostDraft?.previewType === "ghost-model" &&
+          editorBuildIntentCheck?.ghostDraft?.manualReview === false,
+        formatJson({
+          selectedId: editorBuildIntentCheck?.ghostState?.selectedId,
+          draft: editorBuildIntentCheck?.ghostDraft
+        })
+      ),
+      check(
+        "draft_external_marker_export",
+        !editorBuildIntentCheck?.externalAssetKey ||
+          (
+            editorBuildIntentCheck?.externalDraft?.assetKey === editorBuildIntentCheck?.externalAssetKey &&
+            editorBuildIntentCheck?.externalDraft?.sourceScope === "external" &&
+            editorBuildIntentCheck?.externalDraft?.previewType === "marker" &&
+            editorBuildIntentCheck?.externalDraft?.referenceOnly === true &&
+            editorBuildIntentCheck?.externalDraft?.manualReview === true
+          ),
+        formatJson({
+          externalAssetKey: editorBuildIntentCheck?.externalAssetKey,
+          externalDraft: editorBuildIntentCheck?.externalDraft
+        })
+      ),
+      check(
+        "draft_procedural_lily_pad_export",
+        editorBuildIntentCheck?.proceduralState?.selectedId?.includes("procedural.lilypad.tile") &&
+          editorBuildIntentCheck?.proceduralState?.transformControlsAttached === true &&
+          editorBuildIntentCheck?.proceduralDraft?.assetKey === "procedural.lilyPad.tile" &&
+          editorBuildIntentCheck?.proceduralDraft?.sourceScope === "procedural" &&
+          editorBuildIntentCheck?.proceduralDraft?.previewType === "procedural-model" &&
+          editorBuildIntentCheck?.proceduralDraft?.referenceOnly === false &&
+          editorBuildIntentCheck?.proceduralDraft?.manualReview === true,
+        formatJson({
+          selectedId: editorBuildIntentCheck?.proceduralState?.selectedId,
+          draft: editorBuildIntentCheck?.proceduralDraft
+        })
+      ),
+      check(
+        "draft_patch_boundary",
+        editorBuildIntentCheck?.patchBeforeDraftCount === 0 &&
+          editorBuildIntentCheck?.patchAfterDraftCount === 0 &&
+          editorBuildIntentCheck?.finalDraftCount >= 1,
+        formatJson({
+          patchBeforeDraftCount: editorBuildIntentCheck?.patchBeforeDraftCount,
+          patchAfterDraftCount: editorBuildIntentCheck?.patchAfterDraftCount,
+          finalDraftCount: editorBuildIntentCheck?.finalDraftCount
+        })
+      ),
+      check(
+        "draft_remove_button_available",
+        editorBuildIntentCheck?.removableDraftState?.selectedDraftPlacement === true &&
+          editorBuildIntentCheck?.removableDraftState?.canRemoveSelectedDraft === true &&
+          editorBuildIntentCheck?.removeDraftButtonEnabled === true,
+        formatJson({
+          removableDraftId: editorBuildIntentCheck?.removableDraftId,
+          removableDraftState: editorBuildIntentCheck?.removableDraftState,
+          removeDraftButtonEnabled: editorBuildIntentCheck?.removeDraftButtonEnabled
+        })
+      ),
+      check(
+        "draft_remove_deletes_marker",
+        editorBuildIntentCheck?.removeDraftResult === true &&
+          editorBuildIntentCheck?.draftCountAfterRemove === editorBuildIntentCheck?.draftCountBeforeRemove &&
+          editorBuildIntentCheck?.afterRemoveState?.selectionMode === "level" &&
+          !editorBuildIntentCheck?.afterRemoveState?.selectedId &&
+          editorBuildIntentCheck?.removedDraftStillExists === false &&
+          editorBuildIntentCheck?.removedDraftMetaExists === false,
+        formatJson({
+          removableDraftId: editorBuildIntentCheck?.removableDraftId,
+          draftCountBeforeRemove: editorBuildIntentCheck?.draftCountBeforeRemove,
+          draftCountAfterRemove: editorBuildIntentCheck?.draftCountAfterRemove,
+          afterRemoveState: editorBuildIntentCheck?.afterRemoveState,
+          removedDraftStillExists: editorBuildIntentCheck?.removedDraftStillExists,
+          removedDraftMetaExists: editorBuildIntentCheck?.removedDraftMetaExists
+        })
+      ),
+      check(
+        "replacement_candidate_use_asset",
+        editorBuildIntentCheck?.replacementMeta?.markedForReplace === true &&
+          editorBuildIntentCheck?.replacementMeta?.markedForDelete === false &&
+          editorBuildIntentCheck?.replacementMeta?.note?.includes("@replace") &&
+          editorBuildIntentCheck?.replacementMeta?.note?.includes("#blueRamp") &&
+          editorBuildIntentCheck?.replacementObject?.replacementCandidate?.assetKey === "blueRamp" &&
+          editorBuildIntentCheck?.replacementObject?.replacementCandidate?.preserveRole === true,
+        formatJson({
+          meta: editorBuildIntentCheck?.replacementMeta,
+          object: editorBuildIntentCheck?.replacementObject
+        })
+      ),
+      check(
+        "replace_mark_autofills_selected_asset",
+        editorBuildIntentCheck?.markReplaceMeta?.markedForReplace === true &&
+          editorBuildIntentCheck?.markReplaceMeta?.markedForDelete === false &&
+          editorBuildIntentCheck?.markReplaceMeta?.note?.includes("@replace") &&
+          editorBuildIntentCheck?.markReplaceMeta?.note?.includes("#buttonBaseBlue") &&
+          editorBuildIntentCheck?.markReplaceObject?.replacementCandidate?.assetKey === "buttonBaseBlue",
+        formatJson({
+          meta: editorBuildIntentCheck?.markReplaceMeta,
+          object: editorBuildIntentCheck?.markReplaceObject
+        })
+      ),
+      check(
+        "copy_prompt_build_intent_context",
+        editorBuildIntentCheck?.promptIncludesDrafts === true &&
+          editorBuildIntentCheck?.promptIncludesReplacementCandidate === true,
+        formatJson({
+          promptIncludesDrafts: editorBuildIntentCheck?.promptIncludesDrafts,
+          promptIncludesReplacementCandidate: editorBuildIntentCheck?.promptIncludesReplacementCandidate
+        })
       ),
       check(
         "elevated_tile_movable",
@@ -960,6 +1427,39 @@ async function run() {
           !String(colliderMoveCheck?.levelOneState?.selectedColliderLabels?.join(",") || "").includes("Blue Ramp"),
         `levelOne=${formatJson(colliderMoveCheck?.levelOneState || {})}`
       ),
+      check(
+        "collider_view_walkable",
+        colliderModeCheck?.walkableState?.colliderViewMode === "walkable" &&
+          colliderModeCheck?.walkableState?.collidersVisible === true &&
+          colliderModeCheck?.walkableState?.visibleColliderProxyCount > 0,
+        formatJson(colliderModeCheck?.walkableState || {})
+      ),
+      check(
+        "collider_view_triggers",
+        colliderModeCheck?.triggerState?.colliderViewMode === "triggers" &&
+          colliderModeCheck?.triggerState?.collidersVisible === true &&
+          colliderModeCheck?.triggerState?.visibleColliderProxyCount > 0,
+        formatJson(colliderModeCheck?.triggerState || {})
+      ),
+      check(
+        "collider_view_problems_diagnostics",
+        colliderModeCheck?.problemsState?.colliderViewMode === "problems" &&
+          colliderModeCheck?.problemsState?.collidersVisible === true &&
+          Number.isFinite(colliderModeCheck?.problemsState?.problemWarningCount) &&
+          colliderModeCheck?.diagnostics?.schema === "lumina3d.editor.colliderDiagnostics.v1",
+        formatJson({
+          problemsState: colliderModeCheck?.problemsState,
+          diagnostics: colliderModeCheck?.diagnostics
+        })
+      ),
+      check(
+        "collider_actor_walkability_matrix",
+        colliderModeCheck?.diagnostics?.actorWalkability?.length === 3 &&
+          colliderModeCheck?.diagnostics?.actorWalkability?.some((entry) => entry.actor === "human") &&
+          colliderModeCheck?.diagnostics?.actorWalkability?.some((entry) => entry.actor === "frog") &&
+          colliderModeCheck?.diagnostics?.actorWalkability?.some((entry) => entry.actor === "elephant"),
+        formatJson(colliderModeCheck?.diagnostics?.actorWalkability || [])
+      ),
       check("note_typeahead_suggests_move", typeaheadBeforeInsert.open && typeaheadBeforeInsert.suggestions.includes("@move"), `suggestions=${typeaheadBeforeInsert.suggestions.join(",")}`),
       check("note_typeahead_inserts_move", typeaheadAfterInsert.note.includes("@move") && typeaheadAfterInsert.noteTags.includes("@move"), `note=${typeaheadAfterInsert.note}`),
       check(
@@ -1021,6 +1521,22 @@ async function run() {
       check("state_export_selected_colliders", stateExportAfterEdits?.stateExport?.selectedColliderProxies?.length > 0, `selectedProxies=${stateExportAfterEdits?.stateExport?.selectedColliderProxies?.length || 0}`),
       check("state_export_selected_context", Boolean(stateExportAfterEdits?.stateExport?.selectedObjectContext?.objectId), `selected=${stateExportAfterEdits?.stateExport?.selectedObjectContext?.objectId || "missing"}`),
       check("state_export_filter_summary", Number.isFinite(stateExportAfterEdits?.stateExport?.objectFilter?.visibleObjectCount), formatJson(stateExportAfterEdits?.stateExport?.objectFilter || {})),
+      check(
+        "resize_mode_available",
+        resizeModeCheck?.found &&
+          resizeModeCheck?.transformMode === "scale" &&
+          resizeModeCheck?.scaleButtonActive === true &&
+          resizeModeCheck?.transformControlsAttached === true,
+        formatJson(resizeModeCheck || {})
+      ),
+      check(
+        "resize_scale_export",
+        resizeModeCheck?.patchScalePaths?.includes("transform.scale.x") &&
+          resizeModeCheck?.patchScalePaths?.includes("transform.scale.y") &&
+          resizeModeCheck?.patchScalePaths?.includes("transform.scale.z") &&
+          resizeModeCheck?.stateScalePaths?.includes("transform.scale.x"),
+        formatJson(resizeModeCheck || {})
+      ),
       check("state_export_delete", stateDelete?.markedForDelete === true, `markedForDelete=${stateDelete?.markedForDelete || false}`),
       check("state_export_replace", stateReplace?.markedForReplace === true, `markedForReplace=${stateReplace?.markedForReplace || false}`),
       check(
@@ -1044,6 +1560,8 @@ async function run() {
           resetLevelCheck.affectedItemCount === 0 &&
           resetLevelCheck.metaCount === 0 &&
           resetLevelCheck.dirtyCount === 0 &&
+          resetLevelCheck.draftPlacementCount === 0 &&
+          resetLevelCheck.replacementCandidateCount === 0 &&
           resetLevelCheck.levelNoteCount === 0 &&
           !resetLevelCheck.levelNote,
         formatJson(resetLevelCheck)
@@ -1077,9 +1595,13 @@ async function run() {
         totalNoteCount: stateExportAfterEdits?.stateExport?.totalNoteCount || 0,
         deleteCount: stateExportAfterEdits?.stateExport?.deleteCount || 0,
         replaceCount: stateExportAfterEdits?.stateExport?.replaceCount || 0,
+        replacementCandidateCount: stateExportAfterEdits?.stateExport?.replacementCandidateCount || 0,
+        draftPlacementCount: stateExportAfterEdits?.stateExport?.draftPlacementCount || 0,
+        problemWarningCount: stateExportAfterEdits?.stateExport?.colliderDiagnostics?.problemWarningCount || 0,
         intentGlossaryTags: Object.keys(stateExportAfterEdits?.stateExport?.intentGlossary || {}),
         selectedAssetKey: assetCatalogCheck?.stateExportWithAsset?.assetCatalog?.selectedAsset?.assetKey || null
       },
+      resize: resizeModeCheck,
       playInGame: {
         sceneId: gameState?.scene?.id || null,
         phase: gameState?.scene?.phase || null

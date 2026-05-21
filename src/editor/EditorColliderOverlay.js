@@ -1,7 +1,12 @@
 import * as THREE from "three";
+import {
+  colliderRoleColor,
+  colliderSemanticRole,
+  normalizeColliderViewMode,
+  proxyMatchesColliderViewMode
+} from "./EditorColliderDiagnostics.js";
 
 const COLORS = {
-  normal: 0x44d9ff,
   selected: 0xf7cf6b,
   manual: 0x8aa0b7,
   inactive: 0x6f7b73
@@ -54,24 +59,24 @@ function disposeObject(object) {
 }
 
 function styleForProxy(proxy, selected) {
-  if (selected) return { color: COLORS.selected, meshOpacity: 0.16, lineOpacity: 0.96 };
-  if (proxy.active === false) return { color: COLORS.inactive, meshOpacity: 0.05, lineOpacity: 0.32 };
+  if (selected) return { color: COLORS.selected, meshOpacity: 0.2, lineOpacity: 1 };
+  if (proxy.active === false) return { color: COLORS.inactive, meshOpacity: 0.06, lineOpacity: 0.38 };
   if (proxy.generated || proxy.source === "manual-review") {
-    return { color: COLORS.manual, meshOpacity: 0.07, lineOpacity: 0.52 };
+    return { color: colliderRoleColor(colliderSemanticRole(proxy)) || COLORS.manual, meshOpacity: 0.1, lineOpacity: 0.68 };
   }
-  return { color: COLORS.normal, meshOpacity: 0.08, lineOpacity: 0.72 };
+  return { color: colliderRoleColor(colliderSemanticRole(proxy)), meshOpacity: 0.12, lineOpacity: 0.84 };
 }
 
 function createHelper(proxy) {
   const geometry = new THREE.BoxGeometry(1, 1, 1);
   const meshMaterial = new THREE.MeshBasicMaterial({
-    color: COLORS.normal,
+    color: colliderRoleColor(colliderSemanticRole(proxy)),
     transparent: true,
     opacity: 0.08,
     depthWrite: false
   });
   const lineMaterial = new THREE.LineBasicMaterial({
-    color: COLORS.normal,
+    color: colliderRoleColor(colliderSemanticRole(proxy)),
     transparent: true,
     opacity: 0.72
   });
@@ -96,6 +101,7 @@ export class EditorColliderOverlay {
     this.recordsById = new Map();
     this.proxies = [];
     this.entries = [];
+    this.viewMode = "off";
     this.tempBox = new THREE.Box3();
     this.tempCenter = new THREE.Vector3();
     this.tempSize = new THREE.Vector3();
@@ -140,7 +146,16 @@ export class EditorColliderOverlay {
 
   setVisible(visible) {
     this.visible = Boolean(visible);
+    if (!this.visible) this.viewMode = "off";
+    if (this.visible && this.viewMode === "off") this.viewMode = "all";
     this.group.visible = this.visible;
+  }
+
+  setViewMode(mode = "off") {
+    this.viewMode = normalizeColliderViewMode(mode);
+    this.visible = this.viewMode !== "off";
+    this.group.visible = this.visible;
+    this.sync();
   }
 
   sync(selectedId = "") {
@@ -155,7 +170,7 @@ export class EditorColliderOverlay {
 
       const selected = entry.proxy.ownerId && entry.proxy.ownerId === selectedId;
       const style = styleForProxy(entry.proxy, selected);
-      entry.root.visible = true;
+      entry.root.visible = proxyMatchesColliderViewMode(entry.proxy, this.viewMode);
       entry.root.position.copy(calculated.center);
       entry.root.scale.set(calculated.size.x, calculated.size.y, calculated.size.z);
       entry.root.rotation.set(0, calculated.rotationY || 0, 0);
@@ -209,6 +224,7 @@ export class EditorColliderOverlay {
       label: proxy.label,
       ownerId: proxy.ownerId || null,
       category: proxy.category,
+      semanticRole: colliderSemanticRole(proxy),
       source: proxy.source,
       sourceRef: proxy.sourceRef || owner?.sourceRef || null,
       center: vectorSummary(calculated.center),
@@ -238,9 +254,14 @@ export class EditorColliderOverlay {
 
   summary(selectedId = "") {
     const selectedProxies = selectedId ? this.proxySummariesForObject(selectedId) : [];
+    const visibleProxyCount = this.entries.filter((entry) => (
+      entry.root.visible && proxyMatchesColliderViewMode(entry.proxy, this.viewMode)
+    )).length;
     return {
       visible: this.visible,
+      viewMode: this.viewMode,
       proxyCount: this.entries.length,
+      visibleProxyCount,
       selectedProxyCount: selectedProxies.length,
       selectedColliderLabels: selectedProxies.map((proxy) => proxy.label)
     };

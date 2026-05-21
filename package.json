@@ -13,6 +13,7 @@
     "mcp:smoke": "node scripts/smoke-mcp.js",
     "tools:list-levels": "node scripts/list-levels.js",
     "tools:get-level-manifest": "node scripts/get-level-manifest.js",
+    "tools:validate-level-registry": "node scripts/validate-level-registry.js",
     "tools:list-level-objects": "node scripts/list-level-objects.js",
     "tools:build-external-asset-index": "node scripts/build-external-asset-index.js",
     "tools:explain-editor-patch": "node scripts/explain-editor-patch.js",
@@ -21,7 +22,8 @@
     "tools:run-editor-smoke": "node scripts/run-editor-smoke.js",
     "tools:run-fixture": "node scripts/run-fixture.js",
     "tools:validate-missing-colliders": "node scripts/validate-missing-colliders.js",
-    "tools:validate-float-colliders": "node scripts/validate-float-colliders.js"
+    "tools:validate-float-colliders": "node scripts/validate-float-colliders.js",
+    "tools:validate-editor-sync": "node scripts/validate-editor-sync.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

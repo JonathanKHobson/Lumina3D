@@ -424,13 +424,13 @@ function buildLevelTwoMechanismColliderProxies(records) {
     category: "interaction_zone",
     center: {
       x: LEVEL_TWO_POINTS.elephantEcho.x,
-      y: LEVEL_TWO_ELEPHANT_ECHO_TOP_Y + 0.08,
+      y: LEVEL_TWO_POINTS.elephantEcho.y ?? LEVEL_TWO_ELEPHANT_ECHO_TOP_Y,
       z: LEVEL_TWO_POINTS.elephantEcho.z
     },
     halfExtents: { x: 1.06, y: 0.08, z: 1.06 },
     sourceRef: sourceRef("LEVEL_TWO_POINTS", "elephantEcho"),
     metadata: {
-      terraceY: LEVEL_TWO_ELEPHANT_ECHO_TOP_Y,
+      terraceY: LEVEL_TWO_POINTS.elephantEcho.y ?? LEVEL_TWO_ELEPHANT_ECHO_TOP_Y,
       visualOpacity: LEVEL_TWO_ELEPHANT_ECHO_OPACITY
     }
   }));
@@ -605,7 +605,7 @@ export function buildLevelTwoEditorScene({ cloneAsset, placeAsset }) {
   const elephantEcho = cloneAsset("elephant");
   elephantEcho.position.set(
     LEVEL_TWO_POINTS.elephantEcho.x,
-    LEVEL_TWO_ELEPHANT_ECHO_TOP_Y + 0.08,
+    LEVEL_TWO_POINTS.elephantEcho.y ?? LEVEL_TWO_ELEPHANT_ECHO_TOP_Y,
     LEVEL_TWO_POINTS.elephantEcho.z
   );
   applyMaterialPatch(elephantEcho, {

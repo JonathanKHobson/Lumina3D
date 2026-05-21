@@ -247,7 +247,7 @@ export function buildLevelTwoScene({
   const elephantEcho = cloneAsset("elephant");
   elephantEcho.position.set(
     LEVEL_TWO_POINTS.elephantEcho.x,
-    LEVEL_TWO_ELEPHANT_ECHO_TOP_Y + 0.08,
+    LEVEL_TWO_POINTS.elephantEcho.y ?? LEVEL_TWO_ELEPHANT_ECHO_TOP_Y,
     LEVEL_TWO_POINTS.elephantEcho.z
   );
   elephantEcho.userData.levelTwoAsset = "elephant-echo";
@@ -267,7 +267,7 @@ export function buildLevelTwoScene({
   elephantEchoRing.rotation.x = -Math.PI / 2;
   elephantEchoRing.position.set(
     LEVEL_TWO_POINTS.elephantEcho.x,
-    LEVEL_TWO_ELEPHANT_ECHO_TOP_Y + 0.045,
+    (LEVEL_TWO_POINTS.elephantEcho.y ?? LEVEL_TWO_ELEPHANT_ECHO_TOP_Y) + 0.045,
     LEVEL_TWO_POINTS.elephantEcho.z
   );
   elephantEchoRing.userData.levelTwoAsset = "elephant-echo-ring";

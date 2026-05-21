@@ -44,6 +44,7 @@ export function diffTransform(original, current, epsilon = TRANSFORM_EPSILON) {
 
 export function dirtyRecords(records) {
   return records
+    .filter((record) => !record.draftPlacement)
     .map((record) => ({
       ...record,
       changes: diffTransform(record.originalTransform, snapshotTransform(transformTargetForRecord(record)))

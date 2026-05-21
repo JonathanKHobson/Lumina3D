@@ -61,14 +61,36 @@ Use `progress.md` for session history, `backlog.md` for deferred work, and `docs
 
 ## 2026-05-18 - Scene Title Timing
 
-- Status: fixed for Home -> Level One.
+- Status: fixed for Home -> Level One; superseded by the 2026-05-20 title-card readiness fix for Level One/Level Two timing.
 - Scene: Home, Level One.
 - Symptom: Level One title appeared while still effectively leaving the Home scene.
 - Root cause: title card phase lived in Home instead of Level One.
 - Fix: Home now fades/leaves first, then Level One starts in its own `title` phase.
 - Prevention rule: a title card belongs to the scene it introduces; scene phases should make this explicit.
 - Verification: `test-output/home-level-one/smoke.mjs` checks Home fade before `scene.id === "level_one"` title.
-- Follow-up: Level Two should start with its own `title` phase from the beginning.
+- Follow-up: keep title-card timing covered in scene smokes when new scenes are added.
+
+## 2026-05-20 - Title Card Fallback Flashed Wrong Scene Name
+
+- Status: fixed in the pre-Level-3 readiness checkpoint.
+- Scene: Level Two, Level One, Level Three shell.
+- Symptom: Level Two could flash `Level One` during title-card fade/transition frames after `titleCardText` was cleared.
+- Root cause: the HUD title renderer supplied `"Level One"` as a fallback whenever `state.scene.titleCardText` was empty.
+- Fix: removed the fallback, made empty title text render as an empty string, and changed Level One/Level Two title timing so the card appears during arrival/walk-in instead of before movement.
+- Prevention rule: title text should come from scene state or registry metadata, never from another scene's display name as a UI fallback.
+- Verification: scene smokes assert Level Two never renders `Level One` as title text and that Level One/Level Two title cards clear after the title window.
+- Follow-up: keep player control disabled until arrival completes in every new scene-flow shell.
+
+## 2026-05-21 - Level Three Placeholder Identity Drift
+
+- Status: fixed for Phase 1.5; prevention rule active.
+- Scene: Level Three.
+- Symptom/risk: generated lake-shell placeholders can look correct in screenshots but drift out of `render_game_to_text()`, the runtime Dev Editor, `/editor/`, level manifests, or smoke fixtures. Moving-looking placeholders such as lily pads, raft markers, and bridge destinations can also imply active collision/mechanics before those systems exist.
+- Root cause: Phase 1 uses generated geometry instead of imported asset packs, so stable names, editor metadata, source references, and inactive-mechanic flags must be applied deliberately.
+- Fix: Phase 1.5 added source-backed island marker data, runtime Dev Editor metadata for generated placeholders, `/editor/` records for Level Three shell objects, manifest/object-list entries, and render-text rows for shell IDs and inactive future state. The Love Letter Cliff zone marker and actual cliff placeholder now use distinct object IDs to avoid duplicate editor records.
+- Prevention rule: every future Level Three placeholder that matters to gameplay planning needs a stable source ID, runtime mesh name, editor/catalog record, render-text row, and explicit inactive/visual-only status until its mechanic is implemented.
+- Verification: Level Three scene smoke, fixture smoke, missing/float collider validators, manifest/object list, editor-sync validation, `/editor/` smoke, a focused Level Three runtime Dev Editor probe, and screenshot QA all identify the key shell objects. Editor-sync still reports non-blocking `LEVEL_THREE_PROPS` array-index source-reference warnings.
+- Follow-up: when Phase 2 turns lily pads, green button presses, or raft states into mechanics, update this metadata rather than replacing it with parallel ad hoc state.
 
 ## 2026-05-19 - Refactor Lesson: Module Extraction With Pre-Init Call Sites
 

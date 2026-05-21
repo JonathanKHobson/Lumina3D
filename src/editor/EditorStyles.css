@@ -472,6 +472,11 @@ input[type="search"]:focus-visible {
   border-left: 3px solid #a6d8a8;
 }
 
+.editor-asset-row.is-procedural {
+  border-left: 3px solid #d3d85f;
+  background: #202719;
+}
+
 .asset-detail {
   display: grid;
   gap: 7px;
@@ -596,6 +601,10 @@ input[type="search"]:focus-visible {
   cursor: pointer;
 }
 
+.editor-button-wide {
+  width: 100%;
+}
+
 .editor-button:hover,
 .editor-button:focus-visible {
   border-color: #d7c77d;
@@ -620,6 +629,17 @@ input[type="search"]:focus-visible {
   border-color: #8ec7df;
   background: #8ec7df;
   color: #111a1d;
+}
+
+.editor-button-danger:not(:disabled) {
+  border-color: rgba(240, 160, 143, 0.7);
+  color: #ffd6cc;
+}
+
+.editor-button-danger:not(:disabled):hover,
+.editor-button-danger:not(:disabled):focus-visible {
+  border-color: #f0a08f;
+  background: rgba(233, 128, 109, 0.18);
 }
 
 .editor-button[data-tooltip]:hover::after,
@@ -683,6 +703,14 @@ input[type="search"]:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.editor-collider-view {
+  min-width: min(100%, 220px);
+}
+
+.editor-collider-view select {
+  min-width: 150px;
 }
 
 .editor-check input {

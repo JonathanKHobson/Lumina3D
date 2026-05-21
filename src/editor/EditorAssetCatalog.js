@@ -2,6 +2,7 @@ import {
   EDITOR_EXTERNAL_ASSET_INDEX_META,
   EDITOR_EXTERNAL_ASSET_RECORDS
 } from "./EditorExternalAssetCatalog.generated.js";
+import { EDITOR_PROCEDURAL_ASSET_RECORDS } from "./EditorProceduralAssets.js";
 
 export const EDITOR_ASSET_FILTERS = [
   { id: "all", label: "All" },
@@ -18,7 +19,8 @@ export const EDITOR_ASSET_FILTERS = [
 export const EDITOR_ASSET_SOURCE_FILTERS = [
   { id: "all", label: "All" },
   { id: "in-project", label: "In project" },
-  { id: "external", label: "External" }
+  { id: "external", label: "External" },
+  { id: "procedural", label: "Procedural" }
 ];
 
 function inferAssetCategory(assetKey, asset) {
@@ -65,13 +67,21 @@ function projectAssetRecord(assetKey, asset, levelId) {
     targetHeight: asset?.targetHeight ?? null,
     allowedLevels: [],
     usageNotes: levelId
-      ? `Read-only in-project catalog context for ${levelId}; placement is future scope.`
-      : "Read-only in-project catalog context; placement is future scope.",
-    placementEnabled: false
+      ? `In-project catalog context for ${levelId}; draft ghost placement is editor-only until Codex materializes source.`
+      : "In-project catalog context; draft ghost placement is editor-only until Codex materializes source.",
+    placementEnabled: false,
+    draftPlacementEnabled: true
   };
 }
 
 function normalizeExternalAssetRecord(record = {}, levelId = "") {
+  const usageNotes = record.usageNotes && !record.usageNotes.includes("not placeable in this editor slice")
+    ? record.usageNotes
+    : (
+      levelId
+        ? `External reference available while editing ${levelId}; draft markers are allowed, but the asset is not imported into Lumina3D.`
+        : "External reference available for draft markers; not imported into Lumina3D."
+    );
   return {
     assetKey: record.assetKey,
     label: record.label || record.assetKey,
@@ -88,12 +98,36 @@ function normalizeExternalAssetRecord(record = {}, levelId = "") {
     targetFootprint: record.targetFootprint ?? null,
     targetHeight: record.targetHeight ?? null,
     allowedLevels: record.allowedLevels || [],
+    usageNotes,
+    placementEnabled: false,
+    draftPlacementEnabled: true
+  };
+}
+
+function normalizeProceduralAssetRecord(record = {}, levelId = "") {
+  return {
+    assetKey: record.assetKey,
+    label: record.label || record.assetKey,
+    type: record.type || "procedural",
+    category: record.category || "terrain",
+    sourceScope: "procedural",
+    provider: record.provider || "Lumina3D editor",
+    packName: record.packName || "Editor procedural assets",
+    folderPath: record.folderPath || "src/editor",
+    relativePath: record.relativePath || "",
+    format: record.format || "threejs-procedural",
+    source: record.source || "src/editor/EditorProceduralAssets.js",
+    tags: [...new Set([...(record.tags || []), "procedural"].filter(Boolean).map((tag) => String(tag).toLowerCase()))],
+    targetFootprint: record.targetFootprint ?? null,
+    targetHeight: record.targetHeight ?? null,
+    allowedLevels: record.allowedLevels || [],
     usageNotes: record.usageNotes || (
       levelId
-        ? `External reference available while editing ${levelId}; not imported into Lumina3D and not placeable in this slice.`
-        : "External reference available; not imported into Lumina3D and not placeable in this slice."
+        ? `Procedural editor asset available while editing ${levelId}; draft placement exports an AI handoff and does not write runtime source.`
+        : "Procedural editor asset; draft placement exports an AI handoff and does not write runtime source."
     ),
-    placementEnabled: false
+    placementEnabled: false,
+    draftPlacementEnabled: true
   };
 }
 
@@ -102,9 +136,14 @@ export function buildEditorAssetCatalog(assets = {}, { levelId = "" } = {}) {
     .map(([assetKey, asset]) => projectAssetRecord(assetKey, asset, levelId));
   const externalRecords = EDITOR_EXTERNAL_ASSET_RECORDS
     .map((record) => normalizeExternalAssetRecord(record, levelId));
-  const records = [...projectRecords, ...externalRecords]
+  const proceduralRecords = EDITOR_PROCEDURAL_ASSET_RECORDS
+    .map((record) => normalizeProceduralAssetRecord(record, levelId));
+  const records = [...projectRecords, ...proceduralRecords, ...externalRecords]
     .sort((a, b) => {
-      if (a.sourceScope !== b.sourceScope) return a.sourceScope === "in-project" ? -1 : 1;
+      const sourceOrder = { "in-project": 0, procedural: 1, external: 2 };
+      if (a.sourceScope !== b.sourceScope) {
+        return (sourceOrder[a.sourceScope] ?? 9) - (sourceOrder[b.sourceScope] ?? 9);
+      }
       return a.assetKey.localeCompare(b.assetKey);
     });
 
@@ -112,6 +151,7 @@ export function buildEditorAssetCatalog(assets = {}, { levelId = "" } = {}) {
     schema: "lumina3d.editor.assetCatalog.v1",
     levelId: levelId || null,
     placementEnabled: false,
+    draftPlacementEnabled: true,
     externalIndex: EDITOR_EXTERNAL_ASSET_INDEX_META,
     records
   };
@@ -175,7 +215,9 @@ export function filterEditorAssets({ catalog = null, state = {} } = {}) {
     visibleExternalAssetCount: visibleRecords.filter((record) => record.sourceScope === "external").length,
     totalExternalAssetCount: records.filter((record) => record.sourceScope === "external").length,
     visibleProjectAssetCount: visibleRecords.filter((record) => record.sourceScope === "in-project").length,
-    totalProjectAssetCount: records.filter((record) => record.sourceScope === "in-project").length
+    totalProjectAssetCount: records.filter((record) => record.sourceScope === "in-project").length,
+    visibleProceduralAssetCount: visibleRecords.filter((record) => record.sourceScope === "procedural").length,
+    totalProceduralAssetCount: records.filter((record) => record.sourceScope === "procedural").length
   };
 }
 
@@ -217,12 +259,14 @@ export function assetContext(record = null) {
     relativePath: record.relativePath || "",
     format: record.format || record.type || "",
     source: record.source,
+    sourceScopeDetail: record.sourceScope === "procedural" ? "editor procedural" : record.sourceScope || "in-project",
     tags: record.tags || [],
     targetFootprint: record.targetFootprint ?? null,
     targetHeight: record.targetHeight ?? null,
     allowedLevels: record.allowedLevels || [],
     usageNotes: record.usageNotes || "",
-    placementEnabled: false
+    placementEnabled: false,
+    draftPlacementEnabled: true
   };
 }
 
@@ -234,9 +278,11 @@ export function summarizeEditorAssetCatalog(catalog = null, { selectedAsset = nu
     schema: catalog?.schema || "lumina3d.editor.assetCatalog.v1",
     levelId: catalog?.levelId || null,
     placementEnabled: false,
+    draftPlacementEnabled: true,
     assetCount: records.length,
     projectAssetCount: records.filter((record) => record.sourceScope === "in-project").length,
     externalAssetCount: records.filter((record) => record.sourceScope === "external").length,
+    proceduralAssetCount: records.filter((record) => record.sourceScope === "procedural").length,
     sourceScopes,
     categories,
     externalIndex: catalog?.externalIndex || null,

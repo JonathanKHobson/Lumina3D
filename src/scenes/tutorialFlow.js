@@ -6,6 +6,7 @@ import {
   createCelebrationState,
   createHomeState,
   createLevelOneState,
+  createLevelThreeState,
   createLevelTwoState,
   createLoveLetterAttentionState,
   createLoveLetterMessageState,
@@ -40,6 +41,7 @@ export function resetTutorialSceneFlow(context) {
   state.home = createHomeState("inactive");
   state.levelOne = createLevelOneState("inactive");
   state.levelTwo = createLevelTwoState("inactive");
+  state.levelThree = createLevelThreeState("inactive");
   state.active = "human";
   state.human = createActorState(START.human, 0.45, 4.2);
   state.frog = createActorState(START.frog, 0.53, 3.45);

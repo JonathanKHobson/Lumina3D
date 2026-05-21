@@ -53,6 +53,11 @@ const COMMAND_BUILDERS = {
     display: `npm run tools:validate-float-colliders -- ${levelId} --pretty`,
     env: { LUMINA3D_URL: process.env.LUMINA3D_URL || DEFAULT_LUMINA_URL }
   }),
+  validateEditorSync: ({ levelId = "all" } = {}) => ({
+    command: "npm",
+    args: ["run", "tools:validate-editor-sync", "--", levelId, "--pretty"],
+    display: `npm run tools:validate-editor-sync -- ${levelId} --pretty`
+  }),
   runEditorSmoke: () => ({
     command: "npm",
     args: ["run", "tools:run-editor-smoke", "--", "--pretty"],

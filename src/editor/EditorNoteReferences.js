@@ -265,7 +265,8 @@ function assetReferenceContext(record) {
     usageNotes: context.usageNotes,
     referenceOnly: context.sourceScope === "external",
     importedIntoProject: context.sourceScope !== "external",
-    placementEnabled: context.placementEnabled
+    placementEnabled: context.placementEnabled,
+    draftPlacementEnabled: context.draftPlacementEnabled
   };
 }
 

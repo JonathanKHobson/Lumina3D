@@ -10,6 +10,7 @@ import {
   extractNoteReferenceTokens,
   resolveNoteReferences
 } from "./EditorNoteReferences.js";
+import { normalizeReplacementCandidate } from "./EditorReplacementIntent.js";
 import { transformTargetForRecord } from "./EditorTransformUtils.js";
 
 export const EDITOR_STATE_EXPORT_SCHEMA = "lumina3d.editor.stateExport.v1";
@@ -28,11 +29,15 @@ export function normalizeObjectMeta(meta = {}) {
   const note = typeof meta.note === "string" ? meta.note : "";
   const markedForDelete = Boolean(meta.markedForDelete);
   const markedForReplace = Boolean(meta.markedForReplace);
+  const replacementCandidate = markedForReplace
+    ? normalizeReplacementCandidate(meta.replacementCandidate)
+    : null;
   return {
     note,
     noteTags: extractNoteTags(note),
     markedForDelete,
     markedForReplace,
+    replacementCandidate,
     updatedAt: typeof meta.updatedAt === "string" ? meta.updatedAt : ""
   };
 }
@@ -96,7 +101,7 @@ export function saveEditorLevelMeta(levelId, levelMeta, storage = window.localSt
 }
 
 function metaHasContent(meta) {
-  return Boolean(meta.markedForDelete || meta.markedForReplace || meta.note.trim());
+  return Boolean(meta.markedForDelete || meta.markedForReplace || meta.replacementCandidate || meta.note.trim());
 }
 
 function actionIntent(meta) {
@@ -106,6 +111,7 @@ function actionIntent(meta) {
 }
 
 function changedRecordToExport(record, meta, getColliderProxiesForObject, referenceContext) {
+  if (record?.draftPlacement) return null;
   const currentTransform = snapshotTransform(transformTargetForRecord(record));
   const changes = diffTransform(record.originalTransform, currentTransform);
   const normalizedMeta = normalizeObjectMeta(meta);
@@ -130,6 +136,7 @@ function changedRecordToExport(record, meta, getColliderProxiesForObject, refere
     markedForDelete: normalizedMeta.markedForDelete,
     markedForReplace: normalizedMeta.markedForReplace,
     actionIntent: actionIntent(normalizedMeta),
+    replacementCandidate: normalizedMeta.markedForReplace ? normalizedMeta.replacementCandidate : null,
     colliderProxies
   };
 }
@@ -167,7 +174,9 @@ export function buildEditorStateExport({
   objectFilter = null,
   timeline = null,
   assetCatalog = null,
-  referenceAssetCatalog = null
+  referenceAssetCatalog = null,
+  draftPlacements = [],
+  colliderDiagnostics = null
 }) {
   const normalizedLevelMeta = normalizeLevelMeta(levelMeta);
   const hasLevelNote = Boolean(normalizedLevelMeta.note.trim());
@@ -179,9 +188,9 @@ export function buildEditorStateExport({
   const objects = records
     .map((record) => changedRecordToExport(record, objectMeta[record.id], getColliderProxiesForObject, referenceContext))
     .filter(Boolean);
-  const intentGlossary = buildIntentGlossary([...objects, normalizedLevelMeta]);
+  const intentGlossary = buildIntentGlossary([...objects, normalizedLevelMeta, ...draftPlacements]);
   const levelNoteReferences = resolveNoteReferences(normalizedLevelMeta.note, referenceContext);
-  const referenceGlossary = buildReferenceGlossary([...objects, normalizedLevelMeta], referenceContext);
+  const referenceGlossary = buildReferenceGlossary([...objects, normalizedLevelMeta, ...draftPlacements], referenceContext);
   const selectedColliderProxies = selectedId && typeof getColliderProxiesForObject === "function"
     ? getColliderProxiesForObject(selectedId)
     : [];
@@ -206,6 +215,9 @@ export function buildEditorStateExport({
     objectFilter,
     timeline,
     assetCatalog,
+    draftPlacements,
+    draftPlacementCount: draftPlacements.length,
+    colliderDiagnostics,
     exportedAt: new Date().toISOString(),
     affectedObjectCount: objects.length,
     affectedItemCount: objects.length + (hasLevelNote ? 1 : 0),
@@ -215,6 +227,7 @@ export function buildEditorStateExport({
     totalNoteCount: objectNoteCount + (hasLevelNote ? 1 : 0),
     deleteCount: objects.filter((objectExport) => objectExport.markedForDelete).length,
     replaceCount: objects.filter((objectExport) => objectExport.markedForReplace).length,
+    replacementCandidateCount: objects.filter((objectExport) => objectExport.replacementCandidate).length,
     lockedAffectedObjectCount: objects.filter((objectExport) => objectExport.locked).length,
     movableAffectedObjectCount: objects.filter((objectExport) => objectExport.movable).length,
     intentGlossary,
@@ -242,8 +255,12 @@ export function summarizeEditorStateExport(stateExport) {
     objectNoteReferenceCount: stateExport.objectNoteReferenceCount || 0,
     deleteCount: stateExport.deleteCount,
     replaceCount: stateExport.replaceCount,
+    replacementCandidateCount: stateExport.replacementCandidateCount || 0,
+    draftPlacementCount: stateExport.draftPlacementCount || 0,
     colliderProxyCount: stateExport.colliderOverlay?.proxyCount || 0,
+    visibleColliderProxyCount: stateExport.colliderOverlay?.visibleProxyCount || 0,
     selectedColliderProxyCount: stateExport.colliderOverlay?.selectedProxyCount || 0,
+    problemWarningCount: stateExport.colliderDiagnostics?.problemWarningCount || 0,
     selectedLocked: Boolean(stateExport.selectedObjectContext?.locked),
     selectedMovable: Boolean(stateExport.selectedObjectContext?.movable),
     visibleObjectCount: stateExport.objectFilter?.visibleObjectCount ?? null,

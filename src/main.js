@@ -105,6 +105,7 @@ import {
   createCelebrationState,
   createHomeState,
   createLevelOneState,
+  createLevelThreeState,
   createLevelTwoState,
   createLoveLetterAttentionState,
   createLoveLetterMessageState,
@@ -127,26 +128,23 @@ import {
 } from "./levels/homeIntroLevel.js";
 import {
   LEVEL_ONE_BOUNDS,
-  LEVEL_ONE_BRIDGE_ACTOR_LIFT,
+  LEVEL_ONE_BLUE_BLOOM_LATCH,
+  LEVEL_ONE_BLUE_BLOOM_MATS,
+  LEVEL_ONE_BLUE_BLOOM_REVEAL_SECONDS,
+  LEVEL_ONE_BLUE_BLOOM_TIMING,
   LEVEL_ONE_FROG_WATER_SPEECH_COOLDOWN,
-  LEVEL_ONE_BRIDGE_DECK_Y,
-  LEVEL_ONE_BRIDGE_HALF_Z,
-  LEVEL_ONE_BRIDGE_ROW,
-  LEVEL_ONE_BRIDGE_VISUAL_FLATTEN_Y,
-  LEVEL_ONE_BRIDGE_VISUAL_Y,
-  LEVEL_ONE_BRIDGE_Z,
   LEVEL_ONE_BUTTON,
-  LEVEL_ONE_COMPLETE_BRIDGE_A,
-  LEVEL_ONE_COMPLETE_BRIDGE_MAX_X,
-  LEVEL_ONE_COMPLETE_BRIDGE_MIN_X,
-  LEVEL_ONE_COMPLETE_BRIDGE_B,
+  LEVEL_ONE_CROSSING_ACTOR_LIFT,
+  LEVEL_ONE_CROSSING_ROW,
+  LEVEL_ONE_CROSSING_Z,
   LEVEL_ONE_HEIGHT,
   LEVEL_ONE_HINT_SECONDS,
   LEVEL_ONE_JUMP_ZONE,
   LEVEL_ONE_LANDING,
-  LEVEL_ONE_PARTIAL_BRIDGE,
-  LEVEL_ONE_PARTIAL_BRIDGE_MAX_X,
-  LEVEL_ONE_PARTIAL_BRIDGE_MIN_X,
+  LEVEL_ONE_LEFT_APPROACH,
+  LEVEL_ONE_LILY_PAD,
+  LEVEL_ONE_LOVE_LETTER_POINT,
+  LEVEL_ONE_RIGHT_APPROACH,
   LEVEL_ONE_WATER_COLUMNS,
   LEVEL_ONE_WIDTH
 } from "./levels/levelOne.js";
@@ -199,6 +197,29 @@ import {
   LEVEL_TWO_WIDTH
 } from "./levels/levelTwo.js";
 import {
+  LEVEL_THREE_ANCHOR_STONES,
+  LEVEL_THREE_BOUNDS,
+  LEVEL_THREE_BRIDGE_DESTINATION_MARKERS,
+  LEVEL_THREE_CROCODILE_ECHO,
+  LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS,
+  LEVEL_THREE_HEIGHT,
+  LEVEL_THREE_ISLAND_MARKERS,
+  LEVEL_THREE_ISLANDS,
+  LEVEL_THREE_LAND_TILES,
+  LEVEL_THREE_LILY_PAD_PLACEHOLDERS,
+  LEVEL_THREE_MAP_SHAPE,
+  LEVEL_THREE_PLACEHOLDER_LOVE_LETTER_Y,
+  LEVEL_THREE_PLACEHOLDER_IDS,
+  LEVEL_THREE_POINTS,
+  LEVEL_THREE_RAFT_MARKERS,
+  LEVEL_THREE_RED_BUTTON_PLACEHOLDERS,
+  LEVEL_THREE_RESERVED_ZONES,
+  LEVEL_THREE_RESET_PERCH_PLACEHOLDERS,
+  LEVEL_THREE_TOTEM_RAFT,
+  LEVEL_THREE_WATER_TILES,
+  LEVEL_THREE_WIDTH
+} from "./levels/levelThree.js";
+import {
   BARRIER_END_CAP_COLUMN_EDGE_OFFSET,
   BARRIER_REVEAL_FLOOR_LEAD,
   BARRIER_REVEAL_SECONDS,
@@ -243,6 +264,8 @@ import {
 } from "./scenes/homeIntroFlow.js";
 import { resetLevelOneSceneFlow, startLevelOneScene, updateLevelOneSceneFlow } from "./scenes/levelOneFlow.js";
 import { buildLevelOneScene } from "./scenes/levelOneScene.js";
+import { resetLevelThreeSceneFlow, startLevelThreeScene, updateLevelThreeSceneFlow } from "./scenes/levelThreeFlow.js";
+import { buildLevelThreeScene } from "./scenes/levelThreeScene.js";
 import { resetLevelTwoSceneFlow, startLevelTwoScene, updateLevelTwoSceneFlow } from "./scenes/levelTwoFlow.js";
 import { buildLevelTwoScene } from "./scenes/levelTwoScene.js";
 import { buildTutorialScene } from "./scenes/tutorialScene.js";
@@ -309,21 +332,7 @@ const state = {
     lastDialogueAt: -Infinity,
     transitionTimer: 0
   },
-  levelOne: {
-    phase: "inactive",
-    bridgeComplete: false,
-    bridgeRevealActive: false,
-    bridgeRevealElapsed: 0,
-    hintTimer: 0,
-    hintStage: "",
-    complete: false,
-    waterBlocked: true,
-    bridgeAsset: "partial-bridge",
-    frogJumpZone: LEVEL_ONE_JUMP_ZONE,
-    titleElapsed: 0,
-    frogWaterBlockedCount: 0,
-    lastFrogWaterPromptAt: -Infinity
-  },
+  levelOne: createLevelOneState("inactive"),
   levelTwo: {
     phase: "inactive",
     titleElapsed: 0,
@@ -354,9 +363,9 @@ const state = {
     redButtons: {},
     redPlatforms: {},
     redElevatorAStartGate: {
-      released: false,
-      delayRemaining: LEVEL_TWO_RED_ELEVATOR_A_START_DELAY_SECONDS,
-      waitingReason: "waiting-for-human-approach-or-elephant-possession"
+      released: true,
+      delayRemaining: 0,
+      waitingReason: "grounded-start"
     },
     lastRedButtonInvalidPromptAt: -Infinity,
     lastFrogJumpResult: "none",
@@ -366,6 +375,7 @@ const state = {
     lastTotemPromptAt: -Infinity,
     complete: false
   },
+  levelThree: createLevelThreeState("inactive"),
   human: createActorState(START.human, 0.45, 4.2),
   frog: createActorState(START.frog, 0.53, 3.45),
   elephant: createActorState({
@@ -545,6 +555,24 @@ function levelTwoFlowContext() {
   };
 }
 
+function levelThreeFlowContext() {
+  return {
+    state,
+    input,
+    particleContext,
+    saveCubelingUnlocks,
+    resetFrogAiForScene,
+    clearSpeechQueue,
+    playHumanAnimation,
+    syncAll,
+    updateCamera,
+    updateHud,
+    showPrompt,
+    directionName,
+    distance2D
+  };
+}
+
 const renderer = createGameRenderer(canvas);
 const camera = createGameCamera();
 const projectionVector = new THREE.Vector3();
@@ -556,9 +584,10 @@ const sceneGroups = {
   tutorial: new THREE.Group(),
   home: new THREE.Group(),
   levelOne: new THREE.Group(),
-  levelTwo: new THREE.Group()
+  levelTwo: new THREE.Group(),
+  levelThree: new THREE.Group()
 };
-world.add(sceneGroups.tutorial, sceneGroups.home, sceneGroups.levelOne, sceneGroups.levelTwo);
+world.add(sceneGroups.tutorial, sceneGroups.home, sceneGroups.levelOne, sceneGroups.levelTwo, sceneGroups.levelThree);
 
 const assetCache = new Map();
 const floorMeshes = [];
@@ -567,8 +596,11 @@ const levelOneMeshes = [];
 const levelOneWaterColliders = [];
 const levelOneBridgeMeshes = { partial: [], complete: [] };
 const levelOneBridgeDeckMeshes = { partial: [], complete: [] };
+const levelOneBloomMeshes = { lilyPad: null, latch: null, mats: {}, dockGlows: [] };
 const levelTwoMeshes = [];
 const levelTwoGoalMeshes = [];
+const levelThreeMeshes = [];
+const levelThreeGoalMeshes = [];
 const levelTwoInteractiveMeshes = {
   blueButton: null,
   blueButtonTop: null,
@@ -638,8 +670,7 @@ async function init() {
       placeAsset,
       levelOneMeshes,
       levelOneWaterColliders,
-      levelOneBridgeMeshes,
-      levelOneBridgeDeckMeshes,
+      levelOneBloomMeshes,
       colliderForProp,
       addSceneCollider
     });
@@ -650,6 +681,15 @@ async function init() {
       levelTwoMeshes,
       levelTwoGoalMeshes,
       levelTwoInteractiveMeshes,
+      addSceneCollider,
+      colliderForProp
+    });
+    buildLevelThreeScene({
+      sceneGroups,
+      placeAsset,
+      cloneAsset,
+      levelThreeMeshes,
+      levelThreeGoalMeshes,
       addSceneCollider,
       colliderForProp
     });
@@ -688,7 +728,8 @@ async function init() {
       tutorial: jumpToTutorialDebug,
       home: () => startHomeIntro(null, { debug: true }),
       levelOne: startLevelOne,
-      levelTwo: startLevelTwo
+      levelTwo: startLevelTwo,
+      levelThree: startLevelThree
     },
     onUpdateHud: updateHud,
     onOpenChange: handleDevEditorOpenChange,
@@ -697,7 +738,7 @@ async function init() {
   hud.loveLetterContinue?.addEventListener("click", dismissLoveLetterMessage);
   hud.continueFreeMode?.addEventListener("click", continueFreeMode);
   hud.resetTutorialLevel?.addEventListener("click", resetLevel);
-  hud.nextLevel?.addEventListener("click", startHomeIntro);
+  hud.nextLevel?.addEventListener("click", handleNextLevelClick);
   hud.exitContinue?.addEventListener("click", confirmHomeExit);
   hud.exitStay?.addEventListener("click", stayInHomeIntro);
   window.addEventListener("pointerdown", handlePointerDown);
@@ -786,6 +827,7 @@ function applyInitialDebugSceneFromUrl() {
   if (debugScene === SCENES.HOME) startHomeIntro(null, { debug: true });
   if (debugScene === SCENES.LEVEL_ONE) startLevelOne();
   if (debugScene === SCENES.LEVEL_TWO) startLevelTwo();
+  if (debugScene === SCENES.LEVEL_THREE) startLevelThree();
 }
 
 function handleKeyDown(event) {
@@ -797,6 +839,7 @@ function handleKeyDown(event) {
     if (debugScene === SCENES.HOME) startHomeIntro(null, { debug: true });
     if (debugScene === SCENES.LEVEL_ONE) startLevelOne();
     if (debugScene === SCENES.LEVEL_TWO) startLevelTwo();
+    if (debugScene === SCENES.LEVEL_THREE) startLevelThree();
     return;
   }
   if (event.code === "F2") {
@@ -885,19 +928,38 @@ function getCurrentEditableSceneMeshes() {
   if (state.scene.id === SCENES.LEVEL_ONE) {
     return {
       actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant },
-      markers: [markerMeshes.frogEcho, markerMeshes.frogTotem, markerMeshes.button],
-      arrays: [levelOneMeshes, levelOneBridgeMeshes.partial, levelOneBridgeMeshes.complete, levelOneBridgeDeckMeshes.partial, levelOneBridgeDeckMeshes.complete]
+      markers: [
+        markerMeshes.frogEcho,
+        markerMeshes.frogTotem,
+        markerMeshes.button,
+        markerMeshes.spellbookClosed,
+        markerMeshes.spellbookOpen
+      ],
+      arrays: [
+        levelOneMeshes,
+        levelOneBridgeMeshes.partial,
+        levelOneBridgeMeshes.complete,
+        levelOneBridgeDeckMeshes.partial,
+        levelOneBridgeDeckMeshes.complete
+      ]
+    };
+  }
+  if (state.scene.id === SCENES.LEVEL_TWO) {
+    return {
+      actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant },
+      markers: [
+        markerMeshes.frogEcho,
+        markerMeshes.frogTotem,
+        levelTwoInteractiveMeshes.elephantEcho,
+        levelTwoInteractiveMeshes.elephantTotem
+      ],
+      arrays: [levelTwoMeshes, levelTwoGoalMeshes]
     };
   }
   return {
     actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant },
-    markers: [
-      markerMeshes.frogEcho,
-      markerMeshes.frogTotem,
-      levelTwoInteractiveMeshes.elephantEcho,
-      levelTwoInteractiveMeshes.elephantTotem
-    ],
-    arrays: [levelTwoMeshes, levelTwoGoalMeshes]
+    markers: [markerMeshes.frogEcho, markerMeshes.frogTotem],
+    arrays: [levelThreeMeshes, levelThreeGoalMeshes]
   };
 }
 
@@ -977,7 +1039,9 @@ function sceneObjectColliderDebugEntries(sceneId) {
         ? "src/scenes/levelTwoScene.js or src/levels/levelTwo.js"
         : sceneId === SCENES.LEVEL_ONE
           ? "src/scenes/levelOneScene.js or src/levels/levelOne.js"
-          : "src/scenes/homeIntroScene.js or src/levels/homeIntroLevel.js"
+          : sceneId === SCENES.LEVEL_THREE
+            ? "src/scenes/levelThreeScene.js or src/levels/levelThree.js"
+            : "src/scenes/homeIntroScene.js or src/levels/homeIntroLevel.js"
     }));
 }
 
@@ -1010,9 +1074,33 @@ function getCurrentSceneColliderDebugEntries() {
         source: "levelOneWaterColliders",
         center: [water.x, SURFACE_Y, water.z],
         halfExtents: [water.halfX, 0, water.halfZ],
-        active: !state.levelOne.bridgeComplete,
-        metadata: { column: water.column, row: water.row },
+        active: true,
+        metadata: { column: water.column, row: water.row, bypassedByExplicitCrossingSurfaces: true },
         sourceFileHint: "src/scenes/levelOneScene.js or src/levels/levelOne.js"
+      }));
+    });
+    entries.push(colliderDebugEntry({
+      id: LEVEL_ONE_LILY_PAD.id,
+      label: "level-one-lily-pad-walkable-surface",
+      sceneId,
+      source: "LEVEL_ONE_LILY_PAD",
+      center: [LEVEL_ONE_LILY_PAD.position.x, SURFACE_Y + LEVEL_ONE_CROSSING_ACTOR_LIFT, LEVEL_ONE_LILY_PAD.position.z],
+      halfExtents: [LEVEL_ONE_LILY_PAD.halfX, 0.06, LEVEL_ONE_LILY_PAD.halfZ],
+      active: true,
+      metadata: { walkable: true, actors: ["frog", "human-after-dock"], surfaceId: LEVEL_ONE_LILY_PAD.id },
+      sourceFileHint: "src/levels/levelOne.js"
+    }));
+    Object.values(LEVEL_ONE_BLUE_BLOOM_MATS).forEach((mat) => {
+      entries.push(colliderDebugEntry({
+        id: `level-one-blue-bloom-mat-${mat.id}`,
+        label: `level-one-blue-bloom-mat-${mat.id}-walkable-surface`,
+        sceneId,
+        source: "LEVEL_ONE_BLUE_BLOOM_MATS",
+        center: [mat.docked.x, SURFACE_Y + LEVEL_ONE_CROSSING_ACTOR_LIFT, mat.docked.z],
+        halfExtents: [mat.halfX, 0.06, mat.halfZ],
+        active: Boolean(state.levelOne.blueBloomDocked),
+        metadata: { walkable: true, actors: ["human", "frog"], matId: mat.id, requiresDocked: true },
+        sourceFileHint: "src/levels/levelOne.js"
       }));
     });
     [...levelOneBridgeDeckMeshes.partial, ...levelOneBridgeDeckMeshes.complete].forEach((mesh, index) => {
@@ -1133,10 +1221,22 @@ function startHomeIntro(event, options = {}) {
   startHomeIntroScene(homeFlowContext(), event, options);
 }
 
+function handleNextLevelClick(event) {
+  event?.preventDefault();
+  event?.stopPropagation();
+  if (!state.celebration.modalVisible || !levelCompleteNextLevelEnabled()) return;
+  if (state.scene.id === SCENES.TUTORIAL) {
+    startHomeIntro(event);
+    return;
+  }
+  if (state.scene.id === SCENES.LEVEL_ONE) startLevelTwo({ showTitle: true });
+}
+
 function updateSceneFlow(dt) {
   if (state.scene.id === SCENES.HOME) updateHomeScene(dt);
   if (state.scene.id === SCENES.LEVEL_ONE) updateLevelOneScene(dt);
   if (state.scene.id === SCENES.LEVEL_TWO) updateLevelTwoScene(dt);
+  if (state.scene.id === SCENES.LEVEL_THREE) updateLevelThreeScene(dt);
 }
 
 function updateHomeScene(dt) {
@@ -1238,14 +1338,37 @@ function startLevelTwo(options = {}) {
   startLevelTwoScene(levelTwoFlowContext(), options);
 }
 
+function startLevelThree(options = {}) {
+  startLevelThreeScene(levelThreeFlowContext(), options);
+}
+
 function updateLevelOneScene(dt) {
   updateLevelOneSceneFlow(levelOneFlowContext(), dt);
 }
 
 function updateLevelOneFlowEffects(dt) {
-  if (state.levelOne.bridgeRevealActive) {
-    state.levelOne.bridgeRevealElapsed += dt;
-    if (state.levelOne.bridgeRevealElapsed >= 0.85) state.levelOne.bridgeRevealActive = false;
+  if (state.levelOne.blueBloomRevealActive || state.levelOne.bridgeRevealActive) {
+    state.levelOne.blueBloomRevealElapsed += dt;
+    state.levelOne.bridgeRevealElapsed = state.levelOne.blueBloomRevealElapsed;
+    if (
+      state.levelOne.blueBloomRevealElapsed >= LEVEL_ONE_BLUE_BLOOM_TIMING.loveLetterSurfaceAt &&
+      !state.levelOne.loveLetterSurfaced
+    ) {
+      surfaceLevelOneLoveLetterWithBloom();
+    }
+    if (state.levelOne.blueBloomRevealElapsed >= LEVEL_ONE_BLUE_BLOOM_REVEAL_SECONDS) {
+      state.levelOne.blueBloomRevealElapsed = LEVEL_ONE_BLUE_BLOOM_REVEAL_SECONDS;
+      state.levelOne.bridgeRevealElapsed = LEVEL_ONE_BLUE_BLOOM_REVEAL_SECONDS;
+      state.levelOne.blueBloomRevealActive = false;
+      state.levelOne.bridgeRevealActive = false;
+      state.levelOne.blueBloomDocked = true;
+      state.levelOne.bridgeComplete = true;
+      state.levelOne.waterBlocked = false;
+      state.levelOne.bridgeAsset = "blue-bloom-crossing-docked";
+      state.levelOne.blueBloomMats.left.walkable = true;
+      state.levelOne.blueBloomMats.right.walkable = true;
+      dockLevelOneLoveLetterWithBloom();
+    }
   }
 
   if (state.levelOne.phase !== "play") return;
@@ -1255,6 +1378,10 @@ function updateLevelOneFlowEffects(dt) {
 function updateLevelTwoScene(dt) {
   updateLevelTwoSceneFlow(levelTwoFlowContext(), dt);
   updateLevelTwoBlueRampReveal(dt);
+}
+
+function updateLevelThreeScene(dt) {
+  updateLevelThreeSceneFlow(levelThreeFlowContext(), dt);
 }
 
 function updateLevelTwoBlueRampReveal(dt) {
@@ -1372,9 +1499,9 @@ function resetLevelTwoRedMechanismState() {
 
 function createLevelTwoRedElevatorAStartGate() {
   return {
-    released: false,
-    delayRemaining: LEVEL_TWO_RED_ELEVATOR_A_START_DELAY_SECONDS,
-    waitingReason: "waiting-for-human-approach-or-elephant-possession"
+    released: true,
+    delayRemaining: 0,
+    waitingReason: "grounded-start"
   };
 }
 
@@ -1426,13 +1553,13 @@ function ensureLevelTwoRedMechanismState() {
     state.levelTwo.redElevatorAStartGate = createLevelTwoRedElevatorAStartGate();
   }
   if (!Number.isFinite(state.levelTwo.redElevatorAStartGate.delayRemaining)) {
-    state.levelTwo.redElevatorAStartGate.delayRemaining = LEVEL_TWO_RED_ELEVATOR_A_START_DELAY_SECONDS;
+    state.levelTwo.redElevatorAStartGate.delayRemaining = 0;
   }
   if (typeof state.levelTwo.redElevatorAStartGate.released !== "boolean") {
-    state.levelTwo.redElevatorAStartGate.released = false;
+    state.levelTwo.redElevatorAStartGate.released = true;
   }
   if (!state.levelTwo.redElevatorAStartGate.waitingReason) {
-    state.levelTwo.redElevatorAStartGate.waitingReason = "waiting-for-human-approach-or-elephant-possession";
+    state.levelTwo.redElevatorAStartGate.waitingReason = "grounded-start";
   }
 }
 
@@ -1440,7 +1567,8 @@ function updateLevelTwoRedMechanisms(dt = 0) {
   ensureLevelTwoRedMechanismState();
   if (state.scene.id !== SCENES.LEVEL_TWO) return;
 
-  const ineligibleActor = activeIneligibleActorOnRedButton();
+  const invalidRedButtonAttempt = activeIneligibleActorOnRedButton();
+  const ineligibleActor = invalidRedButtonAttempt?.actorKey || "";
 
   LEVEL_TWO_RED_BUTTONS.forEach((button) => {
     const buttonState = state.levelTwo.redButtons[button.id];
@@ -1449,13 +1577,12 @@ function updateLevelTwoRedMechanisms(dt = 0) {
       distance2D(state.elephant, button.position) <= button.radius;
     buttonState.active = heldByElephant;
     buttonState.heldActor = heldByElephant ? "elephant" : "";
-    buttonState.ineligibleActor = ineligibleActor;
+    buttonState.ineligibleActor = invalidRedButtonAttempt?.buttonId === button.id ? ineligibleActor : "";
   });
 
-  if (ineligibleActor && state.elapsed - state.levelTwo.lastRedButtonInvalidPromptAt >= LEVEL_TWO_RED_BUTTON_INVALID_COOLDOWN) {
+  if (invalidRedButtonAttempt && state.elapsed - state.levelTwo.lastRedButtonInvalidPromptAt >= LEVEL_TWO_RED_BUTTON_INVALID_COOLDOWN) {
     state.levelTwo.lastRedButtonInvalidPromptAt = state.elapsed;
-    showPrompt("Only the Elephant Cubeling is heavy enough for red buttons.", 1.8);
-    showSpeech(ineligibleActor, "Only the Elephant Cubeling is heavy enough for red buttons.", 1.7);
+    showRedButtonInvalidFeedback(invalidRedButtonAttempt);
   }
 
   LEVEL_TWO_RED_PLATFORMS.forEach((platform) => {
@@ -1577,13 +1704,13 @@ function updateLevelTwoCyclingRedPlatform(platform, platformState, buttonActive,
     platformState.moving = target > platformState.progress ? "up" : target < platformState.progress ? "down" : "idle";
   } else {
     platformState.progress = target;
-    platformState.releaseTarget = null;
     platformState.moving = "idle";
   }
 }
 
 function updateLevelTwoRedPlatformCycle(platform, platformState, dt = 0) {
   if (
+    platform.id !== "red-elevator-a" &&
     !platformState.wasActive &&
     platformState.progress <= 0.001 &&
     platformState.direction === "up" &&
@@ -1627,13 +1754,40 @@ function levelTwoRedPlatformInactiveTarget(platform, platformState) {
 }
 
 function activeIneligibleActorOnRedButton() {
-  if (state.active !== "human" && state.active !== "frog") return "";
+  if (state.active !== "human" && state.active !== "frog") return null;
   const actor = getActiveActor();
   const button = LEVEL_TWO_RED_BUTTONS.find((candidate) =>
     distance2D(actor, candidate.position) <= candidate.radius &&
-    levelTwoActorIsOnRedButtonSurface(state.active, actor, candidate)
+    (candidate.id === "red-button-a" || levelTwoActorIsOnRedButtonSurface(state.active, actor, candidate))
   );
-  return button ? state.active : "";
+  return button ? { actorKey: state.active, buttonId: button.id } : null;
+}
+
+function showRedButtonInvalidFeedback({ actorKey, buttonId }) {
+  if (buttonId === "red-button-a") {
+    const elephantUnlocked = Boolean(
+      state.cubelings.elephant?.unlocked ||
+      state.levelTwo.elephantAwake ||
+      state.levelTwo.elephantSpawned ||
+      state.levelTwo.elephantTotemCollected
+    );
+    if (elephantUnlocked) {
+      showPrompt("The Elephant might be heavy enough for this.", 1.8);
+      showSpeech(actorKey, "The Elephant might be heavy enough for this.", 1.7);
+      return;
+    }
+    showPrompt("This red button needs more weight.", 1.8);
+    showSpeech(
+      actorKey,
+      actorKey === "frog"
+        ? "I can't press that. I'm too light."
+        : "I'm not heavy enough for this red button.",
+      1.7
+    );
+    return;
+  }
+  showPrompt("Only the Elephant Cubeling is heavy enough for red buttons.", 1.8);
+  showSpeech(actorKey, "Only the Elephant Cubeling is heavy enough for red buttons.", 1.7);
 }
 
 function levelTwoActorIsOnRedButtonSurface(actorKey, actor, button) {
@@ -1661,7 +1815,7 @@ function awakenElephantCubeling() {
   state.levelTwo.elephantAwake = true;
   state.levelTwo.elephantSpawned = true;
   state.levelTwo.elephantEchoVisible = true;
-  state.levelTwo.elephantSurfaceId = LEVEL_TWO_RED_PLATFORMS[0]?.id || "red-elevator-a";
+  state.levelTwo.elephantSurfaceId = null;
   state.levelTwo.elephantRevealActive = true;
   state.levelTwo.elephantRevealElapsed = 0;
   state.levelTwo.elephantSpawnCount += 1;
@@ -1675,7 +1829,7 @@ function awakenElephantCubeling() {
     active: false,
     spawned: true
   };
-  const spawnEffectY = levelTwoRedButtonSurfaceY(LEVEL_TWO_RED_BUTTONS[0]);
+  const spawnEffectY = LEVEL_TWO_POINTS.elephantEcho.y ?? SURFACE_Y;
   state.levelTwo.lastElephantSpawnEffectY = spawnEffectY;
   spawnRevealSparkles(particleContext, LEVEL_TWO_POINTS.elephantEcho.x, LEVEL_TWO_POINTS.elephantEcho.z, LEVEL_TWO_ELEPHANT_ECHO_SPARKLE, 26, {
     y: spawnEffectY
@@ -1687,7 +1841,7 @@ function updateLevelOneHints(dt) {
   state.levelOne.hintTimer += dt;
   if (state.levelOne.hintTimer < LEVEL_ONE_HINT_SECONDS) return;
   state.levelOne.hintTimer = 0;
-  if (state.active === "human" && !state.buttonPressed && Math.abs(state.human.x - gridPoint(5.1, LEVEL_ONE_BRIDGE_ROW).x) < 1.4) {
+  if (state.active === "human" && !state.buttonPressed && Math.abs(state.human.x - gridPoint(5.1, LEVEL_ONE_CROSSING_ROW).x) < 1.4) {
     state.levelOne.hintStage = "human_water";
     showSpeech("human", "That gap's too wide for me.", 2.1);
     return;
@@ -1979,16 +2133,24 @@ function updateFrogJump(dt) {
     state.frog.x = state.frogJump.end.x;
     state.frog.z = state.frogJump.end.z;
     const jumpKind = state.frogJump.kind;
-    const jumpLedgeId = state.frogJump.ledgeId || "";
+    const jumpLedgeId = state.frogJump.ledgeId || state.frogJump.destinationSurface || "";
     state.frogJump = null;
     state.lastJumpClearance.active = false;
-    showSpeech("frog", "Clean hop.", 1.1);
+    if (jumpKind !== "level_one_water") showSpeech("frog", "Clean hop.", 1.1);
     if (jumpKind === "tutorial_barrier") {
       advanceTutorial("jump_wall");
       revealButton();
     } else if (jumpKind === "level_one_water") {
       state.levelOne.hintTimer = LEVEL_ONE_HINT_SECONDS;
-      showPrompt("The Frog Cubeling made it across.", 1.6);
+      if (jumpLedgeId === LEVEL_ONE_LILY_PAD.id || state.levelOne.lilyPadSurfaceId === LEVEL_ONE_LILY_PAD.id && isOnLevelOneLilyPadSurface(state.frog)) {
+        showPrompt("The Frog Cubeling reached the lily pad.", 1.4);
+        if (!state.levelOne.lilyPadPromptShown) {
+          state.levelOne.lilyPadPromptShown = true;
+          showSpeech("frog", "A lily pad! Perfect for a little hop.", 1.9);
+        }
+      } else {
+        showPrompt("The Frog Cubeling made it across.", 1.6);
+      }
     } else if (jumpKind === "level_two_ledge") {
       state.levelTwo.frogSurfaceId = jumpLedgeId;
       state.levelTwo.lastFrogJumpResult = "success";
@@ -2009,6 +2171,10 @@ function updateInteractions(dt = 0) {
   }
   if (state.scene.id === SCENES.LEVEL_TWO) {
     updateLevelTwoInteractions(dt);
+    return;
+  }
+  if (state.scene.id === SCENES.LEVEL_THREE) {
+    updateLevelThreeInteractions();
     return;
   }
   if (state.active === "human" && state.reveals.frogEcho && !state.reveals.frog && distance2D(state.human, START.frog) <= FROG_ECHO_RADIUS) {
@@ -2051,18 +2217,20 @@ function updateInteractions(dt = 0) {
     pressButton();
   }
 
-  if (state.active === "frog" && state.reveals.spellbook && !state.spellbookCollected && distance2D(state.frog, SPELLBOOK) <= SPELLBOOK_RADIUS) {
+  const loveLetterPoint = currentLoveLetterPoint();
+  const loveLetterCollectable = currentLoveLetterCollectable();
+  if (state.active === "frog" && loveLetterCollectable && !state.spellbookCollected && distance2D(state.frog, loveLetterPoint) <= SPELLBOOK_RADIUS) {
     showFrogLoveLetterLesson();
   }
 
-  if (state.active === "human" && state.reveals.spellbook && !state.spellbookCollected) {
-    const distanceToLoveLetter = distance2D(state.human, SPELLBOOK);
+  if (state.active === "human" && loveLetterCollectable && !state.spellbookCollected) {
+    const distanceToLoveLetter = distance2D(state.human, loveLetterPoint);
     if (distanceToLoveLetter <= LOVE_LETTER_APPROACH_RADIUS && distanceToLoveLetter > SPELLBOOK_RADIUS) {
       showHumanLoveLetterApproach();
     }
   }
 
-  if (state.active === "human" && state.reveals.spellbook && !state.spellbookCollected && distance2D(state.human, SPELLBOOK) <= SPELLBOOK_RADIUS) {
+  if (state.active === "human" && loveLetterCollectable && !state.spellbookCollected && distance2D(state.human, loveLetterPoint) <= SPELLBOOK_RADIUS) {
     if (maybeRequestSkip(
       "collect_love_letter",
       "You reached the Love Letter before the guided lesson opened the final step.",
@@ -2073,6 +2241,17 @@ function updateInteractions(dt = 0) {
     }
     collectSpellbook();
   }
+}
+
+function updateLevelThreeInteractions() {
+  if (state.active !== "human") return;
+  if (!state.levelThree.placeholderLoveLetterVisible || state.levelThree.placeholderLoveLetterCollectable) return;
+  const distanceToPlaceholder = distance2D(state.human, LEVEL_THREE_POINTS.placeholderLoveLetter);
+  if (distanceToPlaceholder > LOVE_LETTER_APPROACH_RADIUS) return;
+  if (state.elapsed - state.loveLetterLesson.lastHumanPromptAt < LOVE_LETTER_LESSON_COOLDOWN) return;
+  state.loveLetterLesson.lastHumanPromptAt = state.elapsed;
+  showPrompt("Placeholder Love Letter: Level Three route is not authored yet.", 2.2);
+  showSpeech("loveLetter", "Not yet. Sketch the path first.", 1.9);
 }
 
 function updateLevelOneInteractions() {
@@ -2088,11 +2267,13 @@ function updateLevelOneInteractions() {
     pressButton();
     return;
   }
-  if (state.active === "frog" && state.reveals.spellbook && !state.spellbookCollected && distance2D(state.frog, SPELLBOOK) <= SPELLBOOK_RADIUS) {
+  const loveLetterPoint = currentLoveLetterPoint();
+  const loveLetterCollectable = currentLoveLetterCollectable();
+  if (state.active === "frog" && loveLetterCollectable && !state.spellbookCollected && distance2D(state.frog, loveLetterPoint) <= SPELLBOOK_RADIUS) {
     showFrogLoveLetterLesson();
   }
-  if (state.active === "human" && state.reveals.spellbook && !state.spellbookCollected) {
-    const distanceToLoveLetter = distance2D(state.human, SPELLBOOK);
+  if (state.active === "human" && loveLetterCollectable && !state.spellbookCollected) {
+    const distanceToLoveLetter = distance2D(state.human, loveLetterPoint);
     if (distanceToLoveLetter <= LOVE_LETTER_APPROACH_RADIUS && distanceToLoveLetter > SPELLBOOK_RADIUS) showHumanLoveLetterApproach();
     if (distanceToLoveLetter <= SPELLBOOK_RADIUS) collectSpellbook();
   }
@@ -2119,8 +2300,84 @@ function updateTutorialProximity() {
   if (currentStepId() === "press_button" && state.buttonPressed) advanceTutorial("press_button");
 }
 
+function updateLevelOneBloomVisuals(dt) {
+  if (!levelOneBloomMeshes.lilyPad) return;
+  const isLevelOne = state.scene.id === SCENES.LEVEL_ONE;
+  const progress = levelOneBloomProgress();
+  const elapsed = state.levelOne.blueBloomRevealElapsed;
+  const lilyBob = Math.sin(state.elapsed * 2.2) * 0.035;
+  levelOneBloomMeshes.lilyPad.visible = isLevelOne;
+  levelOneBloomMeshes.lilyPad.position.set(
+    LEVEL_ONE_LILY_PAD.position.x,
+    LEVEL_ONE_LILY_PAD.position.y + lilyBob,
+    LEVEL_ONE_LILY_PAD.position.z
+  );
+  levelOneBloomMeshes.lilyPad.rotation.z = Math.sin(state.elapsed * 1.6) * 0.018;
+
+  if (levelOneBloomMeshes.latch) {
+    const latchProgress = easeOutCubic(clamp((elapsed - LEVEL_ONE_BLUE_BLOOM_TIMING.latchOpenAt) / 0.42, 0, 1));
+    levelOneBloomMeshes.latch.visible = isLevelOne;
+    levelOneBloomMeshes.latch.position.set(
+      LEVEL_ONE_BLUE_BLOOM_LATCH.position.x,
+      LEVEL_ONE_BLUE_BLOOM_LATCH.position.y + Math.sin(state.elapsed * 2.6) * 0.018,
+      LEVEL_ONE_BLUE_BLOOM_LATCH.position.z
+    );
+    levelOneBloomMeshes.latch.rotation.x = -latchProgress * 0.42;
+    levelOneBloomMeshes.latch.children.forEach((child, index) => {
+      if (!child.material?.emissive) return;
+      child.material.emissive.setHex(index === 0 ? 0x000000 : 0x0b355e);
+      child.material.emissiveIntensity = latchProgress * 0.28;
+    });
+  }
+
+  Object.entries(LEVEL_ONE_BLUE_BLOOM_MATS).forEach(([id, config], index) => {
+    const mesh = levelOneBloomMeshes.mats?.[id];
+    if (!mesh) return;
+    mesh.visible = isLevelOne;
+    const bedBob = Math.sin(state.elapsed * 1.6 + index) * 0.026;
+    mesh.position.set(0, bedBob, 0);
+    mesh.rotation.y = config.rotationY + Math.sin(state.elapsed * 1.05 + index) * 0.018 * (1 - progress * 0.35);
+    mesh.rotation.z = Math.sin(state.elapsed * 1.2 + index) * 0.018;
+    mesh.children.forEach((child) => {
+      const held = child.userData.heldOffset;
+      const docked = child.userData.dockedOffset;
+      if (!held || !docked) return;
+      const delay = child.userData.bloomDelay || 0;
+      const childProgress = easeInOutSmooth(clamp((progress - delay) / Math.max(0.12, 1 - delay), 0, 1));
+      child.position.lerpVectors(held, docked, childProgress);
+      child.rotation.y = (child.userData.baseRotationY || 0) +
+        Math.sin(state.elapsed * 1.9 + (child.userData.bloomBob || 0)) * 0.035 * (1 - childProgress * 0.6);
+    });
+  });
+
+  (levelOneBloomMeshes.dockGlows || []).forEach((glow, index) => {
+    const pulse = 0.5 + Math.sin(state.elapsed * 4.0 + index) * 0.5;
+    glow.visible = isLevelOne;
+    glow.material.opacity = state.levelOne.blueBloomDocked ? 0.24 + pulse * 0.13 : progress > 0.65 ? (progress - 0.65) * 0.36 : 0;
+    glow.scale.setScalar(0.95 + pulse * 0.08);
+  });
+
+  if (dt > 0 && state.levelOne.blueBloomDocked && !state.levelOne.crossingReadyPromptShown && state.active === "human") {
+    state.levelOne.crossingReadyPromptShown = true;
+    showSpeech("human", "Now I can cross.", 1.8);
+  }
+}
+
+function levelOneBloomProgress() {
+  if (state.levelOne.blueBloomDocked) return 1;
+  if (!state.levelOne.blueBloomReleased && !state.levelOne.blueBloomRevealActive) return 0;
+  return levelOneBloomDriftProgress();
+}
+
+function levelOneBloomDriftProgress() {
+  const raw = (state.levelOne.blueBloomRevealElapsed - LEVEL_ONE_BLUE_BLOOM_TIMING.driftStartAt) /
+    (LEVEL_ONE_BLUE_BLOOM_TIMING.dockedAt - LEVEL_ONE_BLUE_BLOOM_TIMING.driftStartAt);
+  return easeInOutSmooth(clamp(raw, 0, 1));
+}
+
 function updateVisualEffects(dt) {
   markerMeshes.active.rotation.z += dt * 1.8;
+  updateLevelOneBloomVisuals(dt);
   if (state.frogReveal.active) {
     state.frogReveal.elapsed += dt;
     if (state.frogReveal.elapsed >= FROG_REVEAL_SECONDS) state.frogReveal.active = false;
@@ -2142,6 +2399,12 @@ function updateVisualEffects(dt) {
     mesh.position.y = LEVEL_TWO_PLACEHOLDER_LOVE_LETTER_Y + Math.sin(state.elapsed * 2.4) * 0.11;
     mesh.rotation.y += dt * 1.25;
   });
+  levelThreeGoalMeshes.forEach((mesh) => {
+    if (mesh.userData.levelThreeAsset !== "placeholder-love-letter") return;
+    mesh.visible = state.scene.id === SCENES.LEVEL_THREE && state.levelThree.placeholderLoveLetterVisible;
+    mesh.position.y = LEVEL_THREE_PLACEHOLDER_LOVE_LETTER_Y + Math.sin(state.elapsed * 2.2) * 0.1;
+    mesh.rotation.y += dt * 1.1;
+  });
   if (levelTwoInteractiveMeshes.elephantTotem) {
     const bob = Math.sin(state.elapsed * 3.0) * 0.12;
     levelTwoInteractiveMeshes.elephantTotem.position.y = LEVEL_TWO_ELEPHANT_TOTEM_HILL.topY + 0.9 + bob;
@@ -2156,10 +2419,10 @@ function updateVisualEffects(dt) {
   }
   if (levelTwoInteractiveMeshes.elephantEcho) {
     const pulse = 0.5 + Math.sin(state.elapsed * 3.2) * 0.5;
-    const echoSurfaceY = levelTwoRedButtonSurfaceY(LEVEL_TWO_RED_BUTTONS[0]);
+    const echoSurfaceY = LEVEL_TWO_POINTS.elephantEcho.y ?? SURFACE_Y;
     levelTwoInteractiveMeshes.elephantEcho.position.set(
       LEVEL_TWO_POINTS.elephantEcho.x,
-      echoSurfaceY + 0.08 + Math.sin(state.elapsed * 2.6) * 0.05,
+      echoSurfaceY + Math.sin(state.elapsed * 2.6) * 0.05,
       LEVEL_TWO_POINTS.elephantEcho.z
     );
     levelTwoInteractiveMeshes.elephantEcho.rotation.y += dt * 0.55;
@@ -2208,24 +2471,33 @@ function updateVisualEffects(dt) {
       mesh.userData.lastY = nextY;
     }
   });
-  const loveLetterBob = Math.sin(state.elapsed * 2.7) * 0.12;
+  const loveLetterPoint = currentLoveLetterPoint();
+  const loveLetterBaseY = Number.isFinite(loveLetterPoint.y) ? loveLetterPoint.y : SURFACE_Y;
+  const levelOneBloomingLetter = state.scene.id === SCENES.LEVEL_ONE &&
+    state.levelOne.blueBloomReleased &&
+    !state.levelOne.blueBloomDocked;
+  const loveLetterBob = levelOneBloomingLetter
+    ? Math.sin(state.elapsed * 1.75) * 0.08
+    : Math.sin(state.elapsed * 2.7) * 0.12;
   if (state.reveals.spellbook && !state.spellbookCollected) {
     const revealT = state.loveLetterReveal.active
       ? clamp(state.loveLetterReveal.elapsed / LOVE_LETTER_REVEAL_SECONDS, 0, 1)
       : 1;
-    const drop = (1 - easeOutCubic(revealT)) * 2.35;
-    const wiggle = state.loveLetterReveal.active
+    const drop = levelOneBloomingLetter ? 0 : (1 - easeOutCubic(revealT)) * 2.35;
+    const wiggle = levelOneBloomingLetter
+      ? Math.sin(state.elapsed * 2.4) * 0.08
+      : state.loveLetterReveal.active
       ? Math.sin(state.elapsed * 18) * 0.16 * (1 - revealT)
       : 0;
     const attentionBounce = state.loveLetterAttention.bounceElapsed > 0
       ? Math.sin((1 - state.loveLetterAttention.bounceElapsed / LOVE_LETTER_ATTENTION_BOUNCE_SECONDS) * Math.PI) * 0.32
       : 0;
     markerMeshes.spellbookClosed.visible = true;
-    markerMeshes.spellbookClosed.position.set(SPELLBOOK.x, SURFACE_Y + 0.72 + loveLetterBob + attentionBounce + drop, SPELLBOOK.z);
+    markerMeshes.spellbookClosed.position.set(loveLetterPoint.x, loveLetterBaseY + 0.72 + loveLetterBob + attentionBounce + drop, loveLetterPoint.z);
     markerMeshes.spellbookClosed.rotation.y += dt * 1.7;
     markerMeshes.spellbookClosed.rotation.z = wiggle;
     markerMeshes.spellbookOpen.visible = false;
-    markerMeshes.rewardGlow.position.set(SPELLBOOK.x, SURFACE_Y + 0.08, SPELLBOOK.z);
+    markerMeshes.rewardGlow.position.set(loveLetterPoint.x, loveLetterBaseY + 0.08, loveLetterPoint.z);
     markerMeshes.rewardGlow.material.opacity = (0.38 + Math.sin(state.elapsed * 4) * 0.08) * revealT;
   } else {
     markerMeshes.spellbookClosed.visible = false;
@@ -2408,8 +2680,8 @@ function switchActorFree() {
     }
     if (returningKey === "elephant") state.cubelings.elephant.active = false;
     spawnTransferParticles(particleContext, returningActor, state.human);
-    if (state.scene.id === SCENES.LEVEL_ONE && state.buttonPressed && !state.spellbookCollected) {
-      showPrompt("Bring your character across the bridge to the Love Letter.", 2.2);
+    if (state.scene.id === SCENES.LEVEL_ONE && state.levelOne.blueBloomDocked && !state.spellbookCollected) {
+      showPrompt("Bring your character across the blue blooms to the Love Letter.", 2.2);
       showSpeech("human", "There we go. Now I can cross.", 2.0);
     } else {
       showSpeech("human", "Back to me.", 1.2);
@@ -2454,8 +2726,11 @@ function showFrogLoveLetterLesson() {
     state.loveLetterLesson.lastFrogPromptAt = state.elapsed;
   }
   showPrompt("The Frog Cubeling can't collect the Love Letter. Switch back to your character to pick it up.", 3.2);
+  const frogLine = state.scene.id === SCENES.LEVEL_ONE
+    ? "I brought it closer, but you pick it up."
+    : "I can't pick this up.";
   queueSpeech([
-    { anchor: "frog", text: "I can't pick this up.", seconds: 2.1 },
+    { anchor: "frog", text: frogLine, seconds: 2.1 },
     { anchor: "loveLetter", text: "Come back as yourself and collect me!", seconds: 2.4 }
   ]);
 }
@@ -2508,16 +2783,20 @@ function frogJump() {
   const jump = getFrogJump();
   if (!jump) {
     const text = state.scene.id === SCENES.LEVEL_ONE
-      ? "Get onto the partial bridge, then press Space."
+      ? "Line up with the lily pad, then press Space."
       : state.scene.id === SCENES.LEVEL_TWO
         ? (state.levelTwo.lastFrogJumpReason === "too_high" ? "That ledge is too high for the Frog Cubeling." : "Line up with a low ledge, then press Space.")
-        : "Face the barrier from close range, then press Space.";
+        : state.scene.id === SCENES.LEVEL_THREE
+          ? "No Frog jump route is authored in this shell yet."
+          : "Face the barrier from close range, then press Space.";
     showPrompt(text, 1.4);
     const speech = state.scene.id === SCENES.LEVEL_ONE
-      ? "Hop onto the bridge first."
+      ? "I need to jump, not swim."
       : state.scene.id === SCENES.LEVEL_TWO
         ? (state.levelTwo.lastFrogJumpReason === "too_high" ? "That's too high for me." : "Line me up with a ledge first.")
-        : "Line me up with the barrier first.";
+        : state.scene.id === SCENES.LEVEL_THREE
+          ? "No jump path here yet."
+          : "Line me up with the barrier first.";
     showSpeech("frog", speech, 1.5);
     return;
   }
@@ -2631,26 +2910,41 @@ function pointNearLevelTwoTiles(point, tiles, padding) {
 }
 
 function getLevelOneFrogJump() {
-  const waterMinX = gridPoint(LEVEL_ONE_WATER_COLUMNS[0], LEVEL_ONE_BRIDGE_ROW).x - TILE * 0.55;
-  const waterMaxX = gridPoint(LEVEL_ONE_WATER_COLUMNS[LEVEL_ONE_WATER_COLUMNS.length - 1], LEVEL_ONE_BRIDGE_ROW).x + TILE * 0.55;
-  const side = state.frog.x <= waterMaxX + 0.65 ? 1 : -1;
-  const onPartialBridge = isOnLevelOnePartialBridgeSurface(state.frog);
-  const onCompletedBridge = state.levelOne.bridgeComplete && isOnLevelOneBridgeSurface(state.frog, false);
-  const nearBridgeJumpZone = onPartialBridge || onCompletedBridge || distance2D(state.frog, LEVEL_ONE_JUMP_ZONE) <= LEVEL_ONE_JUMP_ZONE.radius || (
-    side < 0 &&
-    Math.abs(state.frog.z - LEVEL_ONE_BRIDGE_Z) <= LEVEL_ONE_BRIDGE_HALF_Z + 0.22 &&
-    state.frog.x > waterMaxX - 0.45
-  );
-  if (!nearBridgeJumpZone) return null;
-  const landing = side > 0
-    ? { x: LEVEL_ONE_LANDING.x, z: LEVEL_ONE_LANDING.z }
-    : { x: LEVEL_ONE_PARTIAL_BRIDGE.x, z: LEVEL_ONE_BRIDGE_Z };
+  const frog = state.frog;
+  const onLilyPad = isOnLevelOneLilyPadSurface(frog);
+  const nearLeftApproach = distance2D(frog, LEVEL_ONE_LEFT_APPROACH) <= LEVEL_ONE_LEFT_APPROACH.radius ||
+    (frog.x < LEVEL_ONE_LILY_PAD.position.x - 1.25 && Math.abs(frog.z - LEVEL_ONE_CROSSING_Z) <= 2.25);
+  const nearRightApproach = distance2D(frog, LEVEL_ONE_RIGHT_APPROACH) <= LEVEL_ONE_RIGHT_APPROACH.radius ||
+    distance2D(frog, LEVEL_ONE_BUTTON) <= 2.45 ||
+    (frog.x > LEVEL_ONE_LILY_PAD.position.x + 1.65 && Math.abs(frog.z - LEVEL_ONE_CROSSING_Z) <= 2.35);
+  const facingEast = frog.facing.x > -0.35;
+  const facingWest = frog.facing.x < 0.35;
+
+  let landing = null;
+  let destinationSurface = "";
+  if (onLilyPad) {
+    if (frog.facing.x < -0.2) {
+      landing = { x: LEVEL_ONE_LEFT_APPROACH.x, z: LEVEL_ONE_LEFT_APPROACH.z };
+      destinationSurface = "left-bank";
+    } else {
+      landing = { x: LEVEL_ONE_LANDING.x, z: LEVEL_ONE_LANDING.z };
+      destinationSurface = "right-bank";
+    }
+  } else if (nearLeftApproach && facingEast) {
+    landing = { x: LEVEL_ONE_LILY_PAD.position.x, z: LEVEL_ONE_LILY_PAD.position.z };
+    destinationSurface = LEVEL_ONE_LILY_PAD.id;
+  } else if (nearRightApproach && facingWest) {
+    landing = { x: LEVEL_ONE_LILY_PAD.position.x, z: LEVEL_ONE_LILY_PAD.position.z };
+    destinationSurface = LEVEL_ONE_LILY_PAD.id;
+  }
+  if (!landing) return null;
   if (collidesAt(state.frog, landing.x, landing.z, { ignoreActor: true })) return null;
   return {
     kind: "level_one_water",
+    destinationSurface,
     start: { x: state.frog.x, z: state.frog.z },
     end: landing,
-    over: { x: (waterMinX + waterMaxX) * 0.5, z: LEVEL_ONE_BRIDGE_Z, topHeight: 0.18 },
+    over: { x: LEVEL_ONE_LILY_PAD.position.x, z: LEVEL_ONE_LILY_PAD.position.z, topHeight: 0.18 },
     elapsed: 0,
     duration: JUMP_DURATION
   };
@@ -2661,14 +2955,7 @@ function pressButton() {
   state.buttonPressed = true;
   resetTutorialRecoveryState();
   if (state.scene.id === SCENES.LEVEL_ONE) {
-    state.levelOne.bridgeComplete = true;
-    state.levelOne.bridgeRevealActive = true;
-    state.levelOne.bridgeRevealElapsed = 0;
-    state.levelOne.waterBlocked = false;
-    state.levelOne.bridgeAsset = "complete-bridge";
-    showPrompt("Button pressed. The bridge is complete.", 1.8);
-    showSpeech("human", "There we go. Now I can cross.", 2.0);
-    spawnRevealSparkles(particleContext, LEVEL_ONE_COMPLETE_BRIDGE_A.x, LEVEL_ONE_BRIDGE_Z, 0xffe18c, 22);
+    beginLevelOneBlueBloomRelease();
   } else {
     state.doorwayOpen = true;
     const door = barrierMeshes.get(DOOR_ROW);
@@ -2682,7 +2969,7 @@ function pressButton() {
     }
   }
   state.loveLetterAttention.buttonReactionCount += 1;
-  triggerLoveLetterAttention("button_pressed", "strong");
+  if (state.scene.id !== SCENES.LEVEL_ONE) triggerLoveLetterAttention("button_pressed", "strong");
   if (state.scene.id === SCENES.TUTORIAL) {
     if (tutorialPressedWhileHuman) {
       queueSpeech([
@@ -2698,6 +2985,65 @@ function pressButton() {
       ]);
     }
   }
+}
+
+function beginLevelOneBlueBloomRelease() {
+  if (state.levelOne.blueBloomReleased) return;
+  state.levelOne.blueBloomReleased = true;
+  state.levelOne.blueBloomRevealActive = true;
+  state.levelOne.blueBloomRevealElapsed = 0;
+  state.levelOne.blueBloomDocked = false;
+  state.levelOne.loveLetterSurfaced = false;
+  state.levelOne.bridgeRevealActive = true;
+  state.levelOne.bridgeRevealElapsed = 0;
+  state.levelOne.bridgeComplete = false;
+  state.levelOne.waterBlocked = true;
+  state.levelOne.bridgeAsset = "blue-bloom-crossing-releasing";
+  showPrompt("The blue blooms are drifting in!", 1.9);
+  spawnRevealSparkles(particleContext, LEVEL_ONE_BLUE_BLOOM_LATCH.position.x, LEVEL_ONE_BLUE_BLOOM_LATCH.position.z, 0x70c9ff, 20);
+}
+
+function surfaceLevelOneLoveLetterWithBloom() {
+  if (state.scene.id !== SCENES.LEVEL_ONE || state.spellbookCollected) return;
+  state.levelOne.loveLetterSurfaced = true;
+  if (state.reveals.spellbook) return;
+  state.reveals.spellbook = true;
+  state.loveLetterReveal = { active: true, elapsed: 0, mode: "level_one_bloom_float" };
+  state.loveLetterAttention = {
+    ...createLoveLetterAttentionState(),
+    revealedBeforeButton: false,
+    revealReason: "blue_bloom_float",
+    protectSpeechUntil: state.elapsed + 1.4
+  };
+}
+
+function dockLevelOneLoveLetterWithBloom() {
+  if (state.scene.id !== SCENES.LEVEL_ONE || state.spellbookCollected) return;
+  if (!state.reveals.spellbook) surfaceLevelOneLoveLetterWithBloom();
+  state.loveLetterReveal = { active: false, elapsed: LOVE_LETTER_REVEAL_SECONDS, mode: "level_one_bloom_docked" };
+  state.loveLetterAttention = {
+    ...state.loveLetterAttention,
+    revealReason: "blue_bloom_docked",
+    protectSpeechUntil: state.elapsed + 2.4
+  };
+  showPrompt("The blue flowers opened a crossing.", 2.1);
+  spawnRevealSparkles(particleContext, LEVEL_ONE_LOVE_LETTER_POINT.x, LEVEL_ONE_LOVE_LETTER_POINT.z, 0x70c9ff, 14);
+  triggerLoveLetterAttention("blue_bloom_docked", "strong");
+}
+
+function revealLevelOneLoveLetter() {
+  if (state.scene.id !== SCENES.LEVEL_ONE || state.reveals.spellbook || state.spellbookCollected) return;
+  state.reveals.spellbook = true;
+  state.loveLetterReveal = { active: true, elapsed: 0 };
+  state.loveLetterAttention = {
+    ...createLoveLetterAttentionState(),
+    revealedBeforeButton: false,
+    revealReason: "blue_bloom_docked",
+    protectSpeechUntil: state.elapsed + 2.4
+  };
+  showPrompt("The blue flowers opened a crossing.", 2.1);
+  spawnRevealSparkles(particleContext, LEVEL_ONE_LOVE_LETTER_POINT.x, LEVEL_ONE_LOVE_LETTER_POINT.z, 0x70c9ff, 22);
+  triggerLoveLetterAttention("blue_bloom_docked", "strong");
 }
 
 function collectSpellbook() {
@@ -2744,6 +3090,10 @@ function resetLevel() {
     resetLevelTwoScene();
     return;
   }
+  if (state.scene.id === SCENES.LEVEL_THREE) {
+    resetLevelThreeScene();
+    return;
+  }
   resetTutorialSceneFlow(tutorialFlowContext());
 }
 
@@ -2760,6 +3110,7 @@ function resetHomeScene() {
   state.home = createHomeState("arrival");
   state.levelOne = createLevelOneState("inactive");
   state.levelTwo = createLevelTwoState("inactive");
+  state.levelThree = createLevelThreeState("inactive");
   state.active = "human";
   state.cameraYaw = 0;
   state.targetCameraYaw = 0;
@@ -2792,6 +3143,10 @@ function resetLevelOneScene() {
 
 function resetLevelTwoScene() {
   resetLevelTwoSceneFlow(levelTwoFlowContext());
+}
+
+function resetLevelThreeScene() {
+  resetLevelThreeSceneFlow(levelThreeFlowContext());
 }
 
 function moveActor(actor, dx, dz) {
@@ -2851,7 +3206,7 @@ function sceneColliderBlocks(actor, x, z) {
       return true;
     }
     for (const water of levelOneWaterColliders) {
-      if (water.row === LEVEL_ONE_BRIDGE_ROW && levelOneBridgeWalkableAt(actor, x, z)) continue;
+      if (levelOneBridgeWalkableAt(actor, x, z)) continue;
       if (!circleIntersectsAabb(x, z, actor.radius, water)) continue;
       if (actor === state.frog) registerFrogWaterBlock();
       return true;
@@ -2865,6 +3220,11 @@ function sceneColliderBlocks(actor, x, z) {
       return true;
     }
     return false;
+  }
+  if (state.scene.id === SCENES.LEVEL_THREE) {
+    return sceneObjectColliders
+      .filter((collider) => collider.scene === SCENES.LEVEL_THREE)
+      .some((collider) => circleIntersectsAabb(x, z, actor.radius, collider));
   }
   return false;
 }
@@ -3348,7 +3708,14 @@ function updateLevelTwoSurfaceState() {
   if (state.levelTwo.elephantSpawned) {
     const previousElephantSurfaceId = state.levelTwo.elephantSurfaceId;
     const redPlatform = levelTwoRedPlatformAt(state.elephant);
-    if (redPlatform && levelTwoRedPlatformCanAttachActor(state.elephant, redPlatform)) {
+    const exitingElevatorATop = redPlatform?.id === "red-elevator-a" &&
+      previousElephantSurfaceId === "red-elevator-a" &&
+      levelTwoRedPlatformIsTopAligned(redPlatform) &&
+      state.elephant.x <= redPlatform.minX + state.elephant.radius + 0.24 &&
+      levelTwoRedElevatorTopExitSafeAt(state.elephant, state.elephant.radius + 0.08);
+    if (exitingElevatorATop) {
+      state.levelTwo.elephantSurfaceId = "tier-3-elephant-route";
+    } else if (redPlatform && levelTwoRedPlatformCanAttachActor(state.elephant, redPlatform)) {
       state.levelTwo.elephantSurfaceId = redPlatform.id;
     } else if (levelTwoElephantEchoTerraceSafeAt(state.elephant, state.elephant.radius + 0.08)) {
       const previousPlatform = LEVEL_TWO_RED_PLATFORMS.find((platform) => platform.id === previousElephantSurfaceId);
@@ -3373,34 +3740,77 @@ function updateLevelTwoSurfaceState() {
 }
 
 function levelOneBridgeLiftAt(point) {
-  return state.scene.id === SCENES.LEVEL_ONE && isOnLevelOneBridgeSurface(point, true)
-    ? LEVEL_ONE_BRIDGE_ACTOR_LIFT
+  return state.scene.id === SCENES.LEVEL_ONE && isOnLevelOneBridgeSurface(point, false)
+    ? LEVEL_ONE_CROSSING_ACTOR_LIFT
     : 0;
 }
 
 function levelOneBridgeWalkableAt(actor, x, z) {
-  if (!isOnLevelOneBridgeSurface({ x, z }, false)) return false;
-  if (state.levelOne.bridgeComplete) return true;
-  return actor === state.frog && isOnLevelOnePartialBridgeSurface({ x, z });
+  const point = { x, z };
+  const padding = Math.max(0, actor?.radius || 0);
+  if (actor === state.frog && isOnLevelOneLilyPadSurface(point, padding)) return true;
+  if (actor === state.human && state.levelOne.blueBloomDocked && isOnLevelOneLilyPadSurface(point, padding)) return true;
+  if (!state.levelOne.blueBloomDocked) return false;
+  return levelOneDockedBloomCrossingAt(point, padding);
 }
 
 function isOnLevelOneBridgeSurface(point, includeBankOverlap = true) {
-  if (Math.abs(point.z - LEVEL_ONE_BRIDGE_Z) > LEVEL_ONE_BRIDGE_HALF_Z) return false;
-  if (isOnLevelOnePartialBridgeSurface(point)) return true;
-  if (!state.levelOne.bridgeComplete) return false;
-  const minX = includeBankOverlap ? LEVEL_ONE_COMPLETE_BRIDGE_MIN_X : LEVEL_ONE_PARTIAL_BRIDGE_MAX_X;
-  return point.x >= minX && point.x <= LEVEL_ONE_COMPLETE_BRIDGE_MAX_X;
+  if (isOnLevelOneLilyPadSurface(point)) return true;
+  if (!state.levelOne.blueBloomDocked && !state.levelOne.bridgeComplete) return false;
+  if (isOnLevelOneBloomMatSurface(point, "left") || isOnLevelOneBloomMatSurface(point, "right")) return true;
+  if (!includeBankOverlap) return false;
+  const minX = Math.min(
+    LEVEL_ONE_BLUE_BLOOM_MATS.left.docked.x - LEVEL_ONE_BLUE_BLOOM_MATS.left.halfX,
+    LEVEL_ONE_BLUE_BLOOM_MATS.right.docked.x - LEVEL_ONE_BLUE_BLOOM_MATS.right.halfX
+  );
+  const maxX = Math.max(
+    LEVEL_ONE_BLUE_BLOOM_MATS.left.docked.x + LEVEL_ONE_BLUE_BLOOM_MATS.left.halfX,
+    LEVEL_ONE_BLUE_BLOOM_MATS.right.docked.x + LEVEL_ONE_BLUE_BLOOM_MATS.right.halfX
+  );
+  const halfZ = Math.max(LEVEL_ONE_LILY_PAD.halfZ, LEVEL_ONE_BLUE_BLOOM_MATS.left.halfZ, LEVEL_ONE_BLUE_BLOOM_MATS.right.halfZ);
+  return Math.abs(point.z - LEVEL_ONE_CROSSING_Z) <= halfZ && point.x >= minX && point.x <= maxX;
+}
+
+function levelOneDockedBloomCrossingAt(point, padding = 0) {
+  if (!state.levelOne.blueBloomDocked && !state.levelOne.bridgeComplete) return false;
+  if (isOnLevelOneLilyPadSurface(point, padding)) return true;
+  if (isOnLevelOneBloomMatSurface(point, "left", padding) || isOnLevelOneBloomMatSurface(point, "right", padding)) return true;
+  const bankOverlap = 0.72;
+  const minX = Math.min(
+    LEVEL_ONE_BLUE_BLOOM_MATS.left.docked.x - LEVEL_ONE_BLUE_BLOOM_MATS.left.halfX,
+    LEVEL_ONE_LILY_PAD.position.x - LEVEL_ONE_LILY_PAD.halfX,
+    LEVEL_ONE_BLUE_BLOOM_MATS.right.docked.x - LEVEL_ONE_BLUE_BLOOM_MATS.right.halfX
+  ) - bankOverlap;
+  const maxX = Math.max(
+    LEVEL_ONE_BLUE_BLOOM_MATS.left.docked.x + LEVEL_ONE_BLUE_BLOOM_MATS.left.halfX,
+    LEVEL_ONE_LILY_PAD.position.x + LEVEL_ONE_LILY_PAD.halfX,
+    LEVEL_ONE_BLUE_BLOOM_MATS.right.docked.x + LEVEL_ONE_BLUE_BLOOM_MATS.right.halfX
+  ) + bankOverlap;
+  const halfZ = Math.max(LEVEL_ONE_LILY_PAD.halfZ, LEVEL_ONE_BLUE_BLOOM_MATS.left.halfZ, LEVEL_ONE_BLUE_BLOOM_MATS.right.halfZ);
+  return Math.abs(point.z - LEVEL_ONE_CROSSING_Z) <= halfZ + padding &&
+    point.x >= minX - padding &&
+    point.x <= maxX + padding;
 }
 
 function isOnLevelOnePartialBridgeSurface(point) {
-  return Math.abs(point.z - LEVEL_ONE_BRIDGE_Z) <= LEVEL_ONE_BRIDGE_HALF_Z &&
-    point.x >= LEVEL_ONE_PARTIAL_BRIDGE_MIN_X &&
-    point.x <= LEVEL_ONE_PARTIAL_BRIDGE_MAX_X;
+  return isOnLevelOneLilyPadSurface(point) || isOnLevelOneBloomMatSurface(point, "left");
+}
+
+function isOnLevelOneLilyPadSurface(point, padding = 0) {
+  return Math.abs(point.x - LEVEL_ONE_LILY_PAD.position.x) <= LEVEL_ONE_LILY_PAD.halfX + padding &&
+    Math.abs(point.z - LEVEL_ONE_LILY_PAD.position.z) <= LEVEL_ONE_LILY_PAD.halfZ + padding;
+}
+
+function isOnLevelOneBloomMatSurface(point, id, padding = 0) {
+  const mat = LEVEL_ONE_BLUE_BLOOM_MATS[id];
+  if (!mat) return false;
+  return Math.abs(point.x - mat.docked.x) <= mat.halfX + padding &&
+    Math.abs(point.z - mat.docked.z) <= mat.halfZ + padding;
 }
 
 function loveLetterBlocksFrogAt(x, z) {
-  if (!state.reveals.spellbook || state.spellbookCollected) return false;
-  return distance2D({ x, z }, SPELLBOOK) < state.frog.radius + LOVE_LETTER_BLOCK_RADIUS;
+  if (!currentLoveLetterCollectable() || state.spellbookCollected) return false;
+  return distance2D({ x, z }, currentLoveLetterPoint()) < state.frog.radius + LOVE_LETTER_BLOCK_RADIUS;
 }
 
 function activeBarrierColliders() {
@@ -3412,6 +3822,7 @@ function activeWorldBounds() {
   if (state.scene.id === SCENES.HOME) return HOME_BOUNDS;
   if (state.scene.id === SCENES.LEVEL_ONE) return LEVEL_ONE_BOUNDS;
   if (state.scene.id === SCENES.LEVEL_TWO) return LEVEL_TWO_BOUNDS;
+  if (state.scene.id === SCENES.LEVEL_THREE) return LEVEL_THREE_BOUNDS;
   if (state.reveals.rightFloor) return WORLD_BOUNDS;
   return {
     ...WORLD_BOUNDS,
@@ -3449,6 +3860,19 @@ function frogPatrolZone(side = frogCurrentSide()) {
   }
   if (state.scene.id === SCENES.LEVEL_TWO) {
     const frogStart = LEVEL_TWO_POINTS.frogStart;
+    const zone = clampZoneToBounds({
+      side: "left",
+      minX: frogStart.x - 1.35,
+      maxX: frogStart.x + 1.35,
+      minZ: frogStart.z - 1.0,
+      maxZ: frogStart.z + 1.0
+    }, bounds);
+    zone.centerX = (zone.minX + zone.maxX) * 0.5;
+    zone.centerZ = (zone.minZ + zone.maxZ) * 0.5;
+    return zone;
+  }
+  if (state.scene.id === SCENES.LEVEL_THREE) {
+    const frogStart = LEVEL_THREE_POINTS.frogStart;
     const zone = clampZoneToBounds({
       side: "left",
       minX: frogStart.x - 1.35,
@@ -3597,8 +4021,8 @@ function applyRevealVisibility() {
     levelTwoInteractiveMeshes,
     surfaceY: SURFACE_Y,
     doorRow: DOOR_ROW,
-    levelOneBridgeVisualY: LEVEL_ONE_BRIDGE_VISUAL_Y,
-    levelOneBridgeDeckY: LEVEL_ONE_BRIDGE_DECK_Y,
+    levelOneBridgeVisualY: SURFACE_Y,
+    levelOneBridgeDeckY: SURFACE_Y,
     levelTwoBlueRamp: LEVEL_TWO_BLUE_RAMP,
     rightFloorProgress,
     barrierSegmentProgress,
@@ -3907,8 +4331,9 @@ function maybeRevealLoveLetterFromBarrierApproach() {
 function triggerLoveLetterAttention(reason = "gentle", intensity = "gentle") {
   if (!state.reveals.spellbook || state.spellbookCollected) return;
   const strong = intensity === "strong";
-  spawnRevealSparkles(particleContext, SPELLBOOK.x, SPELLBOOK.z, 0xffd37a, strong ? 18 : 7);
-  spawnLoveLetterHearts(particleContext, SPELLBOOK, strong ? 5 : 2);
+  const loveLetterPoint = currentLoveLetterPoint();
+  spawnRevealSparkles(particleContext, loveLetterPoint.x, loveLetterPoint.z, 0xffd37a, strong ? 18 : 7);
+  spawnLoveLetterHearts(particleContext, loveLetterPoint, strong ? 5 : 2);
   state.loveLetterAttention.bounceElapsed = LOVE_LETTER_ATTENTION_BOUNCE_SECONDS;
   state.loveLetterAttention.sparkleTimer = LOVE_LETTER_SPARKLE_INTERVAL;
   state.loveLetterAttention.heartTimer = LOVE_LETTER_HEART_INTERVAL;
@@ -3955,11 +4380,12 @@ function updateLoveLetterAttention(dt) {
   attention.bounceTimer -= dt;
 
   if (attention.sparkleTimer <= 0) {
-    spawnRevealSparkles(particleContext, SPELLBOOK.x, SPELLBOOK.z, 0xffd37a, 5);
+    const loveLetterPoint = currentLoveLetterPoint();
+    spawnRevealSparkles(particleContext, loveLetterPoint.x, loveLetterPoint.z, 0xffd37a, 5);
     attention.sparkleTimer = LOVE_LETTER_SPARKLE_INTERVAL + Math.random() * 1.2;
   }
   if (attention.heartTimer <= 0) {
-    spawnLoveLetterHearts(particleContext, SPELLBOOK, 2);
+    spawnLoveLetterHearts(particleContext, currentLoveLetterPoint(), 2);
     attention.heartTimer = LOVE_LETTER_HEART_INTERVAL + Math.random() * 1.4;
   }
   if (attention.bounceTimer <= 0) {
@@ -4077,11 +4503,25 @@ function updateControlsPanel() {
   renderControlsPanel(hud, state.controlsOpen);
 }
 
+function levelCompleteNextLevelEnabled() {
+  if (state.scene.id === SCENES.TUTORIAL) return Boolean(state.tutorialComplete);
+  if (state.scene.id === SCENES.LEVEL_ONE) return Boolean(state.levelOne.complete);
+  return false;
+}
+
+function levelCompleteNextLevelDestination() {
+  if (state.scene.id === SCENES.TUTORIAL) return "Level One";
+  if (state.scene.id === SCENES.LEVEL_ONE) return "Level Two";
+  return "";
+}
+
 function updateLevelCompleteModal() {
   renderLevelCompleteModal(hud, {
     open: state.celebration.modalVisible,
     isTutorial: state.scene.id === SCENES.TUTORIAL,
-    levelName: state.scene.id === SCENES.LEVEL_TWO ? "Level Two" : "Level One"
+    levelName: state.scene.id === SCENES.LEVEL_TWO ? "Level Two" : "Level One",
+    nextLevelEnabled: levelCompleteNextLevelEnabled(),
+    nextLevelDestination: levelCompleteNextLevelDestination()
   });
 }
 
@@ -4277,7 +4717,7 @@ function getSpeechAnchorPoint(anchor) {
   if (anchor === "elephant") return { x: state.elephant.x, y: LEVEL_TWO_ELEPHANT_ECHO_TOP_Y + 2.0, z: state.elephant.z };
   if (anchor === "frogEcho") return { x: START.frog.x, y: SURFACE_Y + 2.0, z: START.frog.z };
   if (anchor === "frogTotem") return { x: FROG_TOTEM.x, y: SURFACE_Y + 2.0, z: FROG_TOTEM.z };
-  if (anchor === "elephantEcho") return { x: LEVEL_TWO_POINTS.elephantEcho.x, y: LEVEL_TWO_ELEPHANT_ECHO_TOP_Y + 2.0, z: LEVEL_TWO_POINTS.elephantEcho.z };
+  if (anchor === "elephantEcho") return { x: LEVEL_TWO_POINTS.elephantEcho.x, y: (LEVEL_TWO_POINTS.elephantEcho.y ?? SURFACE_Y) + 2.0, z: LEVEL_TWO_POINTS.elephantEcho.z };
   if (anchor === "elephantTotem") return { x: LEVEL_TWO_POINTS.elephantTotem.x, y: LEVEL_TWO_ELEPHANT_TOTEM_HILL.topY + 1.4, z: LEVEL_TWO_POINTS.elephantTotem.z };
   if (anchor === "button") {
     const button = buttonPoint();
@@ -4291,7 +4731,16 @@ function getSpeechAnchorPoint(anchor) {
         z: LEVEL_TWO_POINTS.placeholderLoveLetter.z
       };
     }
-    return { x: SPELLBOOK.x, y: SURFACE_Y + 1.9, z: SPELLBOOK.z };
+    if (state.scene.id === SCENES.LEVEL_THREE) {
+      return {
+        x: LEVEL_THREE_POINTS.placeholderLoveLetter.x,
+        y: LEVEL_THREE_PLACEHOLDER_LOVE_LETTER_Y + 1.2,
+        z: LEVEL_THREE_POINTS.placeholderLoveLetter.z
+      };
+    }
+    const loveLetterPoint = currentLoveLetterPoint();
+    const loveLetterBaseY = Number.isFinite(loveLetterPoint.y) ? loveLetterPoint.y : SURFACE_Y;
+    return { x: loveLetterPoint.x, y: loveLetterBaseY + 1.9, z: loveLetterPoint.z };
   }
   return { x: state.human.x, y: SURFACE_Y + 2.35, z: state.human.z };
 }
@@ -4306,6 +4755,36 @@ function buttonPoint() {
   return state.scene.id === SCENES.LEVEL_ONE ? LEVEL_ONE_BUTTON : TUTORIAL_BUTTON;
 }
 
+function currentLoveLetterPoint() {
+  if (state.scene.id === SCENES.LEVEL_ONE) return currentLevelOneLoveLetterPoint();
+  return SPELLBOOK;
+}
+
+function currentLevelOneLoveLetterPoint() {
+  if (!state.levelOne.blueBloomReleased || state.levelOne.blueBloomDocked) return LEVEL_ONE_LOVE_LETTER_POINT;
+  const driftT = levelOneBloomDriftProgress();
+  const riseT = easeOutCubic(clamp(
+    (state.levelOne.blueBloomRevealElapsed - LEVEL_ONE_BLUE_BLOOM_TIMING.loveLetterSurfaceAt) /
+      LEVEL_ONE_BLUE_BLOOM_TIMING.loveLetterRiseSeconds,
+    0,
+    1
+  ));
+  const rightMat = LEVEL_ONE_BLUE_BLOOM_MATS.right;
+  const heldX = rightMat.held.x + 0.22;
+  const heldZ = rightMat.held.z + 0.12;
+  return {
+    x: THREE.MathUtils.lerp(heldX, LEVEL_ONE_LOVE_LETTER_POINT.x, driftT),
+    y: THREE.MathUtils.lerp(SURFACE_Y - 0.56, LEVEL_ONE_LOVE_LETTER_POINT.y, riseT),
+    z: THREE.MathUtils.lerp(heldZ, LEVEL_ONE_LOVE_LETTER_POINT.z, driftT)
+  };
+}
+
+function currentLoveLetterCollectable() {
+  if (!state.reveals.spellbook) return false;
+  if (state.scene.id === SCENES.LEVEL_ONE) return state.levelOne.blueBloomDocked;
+  return true;
+}
+
 function resetFrogAiForScene() {
   state.frogAi = {
     enabled: true,
@@ -4313,7 +4792,7 @@ function resetFrogAiForScene() {
     target: { x: state.frog.x, z: state.frog.z },
     timer: 0,
     hop: 0,
-    mode: state.scene.id === SCENES.LEVEL_ONE || state.scene.id === SCENES.LEVEL_TWO ? "patrol" : "idle",
+    mode: state.scene.id === SCENES.LEVEL_ONE || state.scene.id === SCENES.LEVEL_TWO || state.scene.id === SCENES.LEVEL_THREE ? "patrol" : "idle",
     doorwayClear: false,
     currentSide: frogCurrentSide(),
     targetSource: "patrol",
@@ -4328,6 +4807,7 @@ function sceneAllowsInput() {
   if (state.scene.id === SCENES.HOME) return state.home.phase === "play" && !state.home.exitConfirmVisible;
   if (state.scene.id === SCENES.LEVEL_ONE) return state.levelOne.phase === "play";
   if (state.scene.id === SCENES.LEVEL_TWO) return state.levelTwo.phase === "play";
+  if (state.scene.id === SCENES.LEVEL_THREE) return state.levelThree.phase === "play";
   return true;
 }
 
@@ -4407,6 +4887,11 @@ function easeOutCubic(value) {
   return 1 - Math.pow(1 - value, 3);
 }
 
+function easeInOutSmooth(value) {
+  const t = clamp(value, 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
 function normalizeAngle(angle) {
   return Math.atan2(Math.sin(angle), Math.cos(angle));
 }
@@ -4476,7 +4961,7 @@ function renderGameToText() {
   controlsPanel: {
     open: state.controlsOpen,
     buttonLabel: "Controls",
-    rows: ["Move: WASD / Arrows", "Transfer: Shift", "Rotate Camera: Q / E", "Frog Cubeling Jump: Space", "Reset: R Testing Only", "Debug Jump: 1 / 2 / 3 / 4"]
+    rows: ["Move: WASD / Arrows", "Transfer: Shift", "Rotate Camera: Q / E", "Frog Cubeling Jump: Space", "Reset: R Testing Only", "Debug Jump: 1 / 2 / 3 / 4 / 5"]
   },
   reveal: {
     rightFloor: state.reveals.rightFloor,
@@ -4556,7 +5041,7 @@ function renderGameToText() {
       "Continue Free Mode",
       "Main Menu Coming Soon"
     ],
-    disabledChoices: state.scene.id === SCENES.TUTORIAL ? ["Main Menu Coming Soon"] : ["Next Level", "Main Menu Coming Soon"]
+    disabledChoices: levelCompleteNextLevelEnabled() ? ["Main Menu Coming Soon"] : ["Next Level", "Main Menu Coming Soon"]
   },
   loveLetterMessage: {
     id: state.loveLetterMessage.id,
@@ -4642,9 +5127,11 @@ function renderGameToText() {
   },
   reward: {
     name: REWARD_NAME,
-    x: SPELLBOOK.x,
-    z: SPELLBOOK.z,
+    x: Number(currentLoveLetterPoint().x.toFixed(2)),
+    y: Number((Number.isFinite(currentLoveLetterPoint().y) ? currentLoveLetterPoint().y : SURFACE_Y).toFixed(2)),
+    z: Number(currentLoveLetterPoint().z.toFixed(2)),
     visible: state.reveals.spellbook,
+    collectable: currentLoveLetterCollectable(),
     droppingIn: state.loveLetterReveal.active,
     wiggling: state.loveLetterReveal.active,
     revealedBeforeButton: state.loveLetterAttention.revealedBeforeButton,
@@ -4728,20 +5215,49 @@ function renderGameToText() {
   },
   levelOne: {
     phase: state.levelOne.phase,
-    waterBlocked: !state.levelOne.bridgeComplete,
+    waterBlocked: !state.levelOne.blueBloomDocked,
     bridgeComplete: state.levelOne.bridgeComplete,
     bridgeAsset: state.levelOne.bridgeAsset,
-    bridgeOrientation: "crosses-water-gap",
-    bridgeRevealActive: state.levelOne.bridgeRevealActive,
-    bridgeActorLift: LEVEL_ONE_BRIDGE_ACTOR_LIFT,
-    bridgeVisualFlattenY: LEVEL_ONE_BRIDGE_VISUAL_FLATTEN_Y,
-    bridgeSurface: {
-      partialMinX: Number(LEVEL_ONE_PARTIAL_BRIDGE_MIN_X.toFixed(2)),
-      partialMaxX: Number(LEVEL_ONE_PARTIAL_BRIDGE_MAX_X.toFixed(2)),
-      completeMinX: Number(LEVEL_ONE_COMPLETE_BRIDGE_MIN_X.toFixed(2)),
-      completeMaxX: Number(LEVEL_ONE_COMPLETE_BRIDGE_MAX_X.toFixed(2)),
-      halfZ: LEVEL_ONE_BRIDGE_HALF_Z,
-      walkableDeckVisible: true
+    crossingType: "blue-bloom-crossing",
+    blueBloomReleased: state.levelOne.blueBloomReleased,
+    blueBloomRevealActive: state.levelOne.blueBloomRevealActive,
+    blueBloomRevealElapsed: Number(state.levelOne.blueBloomRevealElapsed.toFixed(2)),
+    blueBloomDocked: state.levelOne.blueBloomDocked,
+    blueBloomProgress: Number(levelOneBloomProgress().toFixed(2)),
+    loveLetterSurfaced: Boolean(state.levelOne.loveLetterSurfaced),
+    crossingActorLift: LEVEL_ONE_CROSSING_ACTOR_LIFT,
+    lilyPad: {
+      id: LEVEL_ONE_LILY_PAD.id,
+      x: Number(LEVEL_ONE_LILY_PAD.position.x.toFixed(2)),
+      z: Number(LEVEL_ONE_LILY_PAD.position.z.toFixed(2)),
+      halfX: LEVEL_ONE_LILY_PAD.halfX,
+      halfZ: LEVEL_ONE_LILY_PAD.halfZ,
+      visualScale: LEVEL_ONE_LILY_PAD.visualScale,
+      frogWalkableBeforeDock: true,
+      humanWalkableAfterDock: state.levelOne.blueBloomDocked
+    },
+    blueBloomMats: Object.values(LEVEL_ONE_BLUE_BLOOM_MATS).map((mat) => ({
+      id: mat.id,
+      held: { x: Number(mat.held.x.toFixed(2)), z: Number(mat.held.z.toFixed(2)) },
+      docked: { x: Number(mat.docked.x.toFixed(2)), z: Number(mat.docked.z.toFixed(2)) },
+      halfX: mat.halfX,
+      halfZ: mat.halfZ,
+      walkable: state.levelOne.blueBloomDocked
+    })),
+    blueBloomLatch: {
+      x: Number(LEVEL_ONE_BLUE_BLOOM_LATCH.position.x.toFixed(2)),
+      z: Number(LEVEL_ONE_BLUE_BLOOM_LATCH.position.z.toFixed(2)),
+      open: state.levelOne.blueBloomReleased
+    },
+    loveLetterPoint: {
+      x: Number(LEVEL_ONE_LOVE_LETTER_POINT.x.toFixed(2)),
+      y: Number(LEVEL_ONE_LOVE_LETTER_POINT.y.toFixed(2)),
+      z: Number(LEVEL_ONE_LOVE_LETTER_POINT.z.toFixed(2)),
+      visualX: Number(currentLoveLetterPoint().x.toFixed(2)),
+      visualY: Number((Number.isFinite(currentLoveLetterPoint().y) ? currentLoveLetterPoint().y : SURFACE_Y).toFixed(2)),
+      visualZ: Number(currentLoveLetterPoint().z.toFixed(2)),
+      collectable: currentLoveLetterCollectable(),
+      revealedAfterDock: state.reveals.spellbook && state.levelOne.blueBloomDocked
     },
     frogJumpZone: {
       x: Number(LEVEL_ONE_JUMP_ZONE.x.toFixed(2)),
@@ -4750,7 +5266,8 @@ function renderGameToText() {
     },
     waterColumns: LEVEL_ONE_WATER_COLUMNS,
     buttonPlacement: "far-side-off-axis",
-    loveLetterVisibleFromStart: state.scene.id === SCENES.LEVEL_ONE && state.reveals.spellbook,
+    loveLetterVisibleFromStart: false,
+    loveLetterVisibleAfterDock: state.scene.id === SCENES.LEVEL_ONE && state.reveals.spellbook,
     frogAvailableFromStart: state.scene.id === SCENES.LEVEL_ONE && state.reveals.frog,
     hasFrogEcho: state.scene.id === SCENES.LEVEL_ONE ? false : state.reveals.frogEcho,
     hasFrogTotem: state.scene.id === SCENES.LEVEL_ONE ? false : state.reveals.frogTotem,
@@ -4910,13 +5427,13 @@ function renderGameToText() {
       active: state.levelTwo.elephantAwake,
       solid: false,
       x: Number(LEVEL_TWO_POINTS.elephantEcho.x.toFixed(2)),
-      y: Number(levelTwoRedButtonSurfaceY(LEVEL_TWO_RED_BUTTONS[0]).toFixed(2)),
+      y: Number((LEVEL_TWO_POINTS.elephantEcho.y ?? SURFACE_Y).toFixed(2)),
       z: Number(LEVEL_TWO_POINTS.elephantEcho.z.toFixed(2)),
       radius: LEVEL_TWO_ELEPHANT_ECHO_RADIUS,
       asset: "voxel-elephant",
-      elevated: LEVEL_TWO_ELEPHANT_ECHO_TOP_Y > SURFACE_Y + 0.5,
-      heightAboveGround: Number((LEVEL_TWO_ELEPHANT_ECHO_TOP_Y - SURFACE_Y).toFixed(2)),
-      surfaceId: LEVEL_TWO_RED_PLATFORMS[0]?.id || "red-elevator-a",
+      elevated: (LEVEL_TWO_POINTS.elephantEcho.y ?? SURFACE_Y) > SURFACE_Y + 0.5,
+      heightAboveGround: Number(Math.max(0, (LEVEL_TWO_POINTS.elephantEcho.y ?? SURFACE_Y) - SURFACE_Y).toFixed(2)),
+      surfaceId: null,
       tint: "muted grey-green",
       opacity: LEVEL_TWO_ELEPHANT_ECHO_OPACITY,
       homeAnchor: true,
@@ -4936,7 +5453,7 @@ function renderGameToText() {
       z: Number(state.elephant.z.toFixed(2)),
       radius: LEVEL_TWO_ELEPHANT_RADIUS,
       speed: LEVEL_TWO_ELEPHANT_SPEED,
-      spawnSurfaceId: LEVEL_TWO_RED_PLATFORMS[0]?.id || "red-elevator-a",
+      spawnSurfaceId: null,
       surfaceId: state.levelTwo.elephantSurfaceId,
       surfaceLift: Number(levelTwoActorLiftAt(state.elephant).toFixed(2)),
       mostlyStationaryWhenUnpossessed: state.active !== "elephant",
@@ -5018,8 +5535,8 @@ function renderGameToText() {
     }),
     redElevatorA: {
       visible: state.scene.id === SCENES.LEVEL_TWO,
-      teachingSequence: "Elephant Echo, Red Button A, and Red Elevator A are stacked into one wake-up elevator assembly.",
-      startsRaised: true,
+      teachingSequence: "Red Button A can be inspected before Elephant is found; Elephant later provides the needed weight.",
+      startsRaised: false,
       upperDockTier: 3,
       upperDockSurfaceY: Number(LEVEL_TWO_ELEPHANT_ECHO_TOP_Y.toFixed(2)),
       topConnection: "red-elevator-a-top-connector-to-tier-3-elephant-route",
@@ -5032,7 +5549,7 @@ function renderGameToText() {
       buttonOffsetFromPlatformCenter: Number(distance2D(LEVEL_TWO_RED_BUTTONS[0].position, LEVEL_TWO_RED_PLATFORMS[0].position).toFixed(2)),
       cyclesWhileHeldByElephant: LEVEL_TWO_RED_PLATFORMS[0].movementRule === "cycle-while-held",
       releaseBehavior: LEVEL_TWO_RED_PLATFORMS[0].releaseBehavior,
-      lowersWhenHeldByElephant: true,
+      raisesWhenHeldByElephant: true,
       humanRidesThisSlice: false,
       supportsHumanCollision: true,
       supportsHumanRidingIfPlayerBoards: true,
@@ -5051,7 +5568,9 @@ function renderGameToText() {
       },
       isolated: false,
       connectedToLoveLetterRoute: false,
-      invalidFeedback: "Only the Elephant Cubeling is heavy enough for red buttons."
+      invalidFeedback: state.cubelings.elephant?.unlocked
+        ? "The Elephant might be heavy enough for this."
+        : "This red button needs more weight."
     },
     redElevatorAStartGate: {
       released: Boolean(state.levelTwo.redElevatorAStartGate?.released),
@@ -5109,9 +5628,194 @@ function renderGameToText() {
       .filter((collider) => collider.scene === SCENES.LEVEL_TWO)
       .map((collider) => collider.label)
   },
+  levelThree: {
+    phase: state.levelThree.phase,
+    titleCardVisible: state.scene.id === SCENES.LEVEL_THREE && state.scene.titleCardVisible,
+    mapShape: LEVEL_THREE_MAP_SHAPE,
+    width: LEVEL_THREE_WIDTH,
+    height: LEVEL_THREE_HEIGHT,
+    complete: state.levelThree.complete,
+    frogAvailableFromStart: state.scene.id === SCENES.LEVEL_THREE && state.reveals.frog,
+    placeholderLoveLetterVisible: state.scene.id === SCENES.LEVEL_THREE && state.levelThree.placeholderLoveLetterVisible,
+    placeholderLoveLetterCollectable: Boolean(state.levelThree.placeholderLoveLetterCollectable),
+    placeholderLoveLetterPosition: {
+      x: Number(LEVEL_THREE_POINTS.placeholderLoveLetter.x.toFixed(2)),
+      y: Number(LEVEL_THREE_PLACEHOLDER_LOVE_LETTER_Y.toFixed(2)),
+      z: Number(LEVEL_THREE_POINTS.placeholderLoveLetter.z.toFixed(2))
+    },
+    waterTileCount: LEVEL_THREE_WATER_TILES.length,
+    landTileCount: LEVEL_THREE_LAND_TILES.length,
+    mostlyWater: LEVEL_THREE_WATER_TILES.length > LEVEL_THREE_LAND_TILES.length,
+    islandCount: LEVEL_THREE_ISLANDS.length,
+    islands: LEVEL_THREE_ISLANDS.map((island) => ({
+      id: island.id,
+      name: island.name,
+      role: island.role,
+      purpose: island.purpose,
+      tileCount: island.tileCount,
+      bridgeState: island.bridgeState ?? null,
+      x: Number(island.position.x.toFixed(2)),
+      z: Number(island.position.z.toFixed(2))
+    })),
+    islandMarkers: LEVEL_THREE_ISLAND_MARKERS.map((marker) => ({
+      id: marker.id,
+      objectId: marker.objectId || marker.id,
+      name: marker.name,
+      role: marker.role,
+      purpose: marker.purpose,
+      x: Number(marker.position.x.toFixed(2)),
+      z: Number(marker.position.z.toFixed(2)),
+      editorSelectable: true,
+      editorMovable: true
+    })),
+    placeholders: LEVEL_THREE_PLACEHOLDER_IDS,
+    editorSelectableIds: [
+      ...LEVEL_THREE_ISLAND_MARKERS.map((marker) => marker.objectId || marker.id),
+      ...LEVEL_THREE_PLACEHOLDER_IDS,
+      "level_three.love_letter.placeholder"
+    ],
+    neutralFutureState: {
+      level3TotemRaftState: state.levelThree.totemRaftState ?? 0,
+      level3TotemRaftDocked: Boolean(state.levelThree.totemRaftDocked),
+      level3CrocodileUnlocked: Boolean(state.levelThree.crocodileUnlocked),
+      level3BridgeState: state.levelThree.bridgeState ?? 0,
+      level3OpeningGreenPressCount: state.levelThree.openingGreenPressCount ?? 0
+    },
+    lilyPadLane: LEVEL_THREE_LILY_PAD_PLACEHOLDERS.map((pad) => ({
+      id: pad.id,
+      name: pad.name,
+      x: Number(pad.position.x.toFixed(2)),
+      z: Number(pad.position.z.toFixed(2)),
+      radius: pad.radius,
+      staticPhaseOne: true,
+      movementImplemented: false,
+      splashResetImplemented: false,
+      humanUsable: false
+    })),
+    greenButtons: LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS.map((button) => ({
+      id: button.id,
+      name: button.name,
+      islandId: button.islandId,
+      futureMechanism: button.futureMechanism,
+      x: Number(button.position.x.toFixed(2)),
+      z: Number(button.position.z.toFixed(2)),
+      color: "green",
+      repeatableFutureButton: true,
+      behaviorImplemented: false
+    })),
+    crocodileEcho: {
+      id: LEVEL_THREE_CROCODILE_ECHO.id,
+      name: LEVEL_THREE_CROCODILE_ECHO.name,
+      visible: state.scene.id === SCENES.LEVEL_THREE,
+      active: false,
+      solid: false,
+      x: Number(LEVEL_THREE_CROCODILE_ECHO.position.x.toFixed(2)),
+      z: Number(LEVEL_THREE_CROCODILE_ECHO.position.z.toFixed(2)),
+      radius: LEVEL_THREE_CROCODILE_ECHO.radius,
+      unlockImplemented: false,
+      possessionImplemented: false,
+      waterMovementImplemented: false
+    },
+    totemRaft: {
+      id: LEVEL_THREE_TOTEM_RAFT.id,
+      name: LEVEL_THREE_TOTEM_RAFT.name,
+      x: Number(LEVEL_THREE_TOTEM_RAFT.position.x.toFixed(2)),
+      z: Number(LEVEL_THREE_TOTEM_RAFT.position.z.toFixed(2)),
+      collectable: false,
+      movementImplemented: false,
+      markers: LEVEL_THREE_RAFT_MARKERS.map((marker) => ({
+        id: marker.id,
+        name: marker.name,
+        stateIndex: marker.stateIndex,
+        x: Number(marker.position.x.toFixed(2)),
+        z: Number(marker.position.z.toFixed(2))
+      }))
+    },
+    bridgePlaceholders: {
+      cycleImplemented: false,
+      destinations: LEVEL_THREE_BRIDGE_DESTINATION_MARKERS.map((marker) => ({
+        id: marker.id,
+        name: marker.name,
+        stateIndex: marker.stateIndex,
+        islandId: marker.islandId,
+        x: Number(marker.position.x.toFixed(2)),
+        z: Number(marker.position.z.toFixed(2))
+      })),
+      notDirectlyConnected: ["level3GreenButtonIsland", "level3WeightCacheIsland", "level3RedButtonBIsland", "level3LoveLetterCliff"]
+    },
+    redButtonPlaceholders: LEVEL_THREE_RED_BUTTON_PLACEHOLDERS.map((button) => ({
+      id: button.id,
+      name: button.name,
+      islandId: button.islandId,
+      futureRequirement: button.futureRequirement,
+      x: Number(button.position.x.toFixed(2)),
+      z: Number(button.position.z.toFixed(2)),
+      behaviorImplemented: false
+    })),
+    anchorStones: LEVEL_THREE_ANCHOR_STONES.map((stone) => ({
+      id: stone.id,
+      name: stone.name,
+      x: Number(stone.position.x.toFixed(2)),
+      z: Number(stone.position.z.toFixed(2)),
+      cargoImplemented: false
+    })),
+    resetPerches: LEVEL_THREE_RESET_PERCH_PLACEHOLDERS.map((perch) => ({
+      id: perch.id,
+      name: perch.name,
+      x: Number(perch.position.x.toFixed(2)),
+      z: Number(perch.position.z.toFixed(2)),
+      resetBehaviorImplemented: false
+    })),
+    loveLetterCliff: {
+      id: "level3LoveLetterCliff",
+      visible: state.scene.id === SCENES.LEVEL_THREE && state.levelThree.placeholderLoveLetterVisible,
+      x: Number(LEVEL_THREE_POINTS.placeholderLoveLetter.x.toFixed(2)),
+      y: Number(LEVEL_THREE_PLACEHOLDER_LOVE_LETTER_Y.toFixed(2)),
+      z: Number(LEVEL_THREE_POINTS.placeholderLoveLetter.z.toFixed(2)),
+      reachable: false,
+      completionImplemented: false
+    },
+    inactiveMechanics: {
+      crocodileUnlock: false,
+      crocodilePossession: false,
+      crocodileCargo: false,
+      movingLilyPads: false,
+      frogSplashReset: false,
+      greenButtons: false,
+      totemRaftMovement: false,
+      centralBridgeCycle: false,
+      redButtons: false,
+      movingPlatforms: false,
+      loveLetterCompletion: false
+    },
+    reservedZones: LEVEL_THREE_RESERVED_ZONES.map((zone) => ({
+      id: zone.id,
+      name: zone.name,
+      purpose: zone.purpose,
+      x: Number(zone.position.x.toFixed(2)),
+      z: Number(zone.position.z.toFixed(2)),
+      radius: zone.radius
+    })),
+    authoringContract: "shell only; no final route, no new Cubeling, no complex mechanisms",
+    colliderLabels: sceneObjectColliders
+      .filter((collider) => collider.scene === SCENES.LEVEL_THREE)
+      .map((collider) => collider.label)
+  },
   level: {
-    width: state.scene.id === SCENES.HOME ? HOME_WIDTH : state.scene.id === SCENES.LEVEL_TWO ? LEVEL_TWO_WIDTH : LEVEL_WIDTH,
-    height: state.scene.id === SCENES.HOME ? HOME_HEIGHT : state.scene.id === SCENES.LEVEL_TWO ? LEVEL_TWO_HEIGHT : LEVEL_HEIGHT,
+    width: state.scene.id === SCENES.HOME
+      ? HOME_WIDTH
+      : state.scene.id === SCENES.LEVEL_TWO
+        ? LEVEL_TWO_WIDTH
+        : state.scene.id === SCENES.LEVEL_THREE
+          ? LEVEL_THREE_WIDTH
+          : LEVEL_WIDTH,
+    height: state.scene.id === SCENES.HOME
+      ? HOME_HEIGHT
+      : state.scene.id === SCENES.LEVEL_TWO
+        ? LEVEL_TWO_HEIGHT
+        : state.scene.id === SCENES.LEVEL_THREE
+          ? LEVEL_THREE_HEIGHT
+          : LEVEL_HEIGHT,
     floorAsset: "kaykit-blockbits-sand-with-grass",
     movement: "continuous",
     collision: "circle-vs-aabb plus active/inactive actor circle blocking",
@@ -5175,7 +5879,10 @@ installTestHooks({
   startLevelTwo,
   tutorialButton: TUTORIAL_BUTTON,
   tutorialStart: START,
+  spellbook: SPELLBOOK,
   levelOneButton: LEVEL_ONE_BUTTON,
+  levelOneLoveLetterPoint: LEVEL_ONE_LOVE_LETTER_POINT,
+  levelTwoRedPlatforms: LEVEL_TWO_RED_PLATFORMS,
   levelTwoRedButtonSurfaceY,
   updateLevelTwoSurfaceState,
   resetLevelTwoRedMechanismState,

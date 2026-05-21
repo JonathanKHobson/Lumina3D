@@ -1,5 +1,6 @@
 import { levelEditorAdapter as homeIntroAdapter } from "./homeIntroAdapter.js";
 import { levelEditorAdapter as levelOneAdapter } from "./levelOneAdapter.js";
+import { levelEditorAdapter as levelThreeAdapter } from "./levelThreeAdapter.js";
 import { levelEditorAdapter as tutorialAdapter } from "./tutorialAdapter.js";
 import { levelEditorAdapter as levelTwoAdapter } from "../levelTwoAdapter.js";
 
@@ -7,7 +8,8 @@ export const LEVEL_EDITOR_ADAPTERS = [
   tutorialAdapter,
   homeIntroAdapter,
   levelOneAdapter,
-  levelTwoAdapter
+  levelTwoAdapter,
+  levelThreeAdapter
 ].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
 export const DEFAULT_LEVEL_EDITOR_ID = "level_two";

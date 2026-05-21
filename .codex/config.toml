@@ -13,3 +13,12 @@ type = "command"
 command = "/opt/homebrew/bin/python3.12 scripts/codex/lumina3d-mcp-exposure-gate.py"
 timeout = 20
 statusMessage = "Checking Lumina3D MCP exposure"
+
+[[hooks.Stop]]
+matcher = ".*"
+
+[[hooks.Stop.hooks]]
+type = "command"
+command = "/opt/homebrew/bin/python3.12 scripts/codex/lumina3d-progress-closeout-reminder.py"
+timeout = 3
+statusMessage = "Checking Lumina3D progress log reminder"

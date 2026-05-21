@@ -15,7 +15,10 @@ export function installTestHooks({
   startLevelTwo,
   tutorialButton,
   tutorialStart,
+  spellbook,
   levelOneButton,
+  levelOneLoveLetterPoint,
+  levelTwoRedPlatforms = [],
   levelTwoRedButtonSurfaceY,
   updateLevelTwoSurfaceState,
   resetLevelTwoRedMechanismState,
@@ -28,6 +31,23 @@ export function installTestHooks({
   renderGameToText
 }) {
   windowRef.render_game_to_text = renderGameToText;
+
+  const setLevelTwoRedPlatformState = (id, next = {}) => {
+    const platformState = state.levelTwo.redPlatforms?.[id];
+    if (!platformState) return null;
+    const platform = levelTwoRedPlatforms.find((candidate) => candidate.id === id);
+    if (Number.isFinite(next.progress)) platformState.progress = Number(next.progress);
+    if (platform) platformState.lift = platformState.progress * platform.maxLift;
+    if (Number.isFinite(next.lift)) platformState.lift = Number(next.lift);
+    if (next.direction) platformState.direction = next.direction;
+    if (Number.isFinite(next.pauseRemaining)) platformState.pauseRemaining = Number(next.pauseRemaining);
+    if ("releaseTarget" in next) platformState.releaseTarget = next.releaseTarget;
+    if (next.moving) platformState.moving = next.moving;
+    if (typeof next.wasActive === "boolean") platformState.wasActive = next.wasActive;
+    if (typeof next.hasActivated === "boolean") platformState.hasActivated = next.hasActivated;
+    if ("heldBy" in next) platformState.heldBy = next.heldBy;
+    return platformState;
+  };
 
   windowRef.advanceTime = (ms = 16) => {
     const steps = Math.max(1, Math.round(Number(ms) / (1000 / 60)));
@@ -178,13 +198,13 @@ export function installTestHooks({
     state.levelTwo.elephantUnlockPending = false;
     state.levelTwo.elephantAwake = true;
     state.levelTwo.elephantSpawned = true;
-    state.levelTwo.elephantSurfaceId = "red-elevator-a";
+    state.levelTwo.elephantSurfaceId = null;
     state.levelTwo.elephantRevealActive = false;
     state.levelTwo.elephantRevealElapsed = 0;
     state.levelTwo.elephantSpawnCount = Math.max(1, state.levelTwo.elephantSpawnCount || 0);
     resetLevelTwoRedMechanismState?.();
-    state.levelTwo.lastElephantSpawnEffectY = Number.isFinite(levelTwoRedButtonSurfaceY?.({ platformId: "red-elevator-a" }))
-      ? levelTwoRedButtonSurfaceY({ platformId: "red-elevator-a" })
+    state.levelTwo.lastElephantSpawnEffectY = Number.isFinite(levelTwoPoints.elephantEcho.y)
+      ? levelTwoPoints.elephantEcho.y
       : state.levelTwo.lastElephantSpawnEffectY;
     state.cubelings.elephant = { unlocked: true, unlockedPending: false, active: false, spawned: true };
     state.active = "human";
@@ -229,6 +249,21 @@ export function installTestHooks({
     state.levelTwo.elephantRevealElapsed = 0;
     state.levelTwo.elephantSpawnCount = Math.max(1, state.levelTwo.elephantSpawnCount || 0);
     resetLevelTwoRedMechanismState?.();
+    setLevelTwoRedPlatformState("red-elevator-a", {
+      progress: 1,
+      direction: "down",
+      pauseRemaining: 0,
+      releaseTarget: 1,
+      moving: "idle",
+      wasActive: false,
+      hasActivated: false,
+      heldBy: ""
+    });
+    if (state.levelTwo.redElevatorAStartGate) {
+      state.levelTwo.redElevatorAStartGate.released = true;
+      state.levelTwo.redElevatorAStartGate.delayRemaining = 0;
+      state.levelTwo.redElevatorAStartGate.waitingReason = "released";
+    }
     state.cubelings.elephant = { unlocked: true, unlockedPending: false, active: true, spawned: true };
     state.active = "elephant";
     state.elephant.x = levelTwoPoints.redElevatorA.x;
@@ -272,17 +307,16 @@ export function installTestHooks({
     state.levelTwo.elephantRevealElapsed = 0;
     state.levelTwo.elephantSpawnCount = Math.max(1, state.levelTwo.elephantSpawnCount || 0);
     resetLevelTwoRedMechanismState?.();
-    const redAState = state.levelTwo.redPlatforms?.["red-elevator-a"];
-    if (redAState) {
-      redAState.progress = 1;
-      redAState.lift = redAState.lift || 0;
-      redAState.direction = "down";
-      redAState.pauseRemaining = 0;
-      redAState.releaseTarget = null;
-      redAState.moving = "idle";
-      redAState.wasActive = false;
-      redAState.hasActivated = false;
-    }
+    setLevelTwoRedPlatformState("red-elevator-a", {
+      progress: 1,
+      direction: "down",
+      pauseRemaining: 0,
+      releaseTarget: 1,
+      moving: "idle",
+      wasActive: false,
+      hasActivated: false,
+      heldBy: ""
+    });
     state.cubelings.elephant = { unlocked: true, unlockedPending: false, active: false, spawned: true };
     state.active = "human";
     state.human.x = levelTwoPoints.redElevatorA.x;
@@ -370,17 +404,15 @@ export function installTestHooks({
     state.levelTwo.elephantRevealElapsed = 0;
     state.levelTwo.elephantSpawnCount = Math.max(1, state.levelTwo.elephantSpawnCount || 0);
     resetLevelTwoRedMechanismState?.();
-    const redAState = state.levelTwo.redPlatforms?.["red-elevator-a"];
-    if (redAState) {
-      redAState.progress = 0;
-      redAState.lift = 0;
-      redAState.direction = "down";
-      redAState.pauseRemaining = 2.5;
-      redAState.moving = "pause-bottom";
-      redAState.wasActive = true;
-      redAState.hasActivated = true;
-      redAState.heldBy = "elephant";
-    }
+    setLevelTwoRedPlatformState("red-elevator-a", {
+      progress: 0,
+      direction: "down",
+      pauseRemaining: 2.5,
+      moving: "pause-bottom",
+      wasActive: true,
+      hasActivated: true,
+      heldBy: "elephant"
+    });
     if (state.levelTwo.redElevatorAStartGate) {
       state.levelTwo.redElevatorAStartGate.released = true;
       state.levelTwo.redElevatorAStartGate.delayRemaining = 0;
@@ -391,6 +423,72 @@ export function installTestHooks({
     state.elephant.x = levelTwoPoints.redButtonA.x;
     state.elephant.z = levelTwoPoints.redButtonA.z;
     state.elephant.facing = { x: 0, z: 1, name: "south" };
+    state.human.x = levelTwoPoints.redElevatorA.x + 2.55;
+    state.human.z = levelTwoPoints.redElevatorA.z;
+    state.human.facing = { x: 1, z: 0, name: "east" };
+    state.frog.x = levelTwoPoints.frogStart.x;
+    state.frog.z = levelTwoPoints.frogStart.z;
+    state.frog.facing = { x: 1, z: 0, name: "east" };
+    state.levelTwo.frogSurfaceId = null;
+    state.levelTwo.humanSurfaceId = null;
+    input.keys.clear();
+    clearSpeechQueue();
+    state.speech = { text: "", anchor: "human", until: 0 };
+    state.secondarySpeech = { text: "", anchor: "", until: 0 };
+    updateLevelTwoSurfaceState();
+    update(1 / 60);
+    syncAll();
+    updateCamera(1);
+    updateHud();
+    return JSON.parse(renderGameToText());
+  };
+
+  windowRef.set_game_test_level_two_red_a_release_ready = (scenario = "bottom") => {
+    startLevelTwo({ showTitle: false });
+    state.scene.phase = "play";
+    state.scene.titleCardVisible = false;
+    state.scene.titleCardText = "";
+    state.levelTwo.phase = "play";
+    state.levelTwo.blueButtonPressed = true;
+    state.levelTwo.blueRampActive = true;
+    state.levelTwo.elephantEchoVisible = true;
+    state.levelTwo.elephantTotemVisible = false;
+    state.levelTwo.elephantTotemCollected = true;
+    state.levelTwo.elephantUnlockPending = false;
+    state.levelTwo.elephantAwake = true;
+    state.levelTwo.elephantSpawned = true;
+    state.levelTwo.elephantSurfaceId = "red-elevator-a";
+    state.levelTwo.elephantRevealActive = false;
+    state.levelTwo.elephantRevealElapsed = 0;
+    state.levelTwo.elephantSpawnCount = Math.max(1, state.levelTwo.elephantSpawnCount || 0);
+    resetLevelTwoRedMechanismState?.();
+    const releaseScenarios = {
+      bottom: { progress: 0, direction: "up", moving: "idle" },
+      top: { progress: 1, direction: "down", moving: "idle" },
+      descending: { progress: 0.56, direction: "down", moving: "down" },
+      ascending: { progress: 0.44, direction: "up", moving: "up" }
+    };
+    const preset = releaseScenarios[scenario] || releaseScenarios.bottom;
+    setLevelTwoRedPlatformState("red-elevator-a", {
+      progress: preset.progress,
+      direction: preset.direction,
+      pauseRemaining: 0,
+      releaseTarget: null,
+      moving: preset.moving,
+      wasActive: true,
+      hasActivated: true,
+      heldBy: ""
+    });
+    if (state.levelTwo.redElevatorAStartGate) {
+      state.levelTwo.redElevatorAStartGate.released = true;
+      state.levelTwo.redElevatorAStartGate.delayRemaining = 0;
+      state.levelTwo.redElevatorAStartGate.waitingReason = "released";
+    }
+    state.cubelings.elephant = { unlocked: true, unlockedPending: false, active: true, spawned: true };
+    state.active = "elephant";
+    state.elephant.x = levelTwoPoints.redElevatorA.x - 1.15;
+    state.elephant.z = levelTwoPoints.redElevatorA.z + 1.35;
+    state.elephant.facing = { x: 1, z: 0, name: "east" };
     state.human.x = levelTwoPoints.redElevatorA.x + 2.55;
     state.human.z = levelTwoPoints.redElevatorA.z;
     state.human.facing = { x: 1, z: 0, name: "east" };
@@ -430,18 +528,16 @@ export function installTestHooks({
     state.levelTwo.elephantRevealElapsed = 0;
     state.levelTwo.elephantSpawnCount = Math.max(1, state.levelTwo.elephantSpawnCount || 0);
     resetLevelTwoRedMechanismState?.();
-    const redAState = state.levelTwo.redPlatforms?.["red-elevator-a"];
-    if (redAState) {
-      redAState.progress = 0;
-      redAState.lift = 0;
-      redAState.direction = "up";
-      redAState.pauseRemaining = 0;
-      redAState.releaseTarget = null;
-      redAState.moving = "idle";
-      redAState.wasActive = true;
-      redAState.hasActivated = true;
-      redAState.heldBy = "";
-    }
+    setLevelTwoRedPlatformState("red-elevator-a", {
+      progress: 0,
+      direction: "up",
+      pauseRemaining: 0,
+      releaseTarget: null,
+      moving: "idle",
+      wasActive: true,
+      hasActivated: true,
+      heldBy: ""
+    });
     if (state.levelTwo.redElevatorAStartGate) {
       state.levelTwo.redElevatorAStartGate.released = true;
       state.levelTwo.redElevatorAStartGate.delayRemaining = 0;
@@ -706,7 +802,14 @@ export function installTestHooks({
     state.reveals.button = true;
     state.buttonPressed = false;
     state.levelOne.bridgeComplete = false;
+    state.levelOne.bridgeAsset = "blue-bloom-crossing-held";
     state.levelOne.waterBlocked = true;
+    state.levelOne.blueBloomReleased = false;
+    state.levelOne.blueBloomRevealActive = false;
+    state.levelOne.blueBloomRevealElapsed = 0;
+    state.levelOne.blueBloomDocked = false;
+    state.levelOne.loveLetterSurfaced = false;
+    state.reveals.spellbook = false;
     state.frog.x = levelOneButton.x;
     state.frog.z = levelOneButton.z;
     state.frog.facing = { x: 1, z: 0, name: "east" };
@@ -719,6 +822,50 @@ export function installTestHooks({
     syncAll();
     updateCamera(1);
     updateHud();
+    return JSON.parse(renderGameToText());
+  };
+
+  windowRef.set_game_test_level_one_love_letter_ready = () => {
+    startLevelOne?.({ showTitle: false });
+    state.scene.phase = "play";
+    state.scene.titleCardVisible = false;
+    state.scene.titleCardText = "";
+    state.levelOne.phase = "play";
+    state.active = "human";
+    state.reveals.frog = true;
+    state.reveals.button = true;
+    state.reveals.spellbook = true;
+    state.buttonPressed = true;
+    state.spellbookCollected = false;
+    state.levelOne.bridgeComplete = true;
+    state.levelOne.waterBlocked = false;
+    state.levelOne.bridgeAsset = "blue-bloom-crossing-docked";
+    state.levelOne.bridgeRevealActive = false;
+    state.levelOne.bridgeRevealElapsed = 0;
+    state.levelOne.blueBloomReleased = true;
+    state.levelOne.blueBloomRevealActive = false;
+    state.levelOne.blueBloomRevealElapsed = 4.8;
+    state.levelOne.blueBloomDocked = true;
+    state.levelOne.loveLetterSurfaced = true;
+    if (state.levelOne.blueBloomMats?.left) state.levelOne.blueBloomMats.left.walkable = true;
+    if (state.levelOne.blueBloomMats?.right) state.levelOne.blueBloomMats.right.walkable = true;
+    state.human.x = (levelOneLoveLetterPoint?.x || spellbook?.x || 0) - 1.1;
+    state.human.z = levelOneLoveLetterPoint?.z || spellbook?.z || 0;
+    state.human.facing = { x: 1, z: 0, name: "east" };
+    state.frog.x = levelOneButton.x;
+    state.frog.z = levelOneButton.z;
+    state.frog.facing = { x: 1, z: 0, name: "east" };
+    state.frogAi.timer = 999;
+    state.frogAi.target = { x: state.frog.x, z: state.frog.z };
+    input.keys.clear();
+    clearSpeechQueue();
+    state.speech = { text: "", anchor: "", until: 0 };
+    state.secondarySpeech = { text: "", anchor: "", until: 0 };
+    syncAll();
+    updateCamera(1);
+    updateHud();
+    update(1 / 60);
+    syncAll();
     return JSON.parse(renderGameToText());
   };
 

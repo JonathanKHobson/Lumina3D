@@ -24,6 +24,7 @@ export function applySceneRevealVisibility({
   sceneGroups.home.visible = state.scene.id === sceneIds.HOME;
   sceneGroups.levelOne.visible = state.scene.id === sceneIds.LEVEL_ONE;
   sceneGroups.levelTwo.visible = state.scene.id === sceneIds.LEVEL_TWO;
+  if (sceneGroups.levelThree) sceneGroups.levelThree.visible = state.scene.id === sceneIds.LEVEL_THREE;
   floorMeshes.forEach((mesh) => {
     const column = mesh.userData.column;
     const row = mesh.userData.row;

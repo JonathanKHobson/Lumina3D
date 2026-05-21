@@ -53,13 +53,15 @@ export function buildTutorialScene({
 
   for (let row = 0; row < LEVEL_HEIGHT; row++) {
     const point = gridPoint(WALL_COLUMN, row, LEVEL_WIDTH, LEVEL_HEIGHT, TILE);
-    const barrier = cloneAsset("barrier");
+    const isDoorBarrier = row === DOOR_ROW;
+    const barrierAsset = isDoorBarrier ? "tutorialBarrierBlue" : "barrier";
+    const barrier = cloneAsset(barrierAsset);
     barrier.position.set(point.x, SURFACE_Y, point.z);
     barrier.rotation.y = Math.PI / 2;
     tagDevEditorObject(barrier, {
       id: `tutorial.terrain.barrier.${WALL_COLUMN}.${row}`,
       name: `Barrier ${WALL_COLUMN},${row}`,
-      asset: "barrier",
+      asset: barrierAsset,
       category: "terrain_barrier"
     });
     sceneGroups.tutorial.add(barrier);

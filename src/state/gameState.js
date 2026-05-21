@@ -6,7 +6,7 @@ import {
   LOVE_LETTER_SPARKLE_INTERVAL
 } from "../config/constants.js";
 import { LOVE_LETTER_MESSAGES, TUTORIAL_LOVE_LETTER_ID } from "../content/loveLetters.js";
-import { LEVEL_ONE_JUMP_ZONE } from "../levels/levelOne.js";
+import { LEVEL_ONE_BLUE_BLOOM_MATS, LEVEL_ONE_JUMP_ZONE, LEVEL_ONE_LILY_PAD } from "../levels/levelOne.js";
 
 export function createActorState(start, radius, speed) {
   return {
@@ -109,11 +109,23 @@ export function createLevelOneState(phase = "inactive") {
     bridgeComplete: false,
     bridgeRevealActive: false,
     bridgeRevealElapsed: 0,
+    blueBloomReleased: false,
+    blueBloomRevealActive: false,
+    blueBloomRevealElapsed: 0,
+    blueBloomDocked: false,
+    loveLetterSurfaced: false,
+    blueBloomMats: {
+      left: { id: LEVEL_ONE_BLUE_BLOOM_MATS.left.id, walkable: false },
+      right: { id: LEVEL_ONE_BLUE_BLOOM_MATS.right.id, walkable: false }
+    },
+    lilyPadSurfaceId: LEVEL_ONE_LILY_PAD.id,
+    lilyPadPromptShown: false,
+    crossingReadyPromptShown: false,
     hintTimer: 0,
     hintStage: "",
     complete: false,
     waterBlocked: true,
-    bridgeAsset: "partial-bridge",
+    bridgeAsset: "blue-bloom-crossing-held",
     frogJumpZone: LEVEL_ONE_JUMP_ZONE,
     titleElapsed: 0,
     frogWaterBlockedCount: 0,
@@ -152,9 +164,9 @@ export function createLevelTwoState(phase = "inactive") {
     redButtons: {},
     redPlatforms: {},
     redElevatorAStartGate: {
-      released: false,
-      delayRemaining: 2.5,
-      waitingReason: "waiting-for-human-approach-or-elephant-possession"
+      released: true,
+      delayRemaining: 0,
+      waitingReason: "grounded-start"
     },
     lastRedButtonInvalidPromptAt: -Infinity,
     lastFrogJumpResult: "none",
@@ -162,6 +174,24 @@ export function createLevelTwoState(phase = "inactive") {
     lastFrogJumpAt: -Infinity,
     frogTooHighPromptCount: 0,
     lastTotemPromptAt: -Infinity,
+    complete: false
+  };
+}
+
+export function createLevelThreeState(phase = "inactive") {
+  return {
+    phase,
+    titleElapsed: 0,
+    arrivalElapsed: 0,
+    placeholderLoveLetterVisible: phase !== "inactive",
+    placeholderLoveLetterCollectable: false,
+    frogAvailableFromStart: phase !== "inactive",
+    reservedWaterCubelingSpaceVisible: phase !== "inactive",
+    totemRaftState: 0,
+    totemRaftDocked: false,
+    crocodileUnlocked: false,
+    bridgeState: 0,
+    openingGreenPressCount: 0,
     complete: false
   };
 }

@@ -26,6 +26,8 @@ export function createHudRefs(root = document) {
     devEditorExportLayout: root.querySelector("#devEditorExportLayout"),
     devEditorCopySelectionDelta: root.querySelector("#devEditorCopySelectionDelta"),
     devEditorCopyAiContext: root.querySelector("#devEditorCopyAiContext"),
+    devEditorCopyAuthoringJson: root.querySelector("#devEditorCopyAuthoringJson"),
+    devEditorCopyAuthoringMarkdown: root.querySelector("#devEditorCopyAuthoringMarkdown"),
     devEditorExportPatchDraft: root.querySelector("#devEditorExportPatchDraft"),
     devEditorOpenLevelEditor: root.querySelector("#devEditorOpenLevelEditor"),
     devEditorAnnotationNotes: root.querySelector("#devEditorAnnotationNotes"),
@@ -76,7 +78,13 @@ export function renderControlsPanel(hud, open) {
   hud.controlsPanel.classList.toggle("is-open", open);
 }
 
-export function renderLevelCompleteModal(hud, { open, isTutorial, levelName = "Level One" }) {
+export function renderLevelCompleteModal(hud, {
+  open,
+  isTutorial,
+  levelName = "Level One",
+  nextLevelEnabled = false,
+  nextLevelDestination = ""
+}) {
   if (!hud.levelCompleteModal) return;
   hud.levelCompleteModal.classList.toggle("is-open", open);
   hud.levelCompleteModal.setAttribute("aria-hidden", open ? "false" : "true");
@@ -85,10 +93,12 @@ export function renderLevelCompleteModal(hud, { open, isTutorial, levelName = "L
   if (hud.completeDescription) {
     hud.completeDescription.textContent = isTutorial
       ? "The tutorial is complete. You can keep testing this room, restart it, or continue to Level One."
-      : `${levelName} is complete. You can keep testing this room or reset the level.`;
+      : nextLevelDestination
+        ? `${levelName} is complete. You can continue to ${nextLevelDestination}, keep testing this room, or reset the level.`
+        : `${levelName} is complete. You can keep testing this room or reset the level.`;
   }
   if (hud.nextLevel) {
-    hud.nextLevel.disabled = !isTutorial;
+    hud.nextLevel.disabled = !nextLevelEnabled;
     hud.nextLevel.textContent = "Next Level";
   }
   if (hud.resetTutorialLevel) hud.resetTutorialLevel.textContent = isTutorial ? "Reset Tutorial Level" : "Reset Level";
@@ -124,7 +134,7 @@ export function getHudPrompt(state, stepId, { sceneIds, tutorialSteps, freePlayP
     if (state.levelOne.phase === "arrival") return "";
     if (state.celebration.active) return "Love Letter found.";
     if (state.celebration.modalVisible) return "Level One Complete.";
-    if (state.levelOne.bridgeComplete) return state.overridePrompt?.text || "Cross the completed bridge and collect the Love Letter.";
+    if (state.levelOne.bridgeComplete) return state.overridePrompt?.text || "Cross the blue blooms and collect the Love Letter.";
     return state.overridePrompt?.text || "Find a way across the water to the Love Letter.";
   }
   if (state.scene.id === sceneIds.LEVEL_TWO) {
@@ -134,6 +144,10 @@ export function getHudPrompt(state, stepId, { sceneIds, tutorialSteps, freePlayP
     if (state.celebration.modalVisible) return "Level Two Complete.";
     if (state.levelTwo.placeholderLoveLetterCollectable) return state.overridePrompt?.text || "Collect the elevated Love Letter.";
     return state.overridePrompt?.text || "Use Frog and Elephant to reach the elevated Love Letter.";
+  }
+  if (state.scene.id === sceneIds.LEVEL_THREE) {
+    if (state.levelThree.phase === "arrival") return "";
+    return state.overridePrompt?.text || "Explore the lake island shell.";
   }
   if (state.celebration.active) return "Love Letter found.";
   if (state.celebration.modalVisible) return "Tutorial Complete.";
@@ -151,7 +165,7 @@ export function getHudGoalLabel(state, sceneIds) {
   if (state.scene.id === sceneIds.LEVEL_ONE) {
     if (state.levelOne.phase === "title") return "Level One";
     if (state.spellbookCollected) return "Complete";
-    return state.levelOne.bridgeComplete ? "Cross bridge" : "Reach Love Letter";
+    return state.levelOne.bridgeComplete ? "Cross blooms" : "Reach Love Letter";
   }
   if (state.scene.id === sceneIds.LEVEL_TWO) {
     if (state.levelTwo.phase === "title") return "Level Two";
@@ -160,6 +174,10 @@ export function getHudGoalLabel(state, sceneIds) {
     if (state.levelTwo.elephantSpawned) return "Use Elephant";
     return state.levelTwo.blueRampActive ? "Find Elephant Totem" : "Reach Love Letter";
   }
+  if (state.scene.id === sceneIds.LEVEL_THREE) {
+    if (state.levelThree.phase === "arrival") return "Level Three";
+    return "Lake shell";
+  }
   return state.tutorialComplete ? "Complete" : state.doorwayOpen ? "Door open" : state.cubelings.frog.unlocked ? "Frog unlocked" : "Learn controls";
 }
 
@@ -167,6 +185,7 @@ export function getHudStepLabel(state, sceneIds, guidedStepCount) {
   if (state.scene.id === sceneIds.HOME) return state.home.phase === "play" ? "Home" : "";
   if (state.scene.id === sceneIds.LEVEL_ONE) return state.levelOne.phase === "play" ? "Level One" : "";
   if (state.scene.id === sceneIds.LEVEL_TWO) return state.levelTwo.phase === "play" ? "Level Two" : "";
+  if (state.scene.id === sceneIds.LEVEL_THREE) return state.levelThree.phase === "play" ? "Level Three" : "";
   return state.tutorialSkipped
     ? "Objective"
     : state.tutorialComplete
@@ -185,14 +204,15 @@ export function renderSceneOverlays(hud, { state, sceneIds, doorNoteText, update
   if (hud.root) {
     const cinematic = state.scene.id === sceneIds.HOME && state.home.phase !== "play" ||
       state.scene.id === sceneIds.LEVEL_ONE && state.levelOne.phase !== "play" ||
-      state.scene.id === sceneIds.LEVEL_TWO && state.levelTwo.phase !== "play";
+      state.scene.id === sceneIds.LEVEL_TWO && state.levelTwo.phase !== "play" ||
+      state.scene.id === sceneIds.LEVEL_THREE && state.levelThree.phase !== "play";
     hud.root.classList.toggle("is-hidden", cinematic);
   }
   if (hud.titleCard) {
     const visible = state.scene.titleCardVisible;
     hud.titleCard.hidden = !visible;
     hud.titleCard.classList.toggle("is-visible", visible);
-    if (hud.titleCardText) hud.titleCardText.textContent = state.scene.titleCardText || "Level One";
+    if (hud.titleCardText) hud.titleCardText.textContent = state.scene.titleCardText || "";
   }
   if (hud.doorNotePanel) {
     const visible = state.scene.id === sceneIds.HOME && state.home.noteVisible;

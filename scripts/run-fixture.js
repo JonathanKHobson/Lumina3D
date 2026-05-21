@@ -106,6 +106,96 @@ async function runLevelTwoStart(page) {
   return { checks, state };
 }
 
+async function runLevelThreeStart(page) {
+  const checks = [];
+  await setPaused(page, true);
+  const initialState = await waitForScenePlayPhase(page, "level_three", { timeoutMs: 120000 });
+  checks.push({ name: "loaded_level_three", ok: initialState.scene?.id === "level_three", details: `phase=${initialState.scene?.phase}` });
+  checks.push({
+    name: "level_three_title_during_arrival",
+    ok: initialState.scene?.phase === "arrival" && initialState.scene?.titleCardText === "Level Three",
+    details: `phase=${initialState.scene?.phase}, title=${initialState.scene?.titleCardText || ""}`
+  });
+
+  await advance(page, 2200);
+  const state = await readState(page);
+  checks.push({
+    name: "level_three_placeholder_visible",
+    ok: Boolean(state.levelThree?.placeholderLoveLetterVisible),
+    details: `placeholderLoveLetterVisible=${Boolean(state.levelThree?.placeholderLoveLetterVisible)}`
+  });
+  checks.push({
+    name: "level_three_placeholder_not_collectable",
+    ok: !state.levelThree?.placeholderLoveLetterCollectable && !state.levelThree?.complete,
+    details: `collectable=${Boolean(state.levelThree?.placeholderLoveLetterCollectable)}, complete=${Boolean(state.levelThree?.complete)}`
+  });
+  checks.push({
+    name: "level_three_frog_available",
+    ok: Boolean(state.levelThree?.frogAvailableFromStart),
+    details: `frogAvailableFromStart=${Boolean(state.levelThree?.frogAvailableFromStart)}`
+  });
+  checks.push({
+    name: "level_three_water_shell_present",
+    ok: Number(state.levelThree?.waterTileCount || 0) > 0,
+    details: `waterTileCount=${state.levelThree?.waterTileCount || 0}`
+  });
+  checks.push({
+    name: "level_three_mostly_water_island_map",
+    ok: Boolean(state.levelThree?.mostlyWater) &&
+      Number(state.levelThree?.islandCount || 0) >= 11,
+    details: `water=${state.levelThree?.waterTileCount || 0}, land=${state.levelThree?.landTileCount || 0}, islands=${state.levelThree?.islandCount || 0}`
+  });
+  checks.push({
+    name: "level_three_required_zone_ids_present",
+    ok: [
+      "level3StartIsland",
+      "level3FrogLaneStart",
+      "level3TotemWinchIsland",
+      "level3CenterHub",
+      "level3GreenButtonIsland",
+      "level3ElephantIsland",
+      "level3RedButtonAIsland",
+      "level3PlatformDockIsland",
+      "level3WeightCacheIsland",
+      "level3RedButtonBIsland",
+      "level3LoveLetterCliff"
+    ].every((id) => state.levelThree?.islands?.some((island) => island.id === id)),
+    details: `islands=${(state.levelThree?.islands || []).map((island) => island.id).join(",")}`
+  });
+  checks.push({
+    name: "level_three_opening_and_bridge_green_buttons_distinct",
+    ok: state.levelThree?.greenButtons?.some((button) => button.id === "level3TotemGreenButton" && button.futureMechanism === "crocodile-totem-raft-winch") &&
+      state.levelThree?.greenButtons?.some((button) => button.id === "level3BridgeGreenButton" && button.futureMechanism === "central-bridge-cycle"),
+    details: `greenButtons=${(state.levelThree?.greenButtons || []).map((button) => `${button.id}:${button.futureMechanism}`).join(",")}`
+  });
+  checks.push({
+    name: "level_three_phase_one_mechanics_inactive",
+    ok: state.levelThree?.inactiveMechanics &&
+      Object.values(state.levelThree.inactiveMechanics).every((value) => value === false),
+    details: JSON.stringify(state.levelThree?.inactiveMechanics || {})
+  });
+  checks.push({
+    name: "level_three_neutral_future_state_fields",
+    ok: state.levelThree?.neutralFutureState?.level3TotemRaftState === 0 &&
+      state.levelThree?.neutralFutureState?.level3TotemRaftDocked === false &&
+      state.levelThree?.neutralFutureState?.level3CrocodileUnlocked === false &&
+      state.levelThree?.neutralFutureState?.level3BridgeState === 0,
+    details: JSON.stringify(state.levelThree?.neutralFutureState || {})
+  });
+  checks.push({
+    name: "level_three_editor_selectable_ids_present",
+    ok: ["level3StartIsland", "level3FrogLaneStart", "level3TotemGreenButton", "level3TotemRaft", "level3CrocodileEcho", "level3BridgeGreenButton", "level3LoveLetterCliff"]
+      .every((id) => state.levelThree?.editorSelectableIds?.includes(id)),
+    details: `editorSelectableIds=${(state.levelThree?.editorSelectableIds || []).join(",")}`
+  });
+  checks.push({
+    name: "level_three_authoring_contract_shell_only",
+    ok: String(state.levelThree?.authoringContract || "").includes("shell only"),
+    details: state.levelThree?.authoringContract || ""
+  });
+  return { checks, state };
+}
+
 async function runLevelTwoLoveLetterReady(page) {
   const checks = [];
   const state = await waitForScenePlayPhase(page, "level_two", { timeoutMs: 120000 });
@@ -210,7 +300,7 @@ async function runLevelTwoRedAElephantExitRoute(page) {
     details: `progress=${elevatorA?.progress}`
   });
 
-  await hold(page, "KeyA", 1900, 130);
+  await hold(page, "KeyA", 3200, 130);
   await advance(page, 180);
   const exitState = await readState(page);
   checks.push({
@@ -270,10 +360,11 @@ async function runLevelTwoRedAButtonStartsElevator(page) {
     details: `active=${Boolean(readyButtonA?.active)}, heldBy=${readyButtonA?.heldActor || ""}`
   });
   checks.push({
-    name: "red_elevator_a_starts_immediately",
+    name: "red_elevator_a_starts_up_from_bottom",
     ok: readyState?.activeActor === "human" &&
       Boolean(readyState?.levelTwo?.redElevatorAStartGate?.released) &&
-      readyElevatorA?.moving === "down",
+      Number(readyElevatorA?.progress ?? 1) <= 0.03 &&
+      readyElevatorA?.moving === "up",
     details: `active=${readyState?.activeActor || ""}, gateReason=${readyState?.levelTwo?.redElevatorAStartGate?.waitingReason || ""}, progress=${readyElevatorA?.progress}, moving=${readyElevatorA?.moving || ""}`
   });
 
@@ -281,15 +372,15 @@ async function runLevelTwoRedAButtonStartsElevator(page) {
   const movingState = await readState(page);
   const movingElevatorA = movingState?.levelTwo?.redPlatforms?.find((platform) => platform.id === "red-elevator-a");
   checks.push({
-    name: "red_elevator_a_continues_down_without_top_delay",
+    name: "red_elevator_a_continues_up_without_bottom_delay",
     ok: Boolean(movingState?.levelTwo?.redElevatorAStartGate?.released) &&
-      Number(movingElevatorA?.progress || 1) < 0.98,
+      Number(movingElevatorA?.progress || 0) > Number(readyElevatorA?.progress || 0),
     details: `released=${Boolean(movingState?.levelTwo?.redElevatorAStartGate?.released)}, progress=${movingElevatorA?.progress}, moving=${movingElevatorA?.moving || ""}`
   });
   checks.push({
-    name: "red_elevator_a_descends_without_human_approach",
-    ok: ["down", "pause-bottom"].includes(movingElevatorA?.moving || "") ||
-      Number(movingElevatorA?.progress || 1) < 0.98,
+    name: "red_elevator_a_rises_without_human_approach",
+    ok: ["up", "pause-top"].includes(movingElevatorA?.moving || "") ||
+      Number(movingElevatorA?.progress || 0) > Number(readyElevatorA?.progress || 0),
     details: `progress=${movingElevatorA?.progress}, moving=${movingElevatorA?.moving || ""}`
   });
   return { checks, state: movingState };
@@ -362,6 +453,50 @@ async function runLevelTwoRedAReleasedBottomStays(page) {
     details: `progress=${heldElevatorA?.progress}, moving=${heldElevatorA?.moving || ""}, releaseTarget=${heldElevatorA?.releaseTarget}`
   });
   return { checks, state: heldState };
+}
+
+async function runLevelTwoRedAReleaseEndpointLatch(page) {
+  const checks = [];
+  await setPaused(page, true);
+
+  const runScenario = async (scenario, expectedProgress, settleMs, holdMs) => {
+    const readyState = await page.evaluate((nextScenario) => {
+      if (typeof window.set_game_test_level_two_red_a_release_ready !== "function") return null;
+      return window.set_game_test_level_two_red_a_release_ready(nextScenario);
+    }, scenario);
+    const readyElevatorA = readyState?.levelTwo?.redPlatforms?.find((platform) => platform.id === "red-elevator-a");
+    const buttonA = readyState?.levelTwo?.redButtons?.find((button) => button.id === "red-button-a");
+    checks.push({
+      name: `seeded_release_${scenario}`,
+      ok: Boolean(readyState) && !buttonA?.active,
+      details: `scene=${readyState?.scene?.id || "missing"}, progress=${readyElevatorA?.progress}, moving=${readyElevatorA?.moving || ""}, button=${Boolean(buttonA?.active)}`
+    });
+
+    await advance(page, settleMs);
+    const endpointState = await readState(page);
+    const endpointElevatorA = endpointState?.levelTwo?.redPlatforms?.find((platform) => platform.id === "red-elevator-a");
+    checks.push({
+      name: `release_${scenario}_finishes_expected_endpoint`,
+      ok: Math.abs(Number(endpointElevatorA?.progress || 0) - expectedProgress) <= 0.02,
+      details: `progress=${endpointElevatorA?.progress}, moving=${endpointElevatorA?.moving || ""}, releaseTarget=${endpointElevatorA?.releaseTarget}`
+    });
+
+    await advance(page, holdMs);
+    const latchedState = await readState(page);
+    const latchedElevatorA = latchedState?.levelTwo?.redPlatforms?.find((platform) => platform.id === "red-elevator-a");
+    checks.push({
+      name: `release_${scenario}_stays_latched`,
+      ok: Math.abs(Number(latchedElevatorA?.progress || 0) - expectedProgress) <= 0.02 &&
+        latchedElevatorA?.moving === "idle",
+      details: `progress=${latchedElevatorA?.progress}, moving=${latchedElevatorA?.moving || ""}, releaseTarget=${latchedElevatorA?.releaseTarget}`
+    });
+    return latchedState;
+  };
+
+  await runScenario("top", 1, 900, 1400);
+  await runScenario("descending", 0, 3600, 1400);
+  const finalState = await runScenario("ascending", 1, 4300, 1400);
+  return { checks, state: finalState };
 }
 
 async function runLevelTwoLoveLetterCameraVisibility(page) {
@@ -532,7 +667,7 @@ async function runLevelOneUnpossessedFrogButtonActivation(page) {
     ok: seededState?.activeActor === "human" && !seededState?.button?.pressed,
     details: `active=${seededState?.activeActor || ""}, button=${Boolean(seededState?.button?.pressed)}`
   });
-  await advance(page, 180);
+  await advance(page, 6200);
   const pressedState = await readState(page);
   checks.push({
     name: "unpossessed_frog_presses_level_one_button",
@@ -540,9 +675,14 @@ async function runLevelOneUnpossessedFrogButtonActivation(page) {
     details: `button=${Boolean(pressedState?.button?.pressed)}`
   });
   checks.push({
-    name: "level_one_bridge_activates",
-    ok: Boolean(pressedState?.levelOne?.bridgeComplete),
-    details: `bridgeComplete=${Boolean(pressedState?.levelOne?.bridgeComplete)}`
+    name: "level_one_blue_blooms_release",
+    ok: Boolean(pressedState?.levelOne?.blueBloomReleased),
+    details: `blueBloomReleased=${Boolean(pressedState?.levelOne?.blueBloomReleased)}`
+  });
+  checks.push({
+    name: "level_one_blue_blooms_dock",
+    ok: Boolean(pressedState?.levelOne?.blueBloomDocked),
+    details: `blueBloomDocked=${Boolean(pressedState?.levelOne?.blueBloomDocked)}, bridgeCompleteCompat=${Boolean(pressedState?.levelOne?.bridgeComplete)}`
   });
   return { checks, state: pressedState };
 }
@@ -584,12 +724,14 @@ const IMPLEMENTED_FIXTURES = {
   level_two_red_a_button_starts_elevator: runLevelTwoRedAButtonStartsElevator,
   level_two_red_a_elephant_bottom_pause: runLevelTwoRedAElephantBottomPause,
   level_two_red_a_released_bottom_stays: runLevelTwoRedAReleasedBottomStays,
+  level_two_red_a_release_endpoint_latch: runLevelTwoRedAReleaseEndpointLatch,
   level_two_red_a_elephant_exit_route: runLevelTwoRedAElephantExitRoute,
   level_two_red_a_human_exit_route: runLevelTwoRedAHumanExitRoute,
   level_two_love_letter_camera_visibility: runLevelTwoLoveLetterCameraVisibility,
   level_two_red_a_ground_clearance: runLevelTwoRedAGroundClearance,
   level_two_red_b_route: runLevelTwoRedBRoute,
-  level_two_unpossessed_frog_blue_button_activation: runLevelTwoUnpossessedFrogBlueButtonActivation
+  level_two_unpossessed_frog_blue_button_activation: runLevelTwoUnpossessedFrogBlueButtonActivation,
+  level_three_start: runLevelThreeStart
 };
 
 async function run() {

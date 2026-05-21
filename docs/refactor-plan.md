@@ -411,7 +411,7 @@ Before each phase, check for:
 - **Over-combined high-risk work** — do not combine collision/surface extraction, scene-flow extraction, and active Level Two mechanics in one pass.
 - **Actor height/grounding** — `SURFACE_Y`, `FLOOR_TARGET`, actor lift values must not be touched during structural refactors.
 - **HUD references** — DOM selectors break silently at runtime; verify the HUD after any `ui/` extraction.
-- **Debug shortcuts** — confirm keys 1–4 still trigger scene loads after any scene-routing change.
+- **Debug shortcuts** — confirm keys 1–5 still trigger scene loads after any scene-routing change.
 - **Asset paths** — Vite resolves `/assets/...` from `public/`; do not change asset import patterns.
 
 ---
@@ -422,16 +422,19 @@ Before each phase, check for:
 - [ ] No import/export errors in browser console.
 - [ ] Before execution, confirm plan coherence by checking for conflicting symbol scopes and naming references within this document.
 - [ ] Before first code phase, confirm Task 1A moves the Love Letter content cluster together and leaves dialogue extraction for the next content pass.
-- [ ] Debug shortcuts 1–4 load correct scenes.
+- [ ] Debug shortcuts 1–5 load correct scenes.
 - [ ] Tutorial loads and completes: movement, frog possession, jump, button, Love Letter message, tutorial-complete modal.
 - [ ] Home Intro loads: door note, trail guidance, exit confirmation, fade to Level One.
 - [ ] Level One loads: frog water-block dialogue at correct cooldown, bridge reveal, Love Letter message, level-complete modal.
 - [ ] Level Two loads: title, arrival, Frog available, Elephant Totem visible, blue button on ledge.
+- [ ] Level Three shell loads: title during arrival, water garden terrain, placeholder Love Letter, and no final route behavior.
 - [ ] Frog patrol and celebration behavior unchanged.
 - [ ] Run `npm run tools:run-scene-smoke -- tutorial`.
 - [ ] Run `npm run tools:run-scene-smoke -- home_intro`.
 - [ ] Run `npm run tools:run-scene-smoke -- level_one`.
 - [ ] Run `npm run tools:run-scene-smoke -- level_two`.
+- [ ] Run `npm run tools:run-scene-smoke -- level_three`.
+- [ ] Run `npm run tools:validate-level-registry -- --pretty`.
 - [ ] Run `npm run tools:validate-missing-colliders -- level_two`.
 - [ ] Run `npm run tools:validate-float-colliders -- level_two`.
 - [ ] For UI, dialogue, collision, or scene-flow extraction, also run the deeper Playwright smoke scripts under `test-output/`.
@@ -441,17 +444,17 @@ Before each phase, check for:
 
 ## I. Recommended Next Refactor Task
 
-**Task 1A: Move all Love Letter IDs and `LOVE_LETTER_MESSAGES` into `src/content/loveLetters.js`.**
+**Pause broad refactors until the current readiness checkpoint is human-reviewed.**
 
-This is the first half of Phase 1 and the direct follow-up to the 2026-05-19 maintenance pass. Do this before moving tutorial/Frog Echo/Totem dialogue.
+The old Love Letter content extraction recommendation is complete. The next code
+work should stay tied to one verified need:
 
-**Steps:**
-1. Create `src/content/loveLetters.js`.
-2. Move `TUTORIAL_LOVE_LETTER_ID`, `LEVEL_ONE_LOVE_LETTER_ID`, `REWARD_NAME`, and `LOVE_LETTER_MESSAGES` into it.
-3. In `constants.js`: remove those four exports entirely (confirm no remaining usages of `[LEVEL_ONE_LOVE_LETTER_ID]` in that file after the move).
-4. In `main.js`: add `import { ... } from "./content/loveLetters.js"` and remove the four names from the `constants.js` import block.
-5. Verify: Tutorial Love Letter message correct, Level One Love Letter message correct, no console errors.
+1. If the Level Three shell review exposes wiring drift, improve
+   `tools:validate-level-registry` or the level catalog.
+2. If invisible walls are found in play, add a debug-only collider/block probe
+   before moving collision code.
+3. If the Dev Editor authoring packet is too thin, extend export metadata
+   without adding browser source writes.
 
-**Why this is safe:** pure data relocation, no logic, no circular deps (the new file has no imports from `levelOne.js`).
-
-Implementation guardrail: no gameplay logic changes are allowed during this extraction phase; if behavior adjustments are required, split them into a separate follow-up task and keep refactor scope unchanged.
+Implementation guardrail: do not combine a collision/surface refactor, scene
+flow refactor, and new Level Three gameplay in one pass.

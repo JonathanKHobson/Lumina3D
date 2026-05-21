@@ -18,8 +18,13 @@ export function buildEditorAiPrompt(stateExport) {
     notedObjects: stateExport?.noteCount || 0,
     markedDeleteObjects: stateExport?.deleteCount || 0,
     markedReplaceObjects: stateExport?.replaceCount || 0,
+    replacementCandidates: stateExport?.replacementCandidateCount || 0,
+    draftPlacements: stateExport?.draftPlacementCount || 0,
     mapLevelNote: stateExport?.levelNotePresent ? "yes" : "no",
     colliderProxyCount: stateExport?.colliderOverlay?.proxyCount || 0,
+    visibleColliderProxyCount: stateExport?.colliderOverlay?.visibleProxyCount || 0,
+    colliderViewMode: stateExport?.colliderOverlay?.viewMode || "off",
+    problemWarnings: stateExport?.colliderDiagnostics?.problemWarningCount || 0,
     selectedColliderProxyCount: stateExport?.colliderOverlay?.selectedProxyCount || 0,
     selectedObject: stateExport?.selectedObjectContext?.objectId || "none",
     selectedMovable: stateExport?.selectedObjectContext?.movable ? "yes" : "no",
@@ -46,8 +51,11 @@ Summary:
 - Map-level note: ${summary.mapLevelNote}
 - Objects marked delete: ${summary.markedDeleteObjects}
 - Objects marked replace: ${summary.markedReplaceObjects}
-- Editor collider/proxy hints: ${summary.colliderProxyCount}
+- Replacement candidates: ${summary.replacementCandidates}
+- Draft placements: ${summary.draftPlacements}
+- Editor collider/proxy hints: ${summary.visibleColliderProxyCount}/${summary.colliderProxyCount} visible (${summary.colliderViewMode})
 - Selected object collider/proxy hints: ${summary.selectedColliderProxyCount}
+- Collider/walkability warnings: ${summary.problemWarnings}
 - Selected object: ${summary.selectedObject}
 - Selected object movable: ${summary.selectedMovable}
 - Selected object locked: ${summary.selectedLocked}
@@ -62,8 +70,9 @@ Implementation instructions:
 - Apply transform changes to source-backed level data where the sourceRef is clear.
 - Treat object editability fields as editor handoff context: movable objects can receive transform edits; locked objects should be annotated or adjusted only after inspecting the source mapping and lockReason.
 - Use selectedObjectContext when the selected tile or object was inspected but has no transform change.
-- Use assetCatalog.selectedAsset as read-only asset context only; do not spawn, place, or source-write new asset instances unless I explicitly ask for an asset placement slice.
-- External asset references are metadata-only local library references. They are not imported into Lumina3D, not served by the game, and not placeable in this slice unless a future import/placement task explicitly asks for that work.
+- Use assetCatalog.selectedAsset as asset context for replacement candidates or draft placements only; do not source-write new asset instances from the browser.
+- Draft placements are proposed additions, not source-backed objects yet. Inspect asset availability before implementing. In-project draft assets can become runtime objects through normal level source/scene-builder paths. External draft assets must be imported/register-reviewed before runtime use.
+- External asset references are metadata-only local library references. They are not imported into Lumina3D or served by the game unless a future import task explicitly does that work.
 - Interpret #... tokens in notes as editor references, not casual hashtags. Use noteReferences and referenceGlossary to resolve referenced objects/assets before changing code.
 - Object references point to current-level editor records and may include sourceRef, transform, editability, and collider context. Asset references point to read-only assetCatalog records and do not imply placement.
 - If a # reference is unresolved or stale, inspect local files and ask/propose options instead of guessing.
@@ -72,6 +81,9 @@ Implementation instructions:
 - Use colliderProxies and selectedColliderProxies as visual handoff context only. Do not edit collider source unless an object note explicitly asks for @collision or the transform change clearly requires a paired collider/proxy update.
 - Respect markedForDelete as deletion intent, but do not delete blindly if the object has behavior links or unclear source ownership.
 - Respect markedForReplace as replacement intent, not simple deletion. Preserve role, behavior, and linkage when appropriate; if the replacement asset is unclear, propose options instead of guessing.
+- Use replacementCandidate when present as the intended replacement target while preserving the original object's gameplay role unless the note says otherwise.
+- Use draftPlacements as add-intent records. Do not put draft placement transforms into transform-patch handling.
+- Use colliderDiagnostics to prioritize walkability/collider review; problem warnings are evidence to inspect, not automatic source edits.
 - Do not invent new gameplay behavior unless the object note explicitly asks for it.
 - Do not rewrite unrelated systems or migrate architecture.
 - Do not make the browser/editor directly rewrite source files.

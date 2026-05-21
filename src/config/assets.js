@@ -80,6 +80,12 @@ export const ASSETS = {
     targetFootprint: TILE * 2.25
   },
   barrier: { type: "obj", base: "/assets/kaykit/dungeon/barrier/", stem: "barrier", targetFootprint: TILE * 1.04 },
+  tutorialBarrierBlue: {
+    type: "obj",
+    base: "/assets/kaykit/platformer/barrier-blue-1x1x1/",
+    stem: "barrier_1x1x1_blue",
+    targetFootprint: TILE * 1.04
+  },
   barrierHalf: {
     type: "obj",
     base: "/assets/kaykit/dungeon/barrier_half/",

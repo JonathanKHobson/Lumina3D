@@ -18,9 +18,11 @@ export function currentVisibleAssetsForState(state, sceneIds) {
       "kaykit-blockbits-sand-with-grass",
       "kaykit-blockbits-sand-a-path",
       "kaykit-blockbits-water",
-      "ultimate-platformer-partial-bridge",
-      "generated-walkable-bridge-deck",
-      state.levelOne.bridgeComplete ? "ultimate-platformer-complete-bridge" : null,
+      "generated-level-one-lily-pad",
+      "generated-blue-flower-latch",
+      "generated-blue-bloom-mats-held",
+      state.levelOne.blueBloomDocked ? "generated-blue-bloom-mats-docked" : null,
+      state.levelOne.blueBloomDocked ? "generated-blue-dock-glows" : null,
       "kaykit-forest-tree",
       "kaykit-forest-bush",
       "kaykit-forest-rock",
@@ -67,6 +69,35 @@ export function currentVisibleAssetsForState(state, sceneIds) {
       "kaykit-love-letter-closed-placeholder-noncollectable",
       "animals-farm-background-clouds-under-scene"
     ].filter(Boolean);
+  }
+  if (state.scene.id === sceneIds.LEVEL_THREE) {
+    return [
+      "kaykit-blockbits-sand-with-grass",
+      "kaykit-blockbits-sand-a-path",
+      "kaykit-blockbits-water",
+      "generated-level-three-island-zone-markers",
+      "generated-level-three-static-lily-pad-placeholders",
+      "generated-level-three-lily-pad-track-markers",
+      "generated-level-three-opening-totem-green-button-placeholder",
+      "generated-level-three-bridge-green-button-placeholder",
+      "generated-level-three-crocodile-echo-placeholder",
+      "generated-level-three-crocodile-totem-raft-placeholder",
+      "generated-level-three-totem-raft-state-markers",
+      "generated-level-three-bridge-destination-markers",
+      "generated-level-three-red-button-placeholders",
+      "generated-level-three-red-button-b-stone-sockets",
+      "generated-level-three-anchor-stone-placeholders",
+      "generated-level-three-love-letter-cliff",
+      "kaykit-forest-tree",
+      "kaykit-forest-bush",
+      "kaykit-forest-rock",
+      "kaykit-forest-grass-1b-detail",
+      "kaykit-platformer-character",
+      "voxel-frog",
+      "frog-cubeling",
+      "kaykit-love-letter-closed-placeholder-noncollectable",
+      "animals-farm-background-clouds-under-scene"
+    ];
   }
   return [
     "kaykit-blockbits-sand-with-grass",

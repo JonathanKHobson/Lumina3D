@@ -222,8 +222,47 @@ async function run() {
       `${entities.length} editable entities`
     ));
 
+    await page.evaluate(() => window.set_game_test_level_one_love_letter_ready?.());
+    await advance(page, 160);
+    await page.keyboard.press("F2");
+    await advance(page, 80);
+    await page.keyboard.press("F2");
+    await advance(page, 120);
+    const levelOneEntities = await readDevEntities(page);
+    const levelOneLoveLetter = levelOneEntities.find((entity) => entity.id === "level_one.love_letter.closed");
+    const levelOneLoveSelection = await page.evaluate(() => window.__luminaDevEditor.selectEntityById("level_one.love_letter.closed"));
+    const levelOneLovePoint = await page.evaluate(() => window.__luminaDevEditor.canvasPointForEntity("level_one.love_letter.closed"));
+    await page.evaluate(() => window.__luminaDevEditor.selectEntityById("level_one.human"));
+    if (levelOneLovePoint?.visible) {
+      await page.mouse.click(levelOneLovePoint.x, levelOneLovePoint.y);
+      await advance(page, 100);
+    }
+    const levelOneLoveClickSelection = await selectedEntityId(page);
+
+    checks.push(check(
+      "level_one_love_letter_registered",
+      Boolean(levelOneLoveLetter) && levelOneLoveLetter.category === "love_letter",
+      levelOneLoveLetter ? `${levelOneLoveLetter.id} category=${levelOneLoveLetter.category} display=${levelOneLoveLetter.displayName}` : "level_one.love_letter.closed missing"
+    ));
+    checks.push(check(
+      "level_one_love_letter_select_by_id",
+      levelOneLoveSelection?.id === "level_one.love_letter.closed",
+      levelOneLoveSelection?.id || "no Level One love-letter selection"
+    ));
+    checks.push(check(
+      "level_one_love_letter_canvas_point_visible",
+      Boolean(levelOneLovePoint?.visible),
+      JSON.stringify(levelOneLovePoint)
+    ));
+    checks.push(check(
+      "level_one_love_letter_canvas_click_selects",
+      levelOneLoveClickSelection === "level_one.love_letter.closed",
+      `${levelOneLovePoint?.visible ? "clicked" : "not-clicked"} -> ${levelOneLoveClickSelection || "no selection"}`
+    ));
+
     await page.evaluate(() => window.set_game_test_level_two_red_prototype_ready?.());
     await advance(page, 140);
+    const levelTwoLoveSelection = await page.evaluate(() => window.__luminaDevEditor.selectEntityById("level_two.love_letter.placeholder"));
     const elephantSelection = await page.evaluate(() => window.__luminaDevEditor.selectEntityById("level_two.elephant"));
     const elephantBefore = await entityLocalPosition(page, "level_two.elephant");
     await page.evaluate(() => document.querySelector('[data-dev-move="x"][data-dev-delta="1"]')?.click());
@@ -235,6 +274,11 @@ async function run() {
     const elephantAfterUndo = await entityLocalPosition(page, "level_two.elephant");
     const selectedAfterUndo = await selectedEntityId(page);
 
+    checks.push(check(
+      "level_two_placeholder_love_letter_select_by_id",
+      levelTwoLoveSelection?.id === "level_two.love_letter.placeholder",
+      levelTwoLoveSelection?.id || "no Level Two placeholder love-letter selection"
+    ));
     checks.push(check(
       "transform_undo_selects_elephant",
       elephantSelection?.id === "level_two.elephant",

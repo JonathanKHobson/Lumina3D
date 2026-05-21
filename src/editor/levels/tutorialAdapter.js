@@ -32,9 +32,10 @@ const BARRIER_ROTATION_Y = Math.PI / 2;
 function addTutorialBarriers({ group, cloneAsset, editableObjects }) {
   const colliderProxies = [];
   for (let y = 0; y < LEVEL_HEIGHT; y += 1) {
-    const barrier = cloneAsset("barrier");
     const point = gridPoint(WALL_COLUMN, y, LEVEL_WIDTH, LEVEL_HEIGHT, TILE);
     const isDoorBarrier = y === DOOR_ROW;
+    const barrierAsset = isDoorBarrier ? "tutorialBarrierBlue" : "barrier";
+    const barrier = cloneAsset(barrierAsset);
     barrier.position.set(point.x, SURFACE_Y, point.z);
     barrier.rotation.y = BARRIER_ROTATION_Y;
     barrier.scale.y *= BARRIER_TOP_HEIGHT;
@@ -48,7 +49,7 @@ function addTutorialBarriers({ group, cloneAsset, editableObjects }) {
         ? `Button-Gated Barrier ${WALL_COLUMN},${y}`
         : `Barrier Preview ${WALL_COLUMN},${y}`,
       category: "terrain_barrier",
-      assetKey: "barrier",
+      assetKey: barrierAsset,
       readOnly: true,
       transformLocked: true,
       tags: isDoorBarrier

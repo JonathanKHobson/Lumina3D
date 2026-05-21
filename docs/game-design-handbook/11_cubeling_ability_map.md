@@ -132,10 +132,21 @@ Track each Cubeling, status, likely uses, and source confidence so planning and 
 
 ## 10) Crocodile
 
-- Status: `EXPLORATORY / AI-SUGGESTED OR LIGHTLY DISCUSSED`
-- Source/Confidence: `AI-suggested`
-- Idea: heavy-water or swamp specialist, possibly more advanced than Axolotl.
-- Status caveat: not adopted while Axolotl is stronger candidate.
+- Status: `LOCKED / LEVEL THREE CURRENT DIRECTION`
+- Source/Confidence: `Direct user direction`
+- Role:
+  - Amphibious lake specialist.
+  - Moves on both land and water.
+  - Presses normal/cycle buttons when physically reachable.
+  - Eventually carries small weight stones.
+- Locked rules:
+  - Crocodile is not heavy enough to satisfy red buttons.
+  - Crocodile cannot carry humans.
+  - Crocodile cannot carry Cubelings.
+  - Crocodile cargo is limited to small weight stones when that phase is implemented.
+- Current planned use:
+  - Level Three unlocks Crocodile through a Frog-led opening Totem raft puzzle.
+  - Phase 2 unlocks the Totem/Echo only; Crocodile control waits until Phase 3.
 
 ## 11) Dog / Cat
 
