@@ -1,9 +1,11 @@
 import { ASSETS } from "../../src/config/assets.js";
 import {
   SURFACE_Y,
+  TILE,
   WORLD_BOUNDS
 } from "../../src/config/constants.js";
 import { SCENES } from "../../src/config/scenes.js";
+import { sceneGridPoint } from "../../src/core/grid.js";
 import {
   HOME_BOUNDS,
   HOME_HEIGHT,
@@ -13,23 +15,73 @@ import {
 } from "../../src/levels/homeIntroLevel.js";
 import {
   LEVEL_ONE_BOUNDS,
-  LEVEL_ONE_PARTIAL_BRIDGE,
+  LEVEL_ONE_BLUE_BLOOM_LATCH,
+  LEVEL_ONE_BLUE_BLOOM_MATS,
   LEVEL_ONE_BUTTON,
-  LEVEL_ONE_PARTIAL_BRIDGE_MAX_X,
+  LEVEL_ONE_LILY_PAD,
+  LEVEL_ONE_LOVE_LETTER_POINT,
   LEVEL_ONE_PROPS,
   LEVEL_ONE_WIDTH,
   LEVEL_ONE_HEIGHT
 } from "../../src/levels/levelOne.js";
 import {
+  LEVEL_THREE_ANCHOR_STONES,
+  LEVEL_THREE_BOUNDS,
+  LEVEL_THREE_BRIDGE_DESTINATION_MARKERS,
+  LEVEL_THREE_BRIDGE_PIVOT,
+  LEVEL_THREE_BRIDGE_STATE_METADATA,
+  LEVEL_THREE_CROCODILE_ECHO,
+  LEVEL_THREE_CROCODILE_RADIUS,
+  LEVEL_THREE_CROCODILE_SPAWN,
+  LEVEL_THREE_CROCODILE_SPEED,
+  LEVEL_THREE_FROG_LANE_JUMPS,
+  LEVEL_THREE_FROG_LANE_RESET_POINT,
+  LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS,
+  LEVEL_THREE_HEIGHT,
+  LEVEL_THREE_ISLAND_MARKERS,
+  LEVEL_THREE_ISLANDS,
+  LEVEL_THREE_LAND_TILES,
+  LEVEL_THREE_LILY_PAD_PLACEHOLDERS,
+  LEVEL_THREE_LILY_PAD_MIN_EDGE_GAP,
+  LEVEL_THREE_LILY_PAD_MIN_ISLAND_GAP,
+  LEVEL_THREE_MAP_SHAPE,
+  LEVEL_THREE_PATH_TILES,
+  LEVEL_THREE_PLACEHOLDER_LOVE_LETTER_Y,
+  LEVEL_THREE_PLACEHOLDER_IDS,
+  LEVEL_THREE_POINTS,
+  LEVEL_THREE_PROPS,
+  LEVEL_THREE_RAFT_MARKERS,
+  LEVEL_THREE_RED_BUTTON_PLACEHOLDERS,
+  LEVEL_THREE_RESERVED_ZONES,
+  LEVEL_THREE_RESET_PERCH_PLACEHOLDERS,
+  LEVEL_THREE_START_EDGE_CONNECTION_TILES,
+  LEVEL_THREE_TOTEM_COLLECTION_RADIUS,
+  LEVEL_THREE_TOTEM_GREEN_BUTTON_RADIUS,
+  LEVEL_THREE_TOTEM_RAFT,
+  LEVEL_THREE_TOTEM_RAFT_DRIFT_SECONDS,
+  LEVEL_THREE_TOTEM_RAFT_GATES,
+  LEVEL_THREE_WATER_TILES,
+  LEVEL_THREE_WIDTH
+} from "../../src/levels/levelThree.js";
+import {
   LEVEL_TWO_BOUNDS,
+  LEVEL_TWO_BLUE_RAMP,
+  LEVEL_TWO_BUTTON_LEDGE_TILES,
   LEVEL_TWO_CENTRAL_MOUNTAIN_TILES,
   LEVEL_TWO_CENTRAL_MOUNTAIN_TIERS,
   LEVEL_TWO_FROG_SIDE_LEDGE_TILES,
   LEVEL_TWO_FROG_SIDE_LEDGE_HEIGHT,
+  LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_HEIGHT,
+  LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_TILES,
   LEVEL_TWO_LOVE_LETTER_CLEARANCE,
   LEVEL_TWO_PLACEHOLDER_LOVE_LETTER_Y,
   LEVEL_TWO_POINTS,
   LEVEL_TWO_PROPS,
+  LEVEL_TWO_RED_BUTTONS,
+  LEVEL_TWO_RED_BUTTON_B_TERRACE_TILES,
+  LEVEL_TWO_RED_ELEVATOR_B_SHAFT_TILES,
+  LEVEL_TWO_RED_ELEVATOR_TOP_CONNECTOR_TILES,
+  LEVEL_TWO_RED_PLATFORMS,
   LEVEL_TWO_RESERVED_TERRACE_GROUPS,
   LEVEL_TWO_RESERVED_TERRACE_TILES,
   LEVEL_TWO_WIDTH,
@@ -61,6 +113,9 @@ const LEVEL_ALIAS_MAP = {
   level_two: SCENES.LEVEL_TWO,
   leveltwo: SCENES.LEVEL_TWO,
   "level-two": SCENES.LEVEL_TWO,
+  level_three: SCENES.LEVEL_THREE,
+  levelthree: SCENES.LEVEL_THREE,
+  "level-three": SCENES.LEVEL_THREE,
   full_flow: SCENES.TUTORIAL,
   fullflow: SCENES.TUTORIAL,
   "full-flow": SCENES.TUTORIAL
@@ -70,7 +125,8 @@ const DEBUG_KEY_BY_SCENE = {
   [SCENES.TUTORIAL]: "Digit1",
   [SCENES.HOME]: "Digit2",
   [SCENES.LEVEL_ONE]: "Digit3",
-  [SCENES.LEVEL_TWO]: "Digit4"
+  [SCENES.LEVEL_TWO]: "Digit4",
+  [SCENES.LEVEL_THREE]: "Digit5"
 };
 
 function resolveAssetPath(key) {
@@ -116,12 +172,13 @@ function makeObject(input) {
   return result;
 }
 
-function makePropObject(levelPrefix, source, props, assumeSolid = true) {
+function makePropObject(levelPrefix, source, props, assumeSolid = true, toWorldPosition = null) {
   return props.map(([assetKey, x, z, scale], index) => {
+    const worldPosition = toWorldPosition ? toWorldPosition(x, z) : { x, z };
     const position = {
-      x: toTwoDecimals(x),
+      x: toTwoDecimals(worldPosition.x),
       y: toTwoDecimals(SURFACE_Y),
-      z: toTwoDecimals(z)
+      z: toTwoDecimals(worldPosition.z)
     };
     const collisionExpected = assumeSolid && /Tree|Rock|Bush/.test(assetKey);
     return makeObject({
@@ -177,6 +234,41 @@ function makeTerrainExpectation(id, name, prefix, count, sourceY = SURFACE_Y, no
   });
 }
 
+function makeLevelThreeGeneratedObject({
+  id,
+  name,
+  category,
+  position,
+  mechanismLink,
+  assetKey = "generated-level-three-placeholder",
+  assetPath = "/generated/level-three-placeholder",
+  type = "phase-one-placeholder",
+  fingerprint = "Phase 1 visual placeholder only; behavior inactive."
+}) {
+  return makeObject({
+    id,
+    name,
+    type,
+    category,
+    asset: {
+      key: assetKey,
+      path: assetPath,
+      scale: 1
+    },
+    position: {
+      x: toTwoDecimals(position.x),
+      y: toTwoDecimals(SURFACE_Y),
+      z: toTwoDecimals(position.z)
+    },
+    collisionExpected: false,
+    colliderLabel: null,
+    expectedColliderCount: 0,
+    mechanismLink,
+    runtimeProbe: `levelThree.placeholders.${id}`,
+    fingerprint
+  });
+}
+
 function makeLandmarks(points) {
   return points.map((point) => ({
     id: point.id,
@@ -209,7 +301,20 @@ function fixtureUnsupported(id, reason) {
 
 const LEVEL_ONE_PROPS_OBJECTS = makePropObject("level_one", "level-one", LEVEL_ONE_PROPS);
 const HOME_PROPS_OBJECTS = makePropObject("home_intro", "home", HOME_PROPS, false);
-const LEVEL_TWO_PROPS_OBJECTS = makePropObject("level_two", "level-two", LEVEL_TWO_PROPS);
+const LEVEL_TWO_PROPS_OBJECTS = makePropObject(
+  "level_two",
+  "level-two",
+  LEVEL_TWO_PROPS,
+  true,
+  (x, z) => sceneGridPoint(LEVEL_TWO_WIDTH, LEVEL_TWO_HEIGHT, x, z, TILE)
+);
+const LEVEL_THREE_PROPS_OBJECTS = makePropObject(
+  "level_three",
+  "level-three",
+  LEVEL_THREE_PROPS,
+  true,
+  (x, z) => sceneGridPoint(LEVEL_THREE_WIDTH, LEVEL_THREE_HEIGHT, x, z, TILE)
+);
 
 function makeLevelMetadata() {
   const levelTwoCentralTerrain = makeTerrainExpectation(
@@ -226,19 +331,130 @@ function makeLevelMetadata() {
     LEVEL_TWO_FROG_SIDE_LEDGE_HEIGHT,
     "froglike crossing path before frog mechanics"
   );
-  const levelTwoReservedTerrace = LEVEL_TWO_RESERVED_TERRACE_GROUPS.flatMap((station) => {
-    const groupCount = LEVEL_TWO_RESERVED_TERRACE_TILES.filter((tile) => tile.stationId === station.id).length;
-    return [
-      makeTerrainExpectation(
-        `level_two_reserved_${station.id}`,
-        `${station.role} (${station.id})`,
-        `level-two-reserved-${station.id}-`,
-        groupCount,
-        SURFACE_Y,
-        `reserved: ${station.role}`
-      )
-    ];
+  const levelTwoRedElevatorTopConnector = makeTerrainExpectation(
+    "level_two_red_elevator_a_top_connector",
+    "Red Elevator A top connector",
+    "level-two-red-elevator-a-top-connector-",
+    LEVEL_TWO_RED_ELEVATOR_TOP_CONNECTOR_TILES.length,
+    LEVEL_TWO_RED_ELEVATOR_TOP_CONNECTOR_TILES[0]?.bottomY || SURFACE_Y,
+    "Elephant route connector from Red Elevator A to tier-3 terrain"
+  );
+  const levelTwoHumanLoveLetterRoute = makeTerrainExpectation(
+    "level_two_human_love_letter_route",
+    "Elevator B upper Love Letter route",
+    "level-two-human-love-letter-route-",
+    LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_TILES.length,
+    LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_HEIGHT,
+    "Elevator B human exit route to Level Two Love Letter"
+  );
+  const levelTwoBlueButton = makeObject({
+    id: "level_two_blue_button",
+    name: "Blue Button",
+    type: "mechanism-button",
+    category: "mechanism",
+    asset: makeAsset("buttonBaseBlue"),
+    position: {
+      x: toTwoDecimals(LEVEL_TWO_POINTS.blueButton.x),
+      y: toTwoDecimals(SURFACE_Y + (LEVEL_TWO_BUTTON_LEDGE_TILES[0]?.bottomY || 0)),
+      z: toTwoDecimals(LEVEL_TWO_POINTS.blueButton.z)
+    },
+    collisionExpected: false,
+    mechanismLink: "blue-button -> blue-ramp",
+    elevationBand: {
+      min: toTwoDecimals(SURFACE_Y - 0.2),
+      max: toTwoDecimals(SURFACE_Y + 3.2)
+    },
+    runtimeProbe: "levelTwo.blueButton"
   });
+  const levelTwoBlueRamp = makeObject({
+    id: "level_two_blue_ramp",
+    name: "Blue Ramp",
+    type: "mechanism-ramp",
+    category: "mechanism",
+    asset: makeAsset(LEVEL_TWO_BLUE_RAMP.asset),
+    position: {
+      x: toTwoDecimals(LEVEL_TWO_BLUE_RAMP.position.x),
+      y: toTwoDecimals(SURFACE_Y),
+      z: toTwoDecimals(LEVEL_TWO_BLUE_RAMP.position.z)
+    },
+    collisionExpected: false,
+    mechanismLink: "blue-button -> active-ramp",
+    elevationBand: {
+      min: toTwoDecimals(SURFACE_Y - 0.2),
+      max: toTwoDecimals(SURFACE_Y + LEVEL_TWO_BLUE_RAMP.targetLift + 0.6)
+    },
+    runtimeProbe: "levelTwo.blueRamp"
+  });
+  const levelTwoBlueRampDormantPanel = LEVEL_TWO_BLUE_RAMP.dormantPanel ? makeObject({
+    id: "level_two_blue_ramp_dormant_panel",
+    name: "Blue Ramp Dormant Panel",
+    type: "mechanism-visual",
+    category: "visual-only",
+    asset: {
+      key: "generated-blue-ramp-dormant-panel",
+      path: UNKNOWN_ASSET_PATH,
+      scale: 1
+    },
+    position: {
+      x: toTwoDecimals(LEVEL_TWO_BLUE_RAMP.dormantPanel.position.x),
+      y: toTwoDecimals(LEVEL_TWO_BLUE_RAMP.dormantPanel.y),
+      z: toTwoDecimals(LEVEL_TWO_BLUE_RAMP.dormantPanel.position.z)
+    },
+    collisionExpected: false,
+    mechanismLink: "blue-button -> blue-ramp visual cue",
+    elevationBand: {
+      min: toTwoDecimals(LEVEL_TWO_BLUE_RAMP.dormantPanel.y - 0.1),
+      max: toTwoDecimals(LEVEL_TWO_BLUE_RAMP.dormantPanel.y + 0.2)
+    },
+    runtimeProbe: "levelTwo.blueRamp.dormantPanel",
+    fingerprint: "visual-only, no collider"
+  }) : null;
+  const levelTwoRedButtons = LEVEL_TWO_RED_BUTTONS.map((button) => makeObject({
+    id: `level_two_${button.id.replace(/-/g, "_")}`,
+    name: button.id === "red-button-b" ? "Red Button B" : "Red Button A",
+    type: "mechanism-button",
+    category: "mechanism",
+    asset: {
+      key: button.asset,
+      path: resolveAssetPath(button.asset),
+      scale: 1
+    },
+    position: {
+      x: toTwoDecimals(button.position.x),
+      y: toTwoDecimals((button.surfaceTopY || SURFACE_Y) + (button.surfaceClearance || 0)),
+      z: toTwoDecimals(button.position.z)
+    },
+    collisionExpected: false,
+    mechanismLink: `${button.id} -> ${button.linkedPlatformId}`,
+    elevationBand: {
+      min: toTwoDecimals((button.surfaceTopY || SURFACE_Y) - 0.25),
+      max: toTwoDecimals((button.surfaceTopY || SURFACE_Y) + 0.65)
+    },
+    runtimeProbe: `levelTwo.redButtons.${button.id}`
+  }));
+  const levelTwoRedPlatforms = LEVEL_TWO_RED_PLATFORMS.map((platform) => makeObject({
+    id: `level_two_${platform.id.replace(/-/g, "_")}`,
+    name: platform.id === "red-elevator-b" ? "Red Elevator B" : "Red Elevator A",
+    type: "moving-platform",
+    category: "mechanism",
+    asset: {
+      key: platform.asset,
+      path: resolveAssetPath(platform.asset),
+      scale: 1
+    },
+    position: {
+      x: toTwoDecimals(platform.position.x),
+      y: toTwoDecimals(platform.baseY),
+      z: toTwoDecimals(platform.position.z)
+    },
+    collisionExpected: false,
+    mechanismLink: `${platform.linkedButtonId} -> ${platform.id}`,
+    elevationBand: {
+      min: toTwoDecimals(platform.baseY - 0.25),
+      max: toTwoDecimals(platform.baseY + platform.maxLift + 1.1)
+    },
+    runtimeProbe: `levelTwo.redPlatforms.${platform.id}`
+  }));
 
   const levelTwoPlaceholder = makeObject({
     id: "level_two_placeholder_love_letter",
@@ -464,31 +680,85 @@ function makeLevelMetadata() {
   const levelOneObjects = [
     ...LEVEL_ONE_PROPS_OBJECTS,
     makeObject({
-      id: "level_one_bridge_partial",
-      name: "Partial bridge visual",
-      type: "bridge",
+      id: "level_one_lily_pad",
+      name: "Central lily pad",
+      type: "procedural-surface",
       category: "navigation",
       asset: {
-        key: "bridgeModular",
-        path: resolveAssetPath("bridgeModular"),
-        scale: 0.98
+        key: "generatedLilyPad",
+        path: "src/scenes/levelOneScene.js:createLilyPadGroup",
+        scale: 1
       },
       position: {
-        x: toTwoDecimals(LEVEL_ONE_PARTIAL_BRIDGE.x),
-        y: toTwoDecimals(SURFACE_Y + 0.02),
-        z: toTwoDecimals(LEVEL_ONE_PARTIAL_BRIDGE.z)
+        x: toTwoDecimals(LEVEL_ONE_LILY_PAD.position.x),
+        y: toTwoDecimals(LEVEL_ONE_LILY_PAD.position.y),
+        z: toTwoDecimals(LEVEL_ONE_LILY_PAD.position.z)
       },
-      rotationY: 0,
+      rotationY: Number(LEVEL_ONE_LILY_PAD.rotationY.toFixed(3)),
       collisionExpected: true,
-      colliderLabel: "level-one-bridge",
-      colliderMatch: "prefix",
+      colliderLabel: "level-one-lily-pad-walkable-surface",
+      colliderMatch: "exact",
       expectedColliderCount: 1,
-      mechanismLink: null,
+      mechanismLink: "frog jump route",
       elevationBand: {
         min: toTwoDecimals(SURFACE_Y),
         max: toTwoDecimals(SURFACE_Y + 1.0)
       },
-      runtimeProbe: "levelOne?.activeActors"
+      runtimeProbe: "levelOne.lilyPad"
+    }),
+    ...Object.values(LEVEL_ONE_BLUE_BLOOM_MATS).map((mat) => makeObject({
+      id: `level_one_blue_bloom_mat_${mat.id}`,
+      name: `${mat.id === "left" ? "Left" : "Right"} blue-bloom mat`,
+      type: "procedural-surface",
+      category: "navigation",
+      asset: {
+        key: "generatedBlueBloomMat",
+        path: "src/scenes/levelOneScene.js:createBloomMatGroup",
+        scale: 1
+      },
+      position: {
+        x: toTwoDecimals(mat.docked.x),
+        y: toTwoDecimals(mat.docked.y),
+        z: toTwoDecimals(mat.docked.z)
+      },
+      rotationY: Number(mat.rotationY.toFixed(3)),
+      collisionExpected: true,
+      colliderLabel: `level-one-blue-bloom-mat-${mat.id}-walkable-surface`,
+      colliderMatch: "exact",
+      expectedColliderCount: 1,
+      mechanismLink: "blue button -> blue bloom crossing",
+      elevationBand: {
+        min: toTwoDecimals(SURFACE_Y),
+        max: toTwoDecimals(SURFACE_Y + 1.0)
+      },
+      runtimeProbe: `levelOne.blueBloomMats.${mat.id}`
+    })),
+    makeObject({
+      id: "level_one_blue_bloom_latch",
+      name: "Blue flower latch",
+      type: "mechanism-gate",
+      category: "mechanism",
+      asset: {
+        key: "generatedBlueFlowerLatch",
+        path: "src/scenes/levelOneScene.js:createBlueBloomLatchGroup",
+        scale: 1
+      },
+      position: {
+        x: toTwoDecimals(LEVEL_ONE_BLUE_BLOOM_LATCH.position.x),
+        y: toTwoDecimals(LEVEL_ONE_BLUE_BLOOM_LATCH.position.y),
+        z: toTwoDecimals(LEVEL_ONE_BLUE_BLOOM_LATCH.position.z)
+      },
+      rotationY: Number(LEVEL_ONE_BLUE_BLOOM_LATCH.rotationY.toFixed(3)),
+      collisionExpected: false,
+      colliderLabel: null,
+      colliderMatch: "exact",
+      expectedColliderCount: 0,
+      mechanismLink: "blue button -> releases held mats",
+      elevationBand: {
+        min: toTwoDecimals(SURFACE_Y - 0.2),
+        max: toTwoDecimals(SURFACE_Y + 0.7)
+      },
+      runtimeProbe: "levelOne.blueBloomLatch"
     }),
     makeObject({
       id: "level_one_button_anchor",
@@ -510,7 +780,7 @@ function makeLevelMetadata() {
       colliderLabel: null,
       colliderMatch: "exact",
       expectedColliderCount: 0,
-      mechanismLink: "button -> bridge",
+      mechanismLink: "button -> blue bloom crossing",
       elevationBand: {
         min: toTwoDecimals(SURFACE_Y - 0.2),
         max: toTwoDecimals(SURFACE_Y + 0.7)
@@ -522,8 +792,191 @@ function makeLevelMetadata() {
     ...LEVEL_TWO_PROPS_OBJECTS,
     levelTwoCentralTerrain,
     levelTwoFrogLedge,
-    ...levelTwoReservedTerrace,
+    levelTwoRedElevatorTopConnector,
+    levelTwoHumanLoveLetterRoute,
+    levelTwoBlueButton,
+    levelTwoBlueRamp,
+    levelTwoBlueRampDormantPanel,
+    ...levelTwoRedButtons,
+    ...levelTwoRedPlatforms,
     levelTwoPlaceholder
+  ].filter(Boolean);
+
+  const levelThreeWater = makeTerrainExpectation(
+    "level_three_lake_water",
+    "Level Three lake water blockers",
+    "level-three-water-",
+    LEVEL_THREE_WATER_TILES.length,
+    SURFACE_Y,
+    "Mostly-water lake shell blockers for Phase 1 island layout"
+  );
+
+  const levelThreeLand = makeObject({
+    id: "level_three_island_land",
+    name: "Level Three named island land tiles",
+    type: "terrain",
+    category: "island-terrain",
+    asset: makeAsset("groundTile"),
+    position: { x: 0, y: toTwoDecimals(SURFACE_Y), z: 0 },
+    collisionExpected: false,
+    colliderLabel: null,
+    expectedColliderCount: 0,
+    mechanismLink: "phase-one-layout-only",
+    runtimeProbe: "levelThree.islands",
+    fingerprint: `named islands=${LEVEL_THREE_ISLANDS.length}; land tiles=${LEVEL_THREE_LAND_TILES.length}`
+  });
+
+  const levelThreePlaceholder = makeObject({
+    id: "level_three_placeholder_love_letter",
+    name: "Placeholder Love Letter",
+    type: "collectible-placeholder",
+    category: "goal",
+    asset: {
+      key: "spellbookClosed",
+      path: resolveAssetPath("spellbookClosed"),
+      scale: 0.72
+    },
+    position: {
+      x: toTwoDecimals(LEVEL_THREE_POINTS.placeholderLoveLetter.x),
+      y: toTwoDecimals(LEVEL_THREE_PLACEHOLDER_LOVE_LETTER_Y),
+      z: toTwoDecimals(LEVEL_THREE_POINTS.placeholderLoveLetter.z)
+    },
+    rotationY: Number((Math.PI * 0.18).toFixed(3)),
+    collisionExpected: false,
+    colliderLabel: null,
+    colliderMatch: "exact",
+    expectedColliderCount: 0,
+    mechanismLink: "placeholder-only",
+    elevationBand: {
+      min: toTwoDecimals(LEVEL_THREE_PLACEHOLDER_LOVE_LETTER_Y - 0.4),
+      max: toTwoDecimals(LEVEL_THREE_PLACEHOLDER_LOVE_LETTER_Y + 0.8)
+    },
+    runtimeProbe: "levelThree.placeholderLoveLetterPosition",
+    fingerprint: "visible placeholder only; not collectable in shell"
+  });
+
+  const levelThreePlaceholderObjects = [
+    ...LEVEL_THREE_ISLAND_MARKERS.map((marker) => makeLevelThreeGeneratedObject({
+      id: marker.objectId || marker.id,
+      name: marker.name,
+      category: "island-zone-marker",
+      position: marker.position,
+      mechanismLink: `phase-one-zone-marker:${marker.role}`
+    })),
+    ...LEVEL_THREE_LILY_PAD_PLACEHOLDERS.map((pad) => makeLevelThreeGeneratedObject({
+      id: pad.id,
+      name: pad.name,
+      category: "frog-lily-pad-walkable-surface",
+      position: pad.position,
+      mechanismLink: "phase-2a-static-frog-jump-lane",
+      assetKey: "generated-level-one-lily-pad-shared-visual",
+      assetPath: "/generated/shared/lily-pad",
+      fingerprint: `Phase 2A static Frog-valid lily pad using shared Level One visual; moving timing deferred; center tile=${pad.tile?.x},${pad.tile?.y}.`
+    })),
+    ...LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS.map((button) => makeLevelThreeGeneratedObject({
+      id: button.id,
+      name: button.name,
+      category: "green-button-placeholder",
+      position: button.position,
+      mechanismLink: button.futureMechanism,
+      assetKey: "kaykit-platformer-button-green-material-variant",
+      assetPath: "/generated/material-variant/button-green-from-kaykit-button-blue",
+      fingerprint: button.id === "level3TotemGreenButton"
+        ? "KayKit two-part button geometry with green material variant; repeatable Phase 2A Totem raft winch button."
+        : "KayKit two-part button geometry with green material variant; bridge-control behavior remains inactive."
+    })),
+    makeLevelThreeGeneratedObject({
+      id: LEVEL_THREE_CROCODILE_ECHO.id,
+      name: LEVEL_THREE_CROCODILE_ECHO.name,
+      category: "crocodile-echo-placeholder",
+      position: LEVEL_THREE_CROCODILE_ECHO.position,
+      mechanismLink: "wakes-after-human-totem-collection"
+    }),
+    makeLevelThreeGeneratedObject({
+      id: "level3CrocodileCubelingActor",
+      name: "Crocodile Cubeling Actor",
+      category: "crocodile-actor-generated-temporary",
+      position: LEVEL_THREE_CROCODILE_SPAWN,
+      mechanismLink: "phase-3a-crocodile-land-water-control",
+      assetKey: "generated-crocodile-cubeling-temporary",
+      assetPath: "/generated/actors/crocodile-cubeling-temporary",
+      type: "actor",
+      fingerprint: `Phase 3A generated Crocodile actor; radius=${LEVEL_THREE_CROCODILE_RADIUS}; speed=${LEVEL_THREE_CROCODILE_SPEED}; no cargo or ferry behavior.`
+    }),
+    makeLevelThreeGeneratedObject({
+      id: LEVEL_THREE_TOTEM_RAFT.id,
+      name: LEVEL_THREE_TOTEM_RAFT.name,
+      category: "totem-raft-placeholder",
+      position: LEVEL_THREE_TOTEM_RAFT.position,
+      mechanismLink: "spatial-contract-gated-drift-totem-raft",
+      fingerprint: `Moving raft object; drifts between fixed markers over ${LEVEL_THREE_TOTEM_RAFT_DRIFT_SECONDS}s after gates open.`
+    }),
+    ...LEVEL_THREE_RAFT_MARKERS.map((marker) => makeLevelThreeGeneratedObject({
+      id: marker.id,
+      name: marker.name,
+      category: "totem-raft-state-marker",
+      position: marker.position,
+      mechanismLink: `fixed-raft-reference-state-${marker.stateIndex}`,
+      fingerprint: marker.id === "level3TotemDockMarker"
+        ? "Fixed Start Island dock/reference marker; this marker does not animate or become the raft."
+        : "Fixed raft waypoint/reference marker; the raft moves toward this marker."
+    })),
+    ...LEVEL_THREE_TOTEM_RAFT_GATES.map((gate) => makeLevelThreeGeneratedObject({
+      id: gate.id,
+      name: gate.name,
+      category: "totem-raft-reed-gate",
+      position: gate.position,
+      mechanismLink: `level3TotemGreenButton opens ${gate.id}; raft ${gate.fromState}->${gate.toState}`,
+      assetKey: "generated-level-three-reed-raft-gate",
+      assetPath: "/generated/level-three/reed-raft-gate",
+      fingerprint: "Visual raft blocker only; opens/fades when the Totem green button starts the next drift."
+    })),
+    ...LEVEL_THREE_BRIDGE_DESTINATION_MARKERS.map((marker) => makeLevelThreeGeneratedObject({
+      id: marker.id,
+      name: marker.name,
+      category: "bridge-destination-marker",
+      position: marker.position,
+      mechanismLink: `future-bridge-state-${marker.stateIndex}`
+    })),
+    ...LEVEL_THREE_RED_BUTTON_PLACEHOLDERS.map((button) => makeLevelThreeGeneratedObject({
+      id: button.id,
+      name: button.name,
+      category: "red-button-placeholder",
+      position: button.position,
+      mechanismLink: button.futureRequirement,
+      assetKey: "buttonBaseRed/buttonTopRed",
+      assetPath: "/assets/kaykit/platformer/button-red/",
+      fingerprint: "KayKit two-part red button geometry placeholder; weight behavior inactive."
+    })),
+    ...LEVEL_THREE_ANCHOR_STONES.map((stone) => makeLevelThreeGeneratedObject({
+      id: stone.id,
+      name: stone.name,
+      category: "anchor-stone-placeholder",
+      position: stone.position,
+      mechanismLink: "future-crocodile-cargo"
+    })),
+    ...LEVEL_THREE_RESET_PERCH_PLACEHOLDERS.map((perch) => makeLevelThreeGeneratedObject({
+      id: perch.id,
+      name: perch.name,
+      category: "reset-perch-placeholder",
+      position: perch.position,
+      mechanismLink: "future-frog-reset-perch"
+    })),
+    makeLevelThreeGeneratedObject({
+      id: "level3LoveLetterCliff",
+      name: "Love Letter Cliff",
+      category: "love-letter-cliff-placeholder",
+      position: LEVEL_THREE_POINTS.placeholderLoveLetter,
+      mechanismLink: "unreachable-final-reward"
+    })
+  ];
+
+  const levelThreeObjects = [
+    ...LEVEL_THREE_PROPS_OBJECTS,
+    levelThreeLand,
+    levelThreeWater,
+    levelThreePlaceholder,
+    ...levelThreePlaceholderObjects
   ];
 
   const levelTwoReservedFixtureIds = LEVEL_TWO_RESERVED_TERRACE_GROUPS.map((station) => `reserved-${station.id}`);
@@ -546,7 +999,16 @@ function makeLevelMetadata() {
       collectibles: [{ id: "tutorial_love_letter", name: "Love Letter", position: makeLandmarks([{ id: "tutorial_spellbook", name: "Love Letter", ...SPELLBOOK }])[0].position }],
       objects: tutorialObjects,
       fixtures: {
-        implemented: [],
+        implemented: [
+          fixtureImplemented(
+            "tutorial_frog_stranded_reset_lesson",
+            "Seed the tutorial state where Frog hopped the wall and the player returned to human before pressing the button, then verify reset teaching."
+          ),
+          fixtureImplemented(
+            "tutorial_unpossessed_frog_button_rescue",
+            "Seed the same stranded tutorial state, wait past the reset lesson, then verify unpossessed Frog can press the button and open the doorway."
+          )
+        ],
         planned: []
       },
       smokeAvailable: true
@@ -580,7 +1042,7 @@ function makeLevelMetadata() {
       sceneId: SCENES.LEVEL_ONE,
       sceneFile: "/src/scenes/levelOneScene.js",
       levelDataFile: "/src/levels/levelOne.js",
-      sceneAssets: ["groundTile", "pathTile", "waterTile", "forestTreeA", "forestTreeB", "forestBush", "forestRock", "forestGrass", "bridgeModular", "bridgeCenter", "spellbookClosed"],
+      sceneAssets: ["groundTile", "pathTile", "waterTile", "forestTreeA", "forestTreeB", "forestBush", "forestRock", "forestGrass", "generatedLilyPad", "generatedBlueBloomMat", "generatedBlueFlowerLatch", "spellbookClosed"],
       bounds: {
         minX: WORLD_BOUNDS.minX,
         maxX: WORLD_BOUNDS.maxX,
@@ -589,14 +1051,24 @@ function makeLevelMetadata() {
       },
       landmarks: makeLandmarks([
         { id: "level_one_start", name: "Level one start", x: -WORLD_BOUNDS.maxX + 0.2, y: START.human.y, z: START.human.z },
-        { id: "level_one_button", name: "Bridge button", ...LEVEL_ONE_BUTTON },
-        { id: "level_one_bridge_spawn", name: "Bridge spawn", x: LEVEL_ONE_PARTIAL_BRIDGE.x, y: SURFACE_Y + 0.02, z: LEVEL_ONE_PARTIAL_BRIDGE.z }
+        { id: "level_one_button", name: "Blue bloom button", ...LEVEL_ONE_BUTTON },
+        { id: "level_one_lily_pad", name: "Central lily pad", x: LEVEL_ONE_LILY_PAD.position.x, y: LEVEL_ONE_LILY_PAD.position.y, z: LEVEL_ONE_LILY_PAD.position.z },
+        { id: "level_one_blue_bloom_latch", name: "Blue flower latch", x: LEVEL_ONE_BLUE_BLOOM_LATCH.position.x, y: LEVEL_ONE_BLUE_BLOOM_LATCH.position.y, z: LEVEL_ONE_BLUE_BLOOM_LATCH.position.z }
       ]),
       cubelings: [{ id: "frog", name: "Frog Cubeling", status: "spawned" }],
-      collectibles: [{ id: "level_one_love_letter", name: "Love Letter", position: { x: 11.5, y: SURFACE_Y, z: 5.5 } }],
+      collectibles: [{ id: "level_one_love_letter", name: "Love Letter", position: {
+        x: toTwoDecimals(LEVEL_ONE_LOVE_LETTER_POINT.x),
+        y: toTwoDecimals(LEVEL_ONE_LOVE_LETTER_POINT.y),
+        z: toTwoDecimals(LEVEL_ONE_LOVE_LETTER_POINT.z)
+      }, reveal: "after-blue-bloom-dock" }],
       objects: levelOneObjects,
       fixtures: {
-        implemented: [],
+        implemented: [
+          fixtureImplemented(
+            "level_one_unpossessed_frog_button_activation",
+            "Seed Frog on the Level One blue button while the human is active, then verify the blue blooms release and dock from physical Frog contact."
+          )
+        ],
         planned: []
       },
       smokeAvailable: true
@@ -607,7 +1079,23 @@ function makeLevelMetadata() {
       sceneId: SCENES.LEVEL_TWO,
       sceneFile: "/src/scenes/levelTwoScene.js",
       levelDataFile: "/src/levels/levelTwo.js",
-      sceneAssets: ["groundTile", "pathTile", "forestTreeA", "forestTreeB", "forestBush", "forestRock", "forestGrass", "spellbookClosed", "bridgeModular"],
+      sceneAssets: [
+        "groundTile",
+        "pathTile",
+        "forestTreeA",
+        "forestTreeB",
+        "forestBush",
+        "forestRock",
+        "forestGrass",
+        "buttonBaseBlue",
+        "buttonTopBlue",
+        "buttonBaseRed",
+        "buttonTopRed",
+        "blueRamp",
+        "redPlatform4x4",
+        "spellbookClosed",
+        "bridgeModular"
+      ],
       bounds: LEVEL_TWO_BOUNDS,
       landmarks: makeLandmarks([
         { id: "level_two_entry", name: "Level Two entry", ...LEVEL_TWO_POINTS.entry },
@@ -634,6 +1122,46 @@ function makeLevelMetadata() {
           fixtureImplemented(
             "level_two_love_letter_ready",
             "Enter Level Two, wait for play, then confirm the placeholder Love Letter is visible and collectible-ready indicators are stable."
+          ),
+          fixtureImplemented(
+            "level_two_red_a_elephant_exit_route",
+            "Seed Elephant on top-aligned Red Elevator A, walk west onto the top connector, then verify the Elephant reaches the tier-3 route."
+          ),
+          fixtureImplemented(
+            "level_two_red_a_human_exit_route",
+            "Seed the human on top-aligned Red Elevator A, walk west onto the top connector, then verify the human can use the same tier-3 route."
+          ),
+          fixtureImplemented(
+            "level_two_red_a_button_starts_elevator",
+            "Seed Elephant physically holding Red Button A while the human is away, then verify Elevator A starts rising immediately from the grounded start while bottom forgiveness remains separate."
+          ),
+          fixtureImplemented(
+            "level_two_red_a_elephant_bottom_pause",
+            "Seed player-controlled Elephant on Red Elevator A at the bottom and verify the bottom pause is preserved before normal rising motion."
+          ),
+          fixtureImplemented(
+            "level_two_red_a_released_bottom_stays",
+            "Seed Red Elevator A at the bottom after activation with Red Button A released, then verify the elevator stays at the bottom."
+          ),
+          fixtureImplemented(
+            "level_two_red_a_release_endpoint_latch",
+            "Seed Red Elevator A release-at-top, release-while-descending, and release-while-ascending states, then verify it finishes the current direction and stays latched at that endpoint."
+          ),
+          fixtureImplemented(
+            "level_two_love_letter_camera_visibility",
+            "Seed the human on the high Love Letter route, then verify the camera target lifts and zooms out for high-elevation play."
+          ),
+          fixtureImplemented(
+            "level_two_red_a_ground_clearance",
+            "Seed human and Frog near Red Elevator A's ground corridor, then verify both can cross the path under the raised platform footprint."
+          ),
+          fixtureImplemented(
+            "level_two_red_b_route",
+            "Seed Elephant on Red Button B and human on Elevator B, cycle to the top, then walk the human route to collect the Level Two Love Letter."
+          ),
+          fixtureImplemented(
+            "level_two_unpossessed_frog_blue_button_activation",
+            "Seed Frog on the Level Two blue button ledge while the human is active, then verify the blue ramp activates from physical Frog contact."
           )
         ],
         planned: [
@@ -643,7 +1171,7 @@ function makeLevelMetadata() {
           ),
           fixtureUnsupported(
             "level_two_red_button_test",
-            "Red button flow is placeholder-only and missing deterministic fixture state seeds."
+            "Use implemented level_two_red_b_route for the current Red Button B path; this older broad red-button fixture still needs split A/B expectations."
           ),
           fixtureUnsupported(
             "level_two_recall_test",
@@ -651,7 +1179,7 @@ function makeLevelMetadata() {
           ),
           fixtureUnsupported(
             "level_two_elevator_test",
-            "Elevator flow lacks deterministic fixture seeding and positional assertions in current scene wiring."
+            "Use implemented level_two_red_b_route for the current Elevator B path; this older broad elevator fixture still needs split A/B expectations."
           )
         ]
       },
@@ -665,8 +1193,163 @@ function makeLevelMetadata() {
         terrain: {
           centralMountainTileCount: LEVEL_TWO_CENTRAL_MOUNTAIN_TILES.length,
           frogSideLedgeTileCount: LEVEL_TWO_FROG_SIDE_LEDGE_TILES.length,
-          reservedTerraceTileCount: LEVEL_TWO_RESERVED_TERRACE_TILES.length
+          reservedTerraceTileCount: LEVEL_TWO_RESERVED_TERRACE_TILES.length,
+          redButtonBTerraceTileCount: LEVEL_TWO_RED_BUTTON_B_TERRACE_TILES.length,
+          redElevatorBShaftTileCount: LEVEL_TWO_RED_ELEVATOR_B_SHAFT_TILES.length,
+          humanLoveLetterRouteTileCount: LEVEL_TWO_HUMAN_LOVE_LETTER_ROUTE_TILES.length
         }
+      }
+    },
+    [SCENES.LEVEL_THREE]: {
+      id: "level_three",
+      name: "Level Three",
+      sceneId: SCENES.LEVEL_THREE,
+      sceneFile: "/src/scenes/levelThreeScene.js",
+      levelDataFile: "/src/levels/levelThree.js",
+      sceneAssets: [
+        "groundTile",
+        "waterTile",
+        "buttonBaseBlue",
+        "buttonTopBlue",
+        "buttonBaseRed",
+        "buttonTopRed",
+        "forestTreeA",
+        "forestTreeB",
+        "forestBush",
+        "forestRock",
+        "forestGrass",
+        "spellbookClosed"
+      ],
+      bounds: LEVEL_THREE_BOUNDS,
+      landmarks: makeLandmarks([
+        { id: "level_three_entry", name: "Level Three entry", ...LEVEL_THREE_POINTS.entry },
+        { id: "level_three_human_start", name: "Human start on Start Island", ...LEVEL_THREE_POINTS.humanStart },
+        { id: "level_three_frog_start", name: "Frog start", ...LEVEL_THREE_POINTS.frogStart },
+        {
+          id: "level_three_placeholder_love_letter",
+          name: "Placeholder Love Letter",
+          x: LEVEL_THREE_POINTS.placeholderLoveLetter.x,
+          y: LEVEL_THREE_PLACEHOLDER_LOVE_LETTER_Y,
+          z: LEVEL_THREE_POINTS.placeholderLoveLetter.z
+        },
+        ...LEVEL_THREE_ISLANDS.map((island) => ({
+          id: island.id,
+          name: island.name,
+          x: island.position.x,
+          y: SURFACE_Y,
+          z: island.position.z
+        })),
+        {
+          id: LEVEL_THREE_CROCODILE_ECHO.id,
+          name: LEVEL_THREE_CROCODILE_ECHO.name,
+          x: LEVEL_THREE_CROCODILE_ECHO.position.x,
+          y: SURFACE_Y,
+          z: LEVEL_THREE_CROCODILE_ECHO.position.z
+        },
+        {
+          id: LEVEL_THREE_TOTEM_RAFT.id,
+          name: LEVEL_THREE_TOTEM_RAFT.name,
+          x: LEVEL_THREE_TOTEM_RAFT.position.x,
+          y: SURFACE_Y,
+          z: LEVEL_THREE_TOTEM_RAFT.position.z
+        }
+      ]),
+      cubelings: [
+        { id: "frog", name: "Frog Cubeling", status: "spawned" },
+        { id: "crocodile", name: "Crocodile Cubeling", status: "unlockable-phase-3a-after-totem" }
+      ],
+      collectibles: [{ id: "level_three_placeholder_love_letter", name: "Placeholder Love Letter", position: {
+        x: toTwoDecimals(LEVEL_THREE_POINTS.placeholderLoveLetter.x),
+        y: toTwoDecimals(LEVEL_THREE_PLACEHOLDER_LOVE_LETTER_Y),
+        z: toTwoDecimals(LEVEL_THREE_POINTS.placeholderLoveLetter.z)
+      }, collectable: false }],
+      objects: levelThreeObjects,
+      fixtures: {
+        implemented: [
+          fixtureImplemented("level_three_start", "Jump directly to Level Three and wait for play state."),
+          fixtureImplemented(
+            "level_three_crocodile_totem_opening",
+            "Seed the Phase 2A opening route, verify Frog repeat-presses the Totem green button, the raft docks, Frog cannot collect the Totem, Human collects it, the Crocodile Echo wakes, and Phase 3A Crocodile control becomes available."
+          ),
+          fixtureImplemented(
+            "level_three_frog_lane_route",
+            "Press Space through the actual Frog lane sequence and verify Start -> Lily Pad 1 -> Lily Pad 2 -> Lily Pad 3 -> Totem Winch Island route priority works without teleporting to the green button."
+          ),
+          fixtureImplemented(
+            "level_three_crocodile_actor",
+            "Seed the post-Totem Level Three state, transfer into Crocodile, verify Crocodile land/water movement, verify Human/Frog water blocking, and confirm deferred bridge/Love Letter mechanics remain inactive."
+          ),
+          fixtureImplemented(
+            "level_three_spatial_contract",
+            "Verify corrected lily lane spacing, small artificial bridge pivot, destination ring, gated raft drift, fixed dock marker, and preserved Phase 2A Totem collection."
+          )
+        ],
+        planned: []
+      },
+      smokeAvailable: true,
+      metadata: {
+        mapShape: LEVEL_THREE_MAP_SHAPE,
+        levelWidth: LEVEL_THREE_WIDTH,
+        levelHeight: LEVEL_THREE_HEIGHT,
+        waterTileCount: LEVEL_THREE_WATER_TILES.length,
+        landTileCount: LEVEL_THREE_LAND_TILES.length,
+        pathTileCount: LEVEL_THREE_PATH_TILES.length,
+        mostlyWater: LEVEL_THREE_WATER_TILES.length > LEVEL_THREE_LAND_TILES.length,
+        startEdgeConnectionTiles: LEVEL_THREE_START_EDGE_CONNECTION_TILES,
+        phase2A: {
+          status: "implemented-and-visually-cleared-for-forward-progress",
+          humanVisualReviewPending: false,
+          movingLilyPadTimingDeferred: true,
+          frogLaneJumpCount: LEVEL_THREE_FROG_LANE_JUMPS.length,
+          frogLaneResetPoint: LEVEL_THREE_FROG_LANE_RESET_POINT,
+          lilyPadMinEdgeGap: LEVEL_THREE_LILY_PAD_MIN_EDGE_GAP,
+          lilyPadMinIslandGap: LEVEL_THREE_LILY_PAD_MIN_ISLAND_GAP,
+          totemGreenButtonRadius: LEVEL_THREE_TOTEM_GREEN_BUTTON_RADIUS,
+          totemCollectionRadius: LEVEL_THREE_TOTEM_COLLECTION_RADIUS,
+          totemRaftDriftSeconds: LEVEL_THREE_TOTEM_RAFT_DRIFT_SECONDS
+        },
+        phase3A: {
+          status: "implemented",
+          crocodileSpawn: LEVEL_THREE_CROCODILE_SPAWN,
+          crocodileRadius: LEVEL_THREE_CROCODILE_RADIUS,
+          crocodileSpeed: LEVEL_THREE_CROCODILE_SPEED,
+          waterMovement: true,
+          cargoDeferred: true,
+          ferryingDeferred: true,
+          bridgeCyclingDeferred: true
+        },
+        spatialContractRepair: {
+          status: "implemented-automated-verification-target",
+          humanVisualReviewPending: true,
+          lilyLaneSpacingCorrected: true,
+          centerHubRole: LEVEL_THREE_BRIDGE_PIVOT.role,
+          centerHubFootprintTiles: LEVEL_THREE_BRIDGE_PIVOT.footprintTiles,
+          totemRaftDriftSeconds: LEVEL_THREE_TOTEM_RAFT_DRIFT_SECONDS,
+          bridgeRotationImplemented: false,
+          movingLilyPadTimingDeferred: true
+        },
+        islands: LEVEL_THREE_ISLANDS.map((island) => island.id),
+        islandTileCounts: Object.fromEntries(LEVEL_THREE_ISLANDS.map((island) => [island.id, island.tileCount])),
+        islandMarkers: LEVEL_THREE_ISLAND_MARKERS.map((marker) => marker.objectId || marker.id),
+        placeholders: LEVEL_THREE_PLACEHOLDER_IDS,
+        greenButtons: LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS.map((button) => button.id),
+        raftMarkers: LEVEL_THREE_RAFT_MARKERS.map((marker) => marker.id),
+        raftGates: LEVEL_THREE_TOTEM_RAFT_GATES.map((gate) => gate.id),
+        bridgePivot: {
+          id: LEVEL_THREE_BRIDGE_PIVOT.id,
+          role: LEVEL_THREE_BRIDGE_PIVOT.role,
+          footprintTiles: LEVEL_THREE_BRIDGE_PIVOT.footprintTiles,
+          artificial: LEVEL_THREE_BRIDGE_PIVOT.artificial,
+          bridgeRotationImplemented: LEVEL_THREE_BRIDGE_PIVOT.bridgeRotationImplemented
+        },
+        bridgeDestinationRing: LEVEL_THREE_BRIDGE_STATE_METADATA.map((entry) => ({
+          id: entry.id,
+          stateIndex: entry.stateIndex,
+          angleRadians: toTwoDecimals(entry.angleRadians),
+          distanceFromPivot: toTwoDecimals(entry.distanceFromPivot)
+        })),
+        reservedZones: LEVEL_THREE_RESERVED_ZONES.map((zone) => zone.id),
+        authoringContract: "Spatial contract repair: larger spaced Frog lily lane, small artificial bridge pivot, gated Totem raft drift; no moving lily timing, no bridge rotation, no cargo, no red buttons, no final route"
       }
     }
   };

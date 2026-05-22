@@ -1,0 +1,547 @@
+import * as THREE from "three";
+
+import { SCENES } from "../config/scenes.js";
+
+const tmpBox = new THREE.Box3();
+const tmpPosition = new THREE.Vector3();
+const tmpQuaternion = new THREE.Quaternion();
+const tmpScale = new THREE.Vector3();
+
+const SOURCE_HINTS_BY_SCENE = {
+  [SCENES.TUTORIAL]: "src/scenes/tutorialScene.js or src/levels/tutorialLevel.js",
+  [SCENES.HOME]: "src/scenes/homeIntroScene.js or src/levels/homeIntroLevel.js",
+  [SCENES.LEVEL_ONE]: "src/scenes/levelOneScene.js or src/levels/levelOne.js",
+  [SCENES.LEVEL_TWO]: "src/scenes/levelTwoScene.js or src/levels/levelTwo.js",
+  [SCENES.LEVEL_THREE]: "src/scenes/levelThreeScene.js or src/levels/levelThree.js"
+};
+
+const ACTOR_SOURCE_HINTS = {
+  character: "src/core/actors.js",
+  frog: "src/core/actors.js",
+  elephant: "src/core/actors.js",
+  frog_echo: "src/core/actors.js",
+  frog_totem: "src/core/actors.js",
+  elephant_echo: "src/scenes/levelTwoScene.js",
+  elephant_totem: "src/scenes/levelTwoScene.js"
+};
+
+const DISPLAY_NAMES_BY_CATEGORY = {
+  character: "Human",
+  frog: "Frog",
+  elephant: "Elephant",
+  frog_echo: "Frog Echo",
+  frog_totem: "Frog Totem",
+  elephant_echo: "Elephant Echo",
+  elephant_totem: "Elephant Totem"
+};
+
+const DISPLAY_NAMES_BY_ASSET = {
+  groundTile: "Ground Tile",
+  pathTile: "Path Tile",
+  waterTile: "Water Tile",
+  barrier: "Barrier",
+  barrierColumnHalf: "Barrier End Cap",
+  spellbookClosed: "Love Letter Closed",
+  spellbookOpen: "Love Letter Open",
+  "blue-button": "Blue Button",
+  "blue-ramp": "Blue Ramp",
+  "red-button-a": "Red Button A",
+  "red-button-b": "Red Button B",
+  "red-elevator-a": "Red Elevator A",
+  "red-elevator-b": "Red Elevator B",
+  "placeholder-love-letter": "Love Letter",
+  "elephant-echo": "Elephant Echo",
+  "elephant-echo-ring": "Elephant Echo Ring",
+  "elephant-cubeling-totem": "Elephant Totem",
+  "elephant-cubeling-totem-glow": "Elephant Totem Glow",
+  "partial-bridge": "Partial Bridge",
+  "complete-bridge": "Complete Bridge",
+  "generated-door-note": "Door Note",
+  "generated-level-three-placeholder": "Level Three Placeholder",
+  "building_home_A_blue": "Home"
+};
+
+function round(value, digits = 3) {
+  if (!Number.isFinite(value)) return 0;
+  return Number(value.toFixed(digits));
+}
+
+function slug(value) {
+  return String(value || "object")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "object";
+}
+
+function titleCaseToken(value) {
+  if (!value) return "";
+  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}
+
+function humanizeKey(value) {
+  return String(value || "")
+    .replace(/^[a-z]+[_-][a-z]+[_-]/i, "")
+    .replace(/[_-]+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) => token.length === 1 ? token.toUpperCase() : titleCaseToken(token))
+    .join(" ");
+}
+
+function scenePrefixFor(sceneId) {
+  if (sceneId === SCENES.HOME) return "home";
+  if (sceneId === SCENES.LEVEL_ONE) return "levelOne";
+  if (sceneId === SCENES.LEVEL_TWO) return "levelTwo";
+  if (sceneId === SCENES.LEVEL_THREE) return "levelThree";
+  return "tutorial";
+}
+
+function arrayFromVector3(vector, digits = 3) {
+  return [round(vector.x, digits), round(vector.y, digits), round(vector.z, digits)];
+}
+
+function arrayFromEuler(euler, digits = 3) {
+  return [round(euler.x, digits), round(euler.y, digits), round(euler.z, digits)];
+}
+
+function arrayFromQuaternion(quaternion, digits = 4) {
+  return [
+    round(quaternion.x, digits),
+    round(quaternion.y, digits),
+    round(quaternion.z, digits),
+    round(quaternion.w, digits)
+  ];
+}
+
+function inferAsset(object, scenePrefix) {
+  const key = object.userData.devEditorAsset ||
+    object.userData.runtimeAssetKey ||
+    object.userData.assetKey ||
+    object.userData.homeAsset ||
+    object.userData.levelOneAsset ||
+    object.userData.levelTwoAsset ||
+    object.userData.levelThreeAsset ||
+    object.userData.levelTwoTier ||
+    object.userData.levelTwoZone ||
+    (typeof object.userData[`${scenePrefix}Asset`] === "string" ? object.userData[`${scenePrefix}Asset`] : "");
+
+  return {
+    key: key || "",
+    path: object.userData.devEditorAssetPath || "",
+    source: key ? "runtime-userData" : "unknown"
+  };
+}
+
+function inferCategory(object, assetKey) {
+  if (object.userData.devEditorCategory) return object.userData.devEditorCategory;
+  if (
+    object.userData.homeTile !== undefined ||
+    object.userData.levelOneTile !== undefined ||
+    object.userData.levelOneWater !== undefined ||
+    object.userData.levelTwoTile !== undefined ||
+    object.userData.levelTwoTileX !== undefined ||
+    object.userData.levelThreeTile !== undefined ||
+    /groundTile|pathTile|waterTile/i.test(assetKey)
+  ) return "terrain_tile";
+  if (/barrier/i.test(assetKey)) return "terrain_barrier";
+  if (object.userData.homeAsset?.startsWith("home") || /house|home/i.test(assetKey)) return "house";
+  if (/button/i.test(assetKey)) return "button";
+  if (/bridge/i.test(assetKey)) return "bridge";
+  if (/ramp/i.test(assetKey)) return "ramp";
+  if (/elevator|platform/i.test(assetKey)) return "platform";
+  if (/tree/i.test(assetKey)) return "tree";
+  if (/rock/i.test(assetKey)) return "rock";
+  if (/bush/i.test(assetKey)) return "bush";
+  if (/love|spellbook/i.test(assetKey)) return "love_letter";
+  if (/echo/i.test(assetKey)) return "echo";
+  if (/totem/i.test(assetKey)) return "totem";
+  return "prop";
+}
+
+function inferType(object, category) {
+  if (/character|frog|elephant/.test(category)) return "actor";
+  if (/echo|totem/.test(category)) return "marker";
+  if (/button|platform|ramp/.test(category)) return "mechanism";
+  if (object.isGroup) return "group";
+  if (object.isMesh || object.isSkinnedMesh) return "mesh";
+  return object.type || "object";
+}
+
+function inferCollisionExpected(object, category, assetKey) {
+  if (object.userData.devEditorCollisionExpected !== undefined) {
+    return Boolean(object.userData.devEditorCollisionExpected);
+  }
+  if (
+    category === "button" ||
+    category === "bridge" ||
+    category === "house" ||
+    category === "tree" ||
+    category === "rock" ||
+    category === "bush" ||
+    category === "platform" ||
+    category === "ramp" ||
+    category === "terrain_tile" ||
+    category === "terrain_barrier" ||
+    /love|spellbook/i.test(assetKey || "")
+  ) {
+    return true;
+  }
+  return /character|frog|elephant/.test(category);
+}
+
+function shouldSkipObject(object) {
+  return Boolean(
+    object.userData.devEditorHelper ||
+    object.userData.devEditorExclude ||
+    String(object.userData.levelTwoAsset || "").startsWith("reserved-")
+  );
+}
+
+function tileCoordinateParts(object) {
+  const raw = object.userData.homeTile ||
+    object.userData.levelOneTile ||
+    object.userData.levelOneWater ||
+    object.userData.levelTwoTile ||
+    object.userData.levelThreeTile ||
+    (object.userData.levelTwoTileX !== undefined && object.userData.levelTwoTileY !== undefined
+      ? `${object.userData.levelTwoTileX},${object.userData.levelTwoTileY}`
+      : "") ||
+    (object.userData.column !== undefined && object.userData.row !== undefined
+      ? `${object.userData.column},${object.userData.row}`
+      : "");
+  return String(raw || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function inferredStableRuntimeId(sceneId, object, category, assetKey) {
+  const coords = tileCoordinateParts(object);
+  if (category === "terrain_tile" && coords.length >= 2) {
+    const tileKind = /water/i.test(assetKey) ? "water_tile" : "terrain_tile";
+    return `${sceneId}.${tileKind}.${slug(coords[0])}.${slug(coords[1])}`;
+  }
+  if (category === "terrain_barrier" && object.userData.endCapLabel) {
+    return `${sceneId}.terrain.barrier_cap.${slug(object.userData.endCapLabel)}`;
+  }
+  if (category === "terrain_barrier" && object.userData.row !== undefined) {
+    return `${sceneId}.terrain.barrier.${slug(object.userData.column ?? "wall")}.${slug(object.userData.row)}`;
+  }
+  const loveLetterHints = [
+    assetKey,
+    object.userData.devEditorId,
+    object.userData.devEditorName,
+    object.userData.levelOneAsset,
+    object.userData.levelTwoAsset,
+    object.userData.levelThreeAsset,
+    object.name
+  ].join(" ");
+  if (category === "love_letter" || /love|spellbook/i.test(loveLetterHints)) {
+    if (/placeholder/i.test(loveLetterHints)) return `${sceneId}.love_letter.placeholder`;
+    if (/open/i.test(loveLetterHints)) return `${sceneId}.love_letter.open`;
+    return `${sceneId}.love_letter.closed`;
+  }
+  return "";
+}
+
+function makeStableId(sceneId, object, category, counters, seen) {
+  const inferred = inferredStableRuntimeId(sceneId, object, category, inferAsset(object, scenePrefixFor(sceneId)).key);
+  if (inferred && category === "love_letter" && !seen.has(inferred)) {
+    seen.add(inferred);
+    return inferred;
+  }
+
+  const existing = object.userData.devEditorId;
+  if (existing) {
+    const base = String(existing).includes(".") ? String(existing) : `${sceneId}.${slug(existing)}`;
+    if (!seen.has(base)) {
+      seen.add(base);
+      return base;
+    }
+  }
+
+  if (inferred && !seen.has(inferred)) {
+    seen.add(inferred);
+    object.userData.devEditorId = inferred;
+    return inferred;
+  }
+
+  const base = `${sceneId}.${slug(category)}`;
+  counters[base] = (counters[base] || 0) + 1;
+  let candidate = `${base}.${counters[base]}`;
+  if (seen.has(candidate)) candidate = `${candidate}.${object.uuid.slice(0, 8)}`;
+  seen.add(candidate);
+  if (!object.userData.devEditorId) object.userData.devEditorId = candidate;
+  return candidate;
+}
+
+function visualBoundsFor(object) {
+  object.updateWorldMatrix(true, true);
+  tmpBox.setFromObject(object);
+  if (tmpBox.isEmpty()) {
+    object.getWorldPosition(tmpPosition);
+    tmpBox.setFromCenterAndSize(tmpPosition, new THREE.Vector3(0, 0, 0));
+  }
+  const center = new THREE.Vector3();
+  const size = new THREE.Vector3();
+  tmpBox.getCenter(center);
+  tmpBox.getSize(size);
+  return {
+    min: arrayFromVector3(tmpBox.min),
+    max: arrayFromVector3(tmpBox.max),
+    center: arrayFromVector3(center),
+    size: arrayFromVector3(size)
+  };
+}
+
+function transformFor(object) {
+  object.updateWorldMatrix(true, true);
+  object.matrixWorld.decompose(tmpPosition, tmpQuaternion, tmpScale);
+  return {
+    local: {
+      position: arrayFromVector3(object.position),
+      rotationEuler: arrayFromEuler(object.rotation),
+      rotationY: round(object.rotation.y),
+      quaternion: arrayFromQuaternion(object.quaternion),
+      scale: arrayFromVector3(object.scale)
+    },
+    world: {
+      position: arrayFromVector3(tmpPosition),
+      quaternion: arrayFromQuaternion(tmpQuaternion),
+      scale: arrayFromVector3(tmpScale)
+    }
+  };
+}
+
+function sourceHintFor(sceneId, object, category) {
+  return object.userData.devEditorSource ||
+    object.userData.sourceFileHint ||
+    ACTOR_SOURCE_HINTS[category] ||
+    SOURCE_HINTS_BY_SCENE[sceneId] ||
+    "src/main.js";
+}
+
+function displayNameFor(object, name, category, assetKey) {
+  if (object.userData.devEditorDisplayName) return object.userData.devEditorDisplayName;
+  if (DISPLAY_NAMES_BY_CATEGORY[category]) return DISPLAY_NAMES_BY_CATEGORY[category];
+  if (category === "terrain_tile") {
+    const coords = tileCoordinateParts(object);
+    const base = /water/i.test(assetKey) ? "Water Tile" : /path/i.test(assetKey) ? "Path Tile" : "Ground Tile";
+    return coords.length >= 2 ? `${base} ${coords[0]},${coords[1]}` : base;
+  }
+  if (category === "terrain_barrier") {
+    if (object.userData.endCapLabel) return humanizeKey(object.userData.endCapLabel);
+    if (object.userData.row !== undefined) return `Barrier ${object.userData.column ?? "wall"},${object.userData.row}`;
+    return "Barrier";
+  }
+  if (DISPLAY_NAMES_BY_ASSET[assetKey]) return DISPLAY_NAMES_BY_ASSET[assetKey];
+  if (/tree/i.test(category) || /tree/i.test(assetKey)) return "Tree";
+  if (/bush/i.test(category) || /bush/i.test(assetKey)) return "Bush";
+  if (/rock/i.test(category) || /rock/i.test(assetKey)) return "Rock";
+  if (/grass/i.test(category) || /grass/i.test(assetKey)) return "Grass";
+  const candidate = String(name || "").trim();
+  if (candidate && candidate.length <= 32 && !candidate.includes(".")) return candidate;
+  return humanizeKey(assetKey || candidate || category || "Object") || "Object";
+}
+
+function colliderCenterX(collider) {
+  return Array.isArray(collider.center) ? collider.center[0] : collider.x;
+}
+
+function colliderCenterZ(collider) {
+  return Array.isArray(collider.center) ? collider.center[2] : collider.z;
+}
+
+function colliderMatchesEntity(collider, entity) {
+  const label = String(collider.label || collider.id || "").toLowerCase();
+  const idWithoutScene = String(entity.id || "").replace(`${entity.sceneId}.`, "");
+  const tokens = [
+    idWithoutScene,
+    entity.name,
+    entity.category,
+    entity.asset?.key
+  ].flatMap((value) => String(value || "").toLowerCase().split(/[^a-z0-9]+/))
+    .filter((value) =>
+      value.length > 2 &&
+      !["tutorial", "home", "intro", "level", "one", "two", "prop", "mesh", "object"].includes(value)
+    );
+
+  if (tokens.some((token) => label.includes(token))) return true;
+
+  const bounds = entity.bounds?.visualAabb;
+  if (!bounds) return false;
+  const x = colliderCenterX(collider);
+  const z = colliderCenterZ(collider);
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return false;
+  return x >= bounds.min[0] - 0.35 &&
+    x <= bounds.max[0] + 0.35 &&
+    z >= bounds.min[2] - 0.35 &&
+    z <= bounds.max[2] + 0.35;
+}
+
+function compactCollider(collider) {
+  return {
+    id: collider.id || collider.label || "",
+    label: collider.label || collider.id || "",
+    type: collider.type || "aabb2d",
+    source: collider.source || "runtime",
+    center: collider.center || [round(collider.x), round(collider.y || 0), round(collider.z)],
+    halfExtents: collider.halfExtents || [round(collider.halfX), round(collider.halfY || 0), round(collider.halfZ)],
+    active: collider.active !== false,
+    sourceFileHint: collider.sourceFileHint || ""
+  };
+}
+
+function makeEntity({ sceneId, object, category, fallbackName, asset, collisionExpected, counters, seen, colliderEntries }) {
+  const id = makeStableId(sceneId, object, category, counters, seen);
+  const resolvedAsset = asset || inferAsset(object, scenePrefixFor(sceneId));
+  const name = object.userData.devEditorName || fallbackName || object.name || id;
+  const resolvedCategory = category || inferCategory(object, resolvedAsset.key);
+  const displayName = displayNameFor(object, name, resolvedCategory, resolvedAsset.key);
+  const collision = collisionExpected === undefined
+    ? inferCollisionExpected(object, resolvedCategory, resolvedAsset.key)
+    : Boolean(collisionExpected);
+
+  const entity = {
+    id,
+    sceneId,
+    name,
+    displayName,
+    type: inferType(object, resolvedCategory),
+    category: resolvedCategory,
+    asset: resolvedAsset,
+    object,
+    mesh: object,
+    runtime: {
+      uuid: object.uuid,
+      visible: object.visible,
+      parentName: object.parent?.name || "",
+      childCount: object.children?.length || 0
+    },
+    transform: transformFor(object),
+    bounds: {
+      visualAabb: visualBoundsFor(object)
+    },
+    collision: {
+      expected: collision,
+      colliders: []
+    },
+    notes: {
+      orientation: {
+        worldUp: "+Y",
+        movementPlane: "X/Z",
+        rotationUnits: "radians"
+      },
+      sourceFileHint: sourceHintFor(sceneId, object, resolvedCategory)
+    },
+    sourceFileHint: sourceHintFor(sceneId, object, resolvedCategory)
+  };
+
+  entity.collision.colliders = (colliderEntries || [])
+    .filter((collider) => colliderMatchesEntity(collider, entity))
+    .slice(0, 8)
+    .map(compactCollider);
+
+  return entity;
+}
+
+export function collectDevEntities({ state, getSceneMeshes, getSceneColliderDebugEntries }) {
+  const sceneId = state.scene.id;
+  const scenePrefix = scenePrefixFor(sceneId);
+  const colliderEntries = typeof getSceneColliderDebugEntries === "function"
+    ? getSceneColliderDebugEntries()
+    : [];
+  const seen = new Set();
+  const counters = {};
+  const entities = [];
+  const meshSeen = new Set();
+
+  const push = (object, category, fallbackName, asset, collisionExpected) => {
+    if (!object || meshSeen.has(object.uuid) || shouldSkipObject(object)) return;
+    const resolvedAsset = asset || inferAsset(object, scenePrefix);
+    const resolvedCategory = category || inferCategory(object, resolvedAsset.key || object.userData.devEditorCategory || "prop");
+    entities.push(makeEntity({
+      sceneId,
+      object,
+      category: resolvedCategory,
+      fallbackName,
+      asset: resolvedAsset,
+      collisionExpected,
+      counters,
+      seen,
+      colliderEntries
+    }));
+    meshSeen.add(object.uuid);
+  };
+
+  const { actorMeshes, markers, arrays } = getSceneMeshes();
+  if (actorMeshes?.human) push(actorMeshes.human, "character", "Human Character", inferAsset(actorMeshes.human, scenePrefix), true);
+  if (actorMeshes?.frog) push(actorMeshes.frog, "frog", "Frog Cubeling", inferAsset(actorMeshes.frog, scenePrefix), true);
+  if (actorMeshes?.elephant && actorMeshes.elephant.visible) {
+    push(actorMeshes.elephant, "elephant", "Elephant Cubeling", inferAsset(actorMeshes.elephant, scenePrefix), true);
+  }
+
+  (markers || []).forEach((object) => {
+    if (!object || shouldSkipObject(object)) return;
+    const asset = inferAsset(object, scenePrefix);
+    const category = inferCategory(object, asset.key);
+    push(object, category, object.userData.devEditorName || object.name || category, asset, inferCollisionExpected(object, category, asset.key));
+  });
+
+  (arrays || []).forEach((collection) => {
+    (collection || []).forEach((object) => {
+      if (!object || shouldSkipObject(object)) return;
+      const asset = inferAsset(object, scenePrefix);
+      if (!asset.key && !object.userData.devEditorCategory) return;
+      const category = inferCategory(object, asset.key || object.userData.devEditorCategory || "prop");
+      push(object, category, object.name || category, asset, inferCollisionExpected(object, category, asset.key));
+    });
+  });
+
+  return entities;
+}
+
+export function findDevEntityById(devEntities, id) {
+  return (devEntities || []).find((entity) => entity.id === id) || null;
+}
+
+export function getDevEntityRoot(object, devEntities) {
+  let current = object;
+  while (current) {
+    if (current.userData?.devEditorHelper) return null;
+    const match = (devEntities || []).find((entity) => entity.object === current || entity.mesh === current);
+    if (match) return match.object;
+    current = current.parent;
+  }
+  return null;
+}
+
+export function findDevEntityForObject(object, devEntities) {
+  const root = getDevEntityRoot(object, devEntities);
+  if (!root) return null;
+  return (devEntities || []).find((entity) => entity.object === root || entity.mesh === root) || null;
+}
+
+export function assignDevEditorIdentity(object, identity) {
+  if (!object || !identity) return object;
+  Object.entries(identity).forEach(([key, value]) => {
+    if (value !== undefined) object.userData[key] = value;
+  });
+  return object;
+}
+
+export function normalizeDevEntity(entity) {
+  if (!entity) return null;
+  const { object, mesh, ...serializable } = entity;
+  return serializable;
+}
+
+export function entityDistance2D(a, b) {
+  const ax = a?.transform?.world?.position?.[0];
+  const az = a?.transform?.world?.position?.[2];
+  const bx = b?.transform?.world?.position?.[0];
+  const bz = b?.transform?.world?.position?.[2];
+  if (![ax, az, bx, bz].every(Number.isFinite)) return Infinity;
+  return Math.hypot(ax - bx, az - bz);
+}

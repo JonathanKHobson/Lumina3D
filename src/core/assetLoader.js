@@ -15,6 +15,7 @@ export function cloneLoadedAsset(assetCache, key) {
   const cached = assetCache.get(key);
   if (!cached) throw new Error(`Missing asset: ${key}`);
   const clone = cached.object.clone(true);
+  clone.userData.runtimeAssetKey = key;
   clone.visible = true;
   clone.traverse((child) => prepareMesh(child));
   return clone;

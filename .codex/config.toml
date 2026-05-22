@@ -1,0 +1,24 @@
+# Project-scoped Codex hooks for Lumina3D.
+# This file intentionally does not define MCP servers. The Lumina3D MCP server
+# remains installed in the global Codex config; this hook only diagnoses project
+# startup exposure from Lumina3D sessions.
+
+[hooks]
+
+[[hooks.SessionStart]]
+matcher = "startup|resume"
+
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = "/opt/homebrew/bin/python3.12 scripts/codex/lumina3d-mcp-exposure-gate.py"
+timeout = 20
+statusMessage = "Checking Lumina3D MCP exposure"
+
+[[hooks.Stop]]
+matcher = ".*"
+
+[[hooks.Stop.hooks]]
+type = "command"
+command = "/opt/homebrew/bin/python3.12 scripts/codex/lumina3d-progress-closeout-reminder.py"
+timeout = 3
+statusMessage = "Checking Lumina3D progress log reminder"

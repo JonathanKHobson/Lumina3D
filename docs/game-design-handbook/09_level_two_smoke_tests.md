@@ -88,12 +88,14 @@ Use WebGL-safe Chromium flags already proven in this project:
 ## Phase 6 - Red Platform/Elevator
 
 - Does red button move the intended platform/elevator?
-- Does movement happen while Elephant holds the button?
-- Does platform/elevator return when Elephant leaves?
-- Is return slow/readable enough?
-- Can the main character stand on and ride the platform if required?
+- Does movement continuously cycle while Elephant holds the button?
+- Does platform/elevator reach both endpoints and reverse direction cleanly while held?
+- Does platform/elevator stop or return to default/rest when Elephant leaves?
+- Is cycle speed readable enough for the player to board/exit intentionally?
+- Can the main character stand on and ride the cycling platform if required?
 - Can Elephant stand on and ride the platform if required?
 - Does platform align at both endpoints?
+- Does the main character avoid clipping, falling through, or getting stuck after riding?
 - Screenshot: platform start.
 - Screenshot: platform moving.
 - Screenshot: platform aligned at endpoint.
@@ -116,13 +118,38 @@ Use WebGL-safe Chromium flags already proven in this project:
 - Player can complete the intended route from start to Love Letter.
 - Frog section creates access to Elephant Totem.
 - Main character collects Elephant Totem.
-- Elephant section creates access to elevated Love Letter.
-- Recall does not break the route.
+- Elevator A lets Elephant reach the tier-3 route.
+- Elephant can cross from Elevator A's upper exit to Red Button B.
+- Red Button B activates only while Elephant holds it.
+- Main character can stand on Elevator B at ground level.
+- Elevator B cycles upward while Red Button B is held.
+- Main character rides Elevator B and exits only when it is top-aligned.
+- Main character walks the straight Love Letter route after exiting Elevator B.
 - Cubelings cannot collect Love Letter.
 - Main character collects Love Letter.
+- Ground remains visible under and around Elevator B.
+- Button B sits on existing tier-3 mountain grass, not a custom button terrace.
 - Screenshot: elevated goal.
 - Screenshot: Elephant route.
+- Screenshot: Red Button B held / Elevator B route.
 - Screenshot: Love Letter collection.
+
+Deterministic fixture:
+
+```bash
+LUMINA3D_URL=http://127.0.0.1:5179/ npm run tools:run-fixture -- level_two level_two_red_b_route --pretty
+```
+
+Expected checks:
+
+- `red_button_b_pressed_by_elephant`;
+- `human_boarded_elevator_b`;
+- `elevator_b_reaches_top`;
+- `human_rides_elevator_b`;
+- `human_walked_love_letter_route`;
+- `level_two_love_letter_collects`;
+- `level_two_complete`;
+- `level_two_love_letter_message`.
 
 ## Phase 9 - Completion
 
@@ -135,6 +162,12 @@ Use WebGL-safe Chromium flags already proven in this project:
 - Coming-soon/next-level labels match current game state.
 - Screenshot: message popup.
 - Screenshot: completion menu.
+
+Expected Level Two completion copy:
+
+- completion eyebrow: `Level Two Complete`;
+- completion title: `Love Letter Found!`;
+- Love Letter message id: `level_two_love_letter_01`.
 
 ## Regression Checks From Earlier Bugs
 

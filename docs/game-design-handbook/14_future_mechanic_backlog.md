@@ -73,6 +73,18 @@ Single backlog page for current and near-future planning ideas from the button a
     - Keep only as historical note unless later re-opened.
     - Source: `Shared brainstorm`.
 
+16. Level One Axolotl expansion
+   - Status: `OPTIONAL / DEFERRED`
+   - Scope: future alignment pass after Level Two Elephant slice is stable.
+   - Design: Frog still uses current jump solution, then blue button opens crate -> Axolotl Totem -> island swim -> Axolotl blue-button press -> bridge completion.
+   - Source: `Direct user idea`, `Shared beginner-curve planning`.
+
+17. Level Three Crocodile lake sequence
+   - Status: `LOCKED / CURRENT LEVEL THREE ROADMAP`
+   - Scope: Stillwater Circuit phases after the Phase 1 lake/island shell.
+   - Design: Frog solves the opening moving-lily-pad lane and repeatable green-button Totem winch; Human collects Crocodile Totem; Crocodile later moves on land/water and carries small stones for a later red-button weight puzzle.
+   - Source: `Direct user direction`, `Phase 1 shell implementation`.
+
 ## Human review questions
 
 - Which Cubelings stay out of Level Two to keep the path shippable?

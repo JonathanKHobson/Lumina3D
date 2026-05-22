@@ -227,6 +227,7 @@ Independent smoke test:
 Purpose:
 
 - move actors between elevations.
+- support the current two-elevator Level Two route: Elevator A for Elephant, Elevator B for the main character.
 
 Needed assets:
 
@@ -254,6 +255,50 @@ Independent smoke test:
 - main character stays on platform;
 - Elephant stays on platform if needed;
 - platform aligns with both endpoints.
+
+Implemented split:
+
+- Red Elevator A starts raised and cycles while Elephant holds Red Button A so Elephant can access the tier-3 route.
+- Red Elevator B starts at ground level, is human-only, cycles while Elephant holds Red Button B, and aligns with the Love Letter route at the top.
+
+## 8b. Red Button B / Elevator B Route Component
+
+Purpose:
+
+- let Elephant complete a remote route for the main character.
+
+Needed assets:
+
+- `buttonBaseRed`;
+- `buttonTopRed`;
+- `redPlatform4x4`;
+- existing west-side tier-3 mountain grass under Red Button B;
+- restored ground-level Elevator B dock;
+- straight tier-4 human Love Letter route.
+
+State variables:
+
+- `levelTwo.redButtons["red-button-b"]`;
+- `levelTwo.redPlatforms["red-elevator-b"]`;
+- `levelTwo.humanSurfaceId`;
+- `levelTwo.elephantSurfaceId`;
+- `levelTwo.complete`.
+
+Risks:
+
+- Elephant not truly on the elevated Button B surface;
+- human falling through Elevator B;
+- Elevator B top stop not aligned with the Love Letter route;
+- Love Letter collectable before Elevator B.
+
+Independent smoke test:
+
+- seed Elephant on Red Button B and human on Elevator B;
+- confirm Button B is held by Elephant;
+- confirm Elevator B reaches top with human as rider;
+- walk human from Elevator B onto the Love Letter route;
+- collect Level Two Love Letter;
+- confirm Level Two completion.
 
 ## 9. Cubeling Recall Component
 
@@ -315,4 +360,3 @@ Independent smoke test:
 - message appears;
 - completion menu opens;
 - reset clears reward objects.
-

@@ -12,6 +12,9 @@ This doc links terrain/surface readability to Cubeling candidates and future spe
 - Meaning: water traversal
 - Status: `STRONG CANDIDATE / FUTURE WATER CUBELING`
 - Source: `Direct user idea`
+- Forward pathing note:
+  - A future Level One alignment pass can introduce Axolotl in a small, bounded way:
+    Frog still teaches jump-based crossing, then Axolotl handles a river-island swim segment before the bridge completes.
 
 ### Tortoise
 

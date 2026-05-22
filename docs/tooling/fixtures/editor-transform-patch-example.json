@@ -1,0 +1,121 @@
+{
+  "schema": "lumina3d.editor.transformPatch.v1",
+  "patchType": "lumina3d.editor.transformPatch.v1",
+  "legacyPatchType": "lumina3d.editor.transformPatch",
+  "levelId": "level_two",
+  "objectId": "level_two.blue_ramp",
+  "sourceRef": {
+    "file": "src/levels/levelTwo.js",
+    "exportName": "LEVEL_TWO_BLUE_RAMP",
+    "path": "position"
+  },
+  "changes": [
+    {
+      "path": "transform.position.x",
+      "oldValue": 9.2,
+      "newValue": 9.45
+    },
+    {
+      "path": "transform.rotation.y",
+      "oldValue": -1.570796,
+      "newValue": -1.308997
+    }
+  ],
+  "objects": [
+    {
+      "objectId": "level_two.blue_ramp",
+      "name": "Blue Ramp",
+      "category": "ramp",
+      "sourceRef": {
+        "file": "src/levels/levelTwo.js",
+        "exportName": "LEVEL_TWO_BLUE_RAMP",
+        "path": "position"
+      },
+      "changes": [
+        {
+          "path": "transform.position.x",
+          "oldValue": 9.2,
+          "newValue": 9.45
+        },
+        {
+          "path": "transform.rotation.y",
+          "oldValue": -1.570796,
+          "newValue": -1.308997
+        }
+      ]
+    },
+    {
+      "objectId": "level_two.blue_button",
+      "name": "Blue Button",
+      "category": "button",
+      "sourceRef": {
+        "file": "src/levels/levelTwo.js",
+        "exportName": "LEVEL_TWO_POINTS",
+        "path": "blueButton"
+      },
+      "changes": [
+        {
+          "path": "transform.position.z",
+          "oldValue": 13,
+          "newValue": 12.5
+        }
+      ]
+    },
+    {
+      "objectId": "level_two.red-button-a",
+      "name": "Red Button A",
+      "category": "red_button",
+      "sourceRef": {
+        "file": "src/levels/levelTwo.js",
+        "exportName": "LEVEL_TWO_RED_BUTTONS",
+        "path": "red-button-a"
+      },
+      "changes": [
+        {
+          "path": "transform.position.x",
+          "oldValue": 13.4,
+          "newValue": 12.9
+        }
+      ]
+    },
+    {
+      "objectId": "level_two.red-elevator-a",
+      "name": "Red Elevator A",
+      "category": "red_platform",
+      "sourceRef": {
+        "file": "src/levels/levelTwo.js",
+        "exportName": "LEVEL_TWO_RED_PLATFORMS",
+        "path": "red-elevator-a"
+      },
+      "changes": [
+        {
+          "path": "transform.position.z",
+          "oldValue": 1,
+          "newValue": 1.5
+        }
+      ]
+    },
+    {
+      "objectId": "level_two.prop.forestTreeA.1",
+      "name": "forestTreeA 1",
+      "category": "physical_prop",
+      "sourceRef": {
+        "file": "src/levels/levelTwo.js",
+        "exportName": "LEVEL_TWO_PROPS",
+        "path": "[0]"
+      },
+      "changes": [
+        {
+          "path": "transform.position.x",
+          "oldValue": -17.4,
+          "newValue": -16.9
+        },
+        {
+          "path": "transform.scale.x",
+          "oldValue": 0.88,
+          "newValue": 0.92
+        }
+      ]
+    }
+  ]
+}

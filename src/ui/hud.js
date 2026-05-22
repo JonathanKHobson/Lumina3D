@@ -5,6 +5,7 @@ export function createHudRefs(root = document) {
     goal: root.querySelector("#goalState"),
     step: root.querySelector("#stepState"),
     prompt: root.querySelector("#prompt"),
+    tutorialBanner: root.querySelector("#tutorialBanner"),
     speech: root.querySelector("#speechBubble"),
     speechSecondary: root.querySelector("#speechBubbleSecondary"),
     skipModal: root.querySelector("#skipModal"),
@@ -16,10 +17,29 @@ export function createHudRefs(root = document) {
     devEditorToggle: root.querySelector("#devEditorToggle"),
     devEditorPanel: root.querySelector("#devEditorPanel"),
     devEditorSelectionSummary: root.querySelector("#devEditorSelectionSummary"),
+    devEditorObjectFilter: root.querySelector("#devEditorObjectFilter"),
+    devEditorShowTilesToggle: root.querySelector("#devEditorShowTilesToggle"),
     devEditorObjectList: root.querySelector("#devEditorObjectList"),
     devEditorSnapToggle: root.querySelector("#devEditorSnapToggle"),
+    devEditorUndoTransform: root.querySelector("#devEditorUndoTransform"),
     devEditorColliderToggle: root.querySelector("#devEditorColliderToggle"),
     devEditorExportLayout: root.querySelector("#devEditorExportLayout"),
+    devEditorCopySelectionDelta: root.querySelector("#devEditorCopySelectionDelta"),
+    devEditorCopyAiContext: root.querySelector("#devEditorCopyAiContext"),
+    devEditorCopyAuthoringJson: root.querySelector("#devEditorCopyAuthoringJson"),
+    devEditorCopyAuthoringMarkdown: root.querySelector("#devEditorCopyAuthoringMarkdown"),
+    devEditorExportPatchDraft: root.querySelector("#devEditorExportPatchDraft"),
+    devEditorOpenLevelEditor: root.querySelector("#devEditorOpenLevelEditor"),
+    devEditorAnnotationNotes: root.querySelector("#devEditorAnnotationNotes"),
+    devEditorAnnotationDeleteCandidate: root.querySelector("#devEditorAnnotationDeleteCandidate"),
+    devEditorAnnotationReplaceCandidate: root.querySelector("#devEditorAnnotationReplaceCandidate"),
+    devEditorAnnotationCollisionIssue: root.querySelector("#devEditorAnnotationCollisionIssue"),
+    devEditorAnnotationOrientationIssue: root.querySelector("#devEditorAnnotationOrientationIssue"),
+    devEditorAnnotationPositioningIssue: root.querySelector("#devEditorAnnotationPositioningIssue"),
+    devEditorAnnotationPriority: root.querySelector("#devEditorAnnotationPriority"),
+    devEditorAnnotationReplacementAsset: root.querySelector("#devEditorAnnotationReplacementAsset"),
+    devEditorAnnotationReplacementReason: root.querySelector("#devEditorAnnotationReplacementReason"),
+    devEditorAnnotationClear: root.querySelector("#devEditorAnnotationClear"),
     levelCompleteModal: root.querySelector("#levelCompleteModal"),
     loveLetterModal: root.querySelector("#loveLetterModal"),
     loveLetterTitle: root.querySelector("#loveLetterTitle"),
@@ -58,19 +78,27 @@ export function renderControlsPanel(hud, open) {
   hud.controlsPanel.classList.toggle("is-open", open);
 }
 
-export function renderLevelCompleteModal(hud, { open, isTutorial }) {
+export function renderLevelCompleteModal(hud, {
+  open,
+  isTutorial,
+  levelName = "Level One",
+  nextLevelEnabled = false,
+  nextLevelDestination = ""
+}) {
   if (!hud.levelCompleteModal) return;
   hud.levelCompleteModal.classList.toggle("is-open", open);
   hud.levelCompleteModal.setAttribute("aria-hidden", open ? "false" : "true");
-  if (hud.completeEyebrow) hud.completeEyebrow.textContent = isTutorial ? "Tutorial Complete" : "Level One Complete";
+  if (hud.completeEyebrow) hud.completeEyebrow.textContent = isTutorial ? "Tutorial Complete" : `${levelName} Complete`;
   if (hud.completeTitle) hud.completeTitle.textContent = "Love Letter Found!";
   if (hud.completeDescription) {
     hud.completeDescription.textContent = isTutorial
       ? "The tutorial is complete. You can keep testing this room, restart it, or continue to Level One."
-      : "Level One is complete. You can keep testing this room or reset the level.";
+      : nextLevelDestination
+        ? `${levelName} is complete. You can continue to ${nextLevelDestination}, keep testing this room, or reset the level.`
+        : `${levelName} is complete. You can keep testing this room or reset the level.`;
   }
   if (hud.nextLevel) {
-    hud.nextLevel.disabled = !isTutorial;
+    hud.nextLevel.disabled = !nextLevelEnabled;
     hud.nextLevel.textContent = "Next Level";
   }
   if (hud.resetTutorialLevel) hud.resetTutorialLevel.textContent = isTutorial ? "Reset Tutorial Level" : "Reset Level";
@@ -106,13 +134,26 @@ export function getHudPrompt(state, stepId, { sceneIds, tutorialSteps, freePlayP
     if (state.levelOne.phase === "arrival") return "";
     if (state.celebration.active) return "Love Letter found.";
     if (state.celebration.modalVisible) return "Level One Complete.";
-    if (state.levelOne.bridgeComplete) return state.overridePrompt?.text || "Cross the completed bridge and collect the Love Letter.";
+    if (state.levelOne.bridgeComplete) return state.overridePrompt?.text || "Cross the blue blooms and collect the Love Letter.";
     return state.overridePrompt?.text || "Find a way across the water to the Love Letter.";
   }
   if (state.scene.id === sceneIds.LEVEL_TWO) {
     if (state.levelTwo.phase === "title") return "";
     if (state.levelTwo.phase === "arrival") return "";
-    return state.overridePrompt?.text || "Look for the elevated Love Letter.";
+    if (state.celebration.active) return "Love Letter found.";
+    if (state.celebration.modalVisible) return "Level Two Complete.";
+    if (state.levelTwo.placeholderLoveLetterCollectable) return state.overridePrompt?.text || "Collect the elevated Love Letter.";
+    return state.overridePrompt?.text || "Use Frog and Elephant to reach the elevated Love Letter.";
+  }
+  if (state.scene.id === sceneIds.LEVEL_THREE) {
+    if (state.levelThree.phase === "arrival") return "";
+    if (state.levelThree.crocodileTotemCollected) {
+      return state.overridePrompt?.text || "The Crocodile Echo is awake. Future lake routes wait.";
+    }
+    if (state.levelThree.totemRaftDocked) {
+      return state.overridePrompt?.text || "Return as the Human and collect the Crocodile Totem.";
+    }
+    return state.overridePrompt?.text || "Use Frog to cross the floating leaves and press the green button.";
   }
   if (state.celebration.active) return "Love Letter found.";
   if (state.celebration.modalVisible) return "Tutorial Complete.";
@@ -130,11 +171,20 @@ export function getHudGoalLabel(state, sceneIds) {
   if (state.scene.id === sceneIds.LEVEL_ONE) {
     if (state.levelOne.phase === "title") return "Level One";
     if (state.spellbookCollected) return "Complete";
-    return state.levelOne.bridgeComplete ? "Cross bridge" : "Reach Love Letter";
+    return state.levelOne.bridgeComplete ? "Cross blooms" : "Reach Love Letter";
   }
   if (state.scene.id === sceneIds.LEVEL_TWO) {
     if (state.levelTwo.phase === "title") return "Level Two";
-    return "Review shell";
+    if (state.spellbookCollected || state.levelTwo.complete) return "Complete";
+    if (state.levelTwo.placeholderLoveLetterCollectable) return "Collect Love Letter";
+    if (state.levelTwo.elephantSpawned) return "Use Elephant";
+    return state.levelTwo.blueRampActive ? "Find Elephant Totem" : "Reach Love Letter";
+  }
+  if (state.scene.id === sceneIds.LEVEL_THREE) {
+    if (state.levelThree.phase === "arrival") return "Level Three";
+    if (state.levelThree.crocodileTotemCollected) return "Echo awake";
+    if (state.levelThree.totemRaftDocked) return "Collect Totem";
+    return "Winch Totem";
   }
   return state.tutorialComplete ? "Complete" : state.doorwayOpen ? "Door open" : state.cubelings.frog.unlocked ? "Frog unlocked" : "Learn controls";
 }
@@ -143,6 +193,7 @@ export function getHudStepLabel(state, sceneIds, guidedStepCount) {
   if (state.scene.id === sceneIds.HOME) return state.home.phase === "play" ? "Home" : "";
   if (state.scene.id === sceneIds.LEVEL_ONE) return state.levelOne.phase === "play" ? "Level One" : "";
   if (state.scene.id === sceneIds.LEVEL_TWO) return state.levelTwo.phase === "play" ? "Level Two" : "";
+  if (state.scene.id === sceneIds.LEVEL_THREE) return state.levelThree.phase === "play" ? "Level Three" : "";
   return state.tutorialSkipped
     ? "Objective"
     : state.tutorialComplete
@@ -161,14 +212,15 @@ export function renderSceneOverlays(hud, { state, sceneIds, doorNoteText, update
   if (hud.root) {
     const cinematic = state.scene.id === sceneIds.HOME && state.home.phase !== "play" ||
       state.scene.id === sceneIds.LEVEL_ONE && state.levelOne.phase !== "play" ||
-      state.scene.id === sceneIds.LEVEL_TWO && state.levelTwo.phase !== "play";
+      state.scene.id === sceneIds.LEVEL_TWO && state.levelTwo.phase !== "play" ||
+      state.scene.id === sceneIds.LEVEL_THREE && state.levelThree.phase !== "play";
     hud.root.classList.toggle("is-hidden", cinematic);
   }
   if (hud.titleCard) {
     const visible = state.scene.titleCardVisible;
     hud.titleCard.hidden = !visible;
     hud.titleCard.classList.toggle("is-visible", visible);
-    if (hud.titleCardText) hud.titleCardText.textContent = state.scene.titleCardText || "Level One";
+    if (hud.titleCardText) hud.titleCardText.textContent = state.scene.titleCardText || "";
   }
   if (hud.doorNotePanel) {
     const visible = state.scene.id === sceneIds.HOME && state.home.noteVisible;
