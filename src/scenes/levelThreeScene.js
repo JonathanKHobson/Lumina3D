@@ -11,6 +11,7 @@ import { sceneGridPoint } from "../core/grid.js";
 import { createLilyPadGroup } from "../core/lilyPad.js";
 import {
   LEVEL_THREE_ANCHOR_STONES,
+  LEVEL_THREE_BRIDGE_PIVOT,
   LEVEL_THREE_BRIDGE_DESTINATION_MARKERS,
   LEVEL_THREE_CLIFF_TOP_Y,
   LEVEL_THREE_CROCODILE_ECHO,
@@ -25,6 +26,7 @@ import {
   LEVEL_THREE_RAFT_MARKERS,
   LEVEL_THREE_RED_BUTTON_PLACEHOLDERS,
   LEVEL_THREE_RESET_PERCH_PLACEHOLDERS,
+  LEVEL_THREE_TOTEM_RAFT_GATES,
   LEVEL_THREE_TOTEM_RAFT,
   LEVEL_THREE_WATER_TILES,
   LEVEL_THREE_WIDTH
@@ -112,6 +114,7 @@ export function buildLevelThreeScene({
 function addLevelThreePlaceholders(group, levelThreeMeshes, cloneAsset, addSceneCollider, levelThreeInteractiveMeshes = {}) {
   levelThreeInteractiveMeshes.greenButtons = levelThreeInteractiveMeshes.greenButtons || {};
   levelThreeInteractiveMeshes.greenButtonTops = levelThreeInteractiveMeshes.greenButtonTops || {};
+  levelThreeInteractiveMeshes.totemRaftGates = levelThreeInteractiveMeshes.totemRaftGates || {};
 
   LEVEL_THREE_ISLAND_MARKERS.forEach((marker) => {
     addGenerated(group, levelThreeMeshes, createIslandMarker(marker), marker.objectId || marker.id, "island_zone_marker", {
@@ -155,6 +158,18 @@ function addLevelThreePlaceholders(group, levelThreeMeshes, cloneAsset, addScene
       displayName: marker.name,
       sourceExport: "LEVEL_THREE_RAFT_MARKERS"
     });
+  });
+
+  LEVEL_THREE_TOTEM_RAFT_GATES.forEach((gate) => {
+    const gateMesh = addGenerated(group, levelThreeMeshes, createRaftGate(gate), gate.id, "totem_raft_gate", {
+      name: gate.name,
+      displayName: gate.name,
+      sourceExport: "LEVEL_THREE_TOTEM_RAFT_GATES",
+      role: "raft-blocker-gate",
+      editorAsset: "generated-level-three-reed-raft-gate",
+      editorAssetPath: "/generated/level-three/raft-gate"
+    });
+    levelThreeInteractiveMeshes.totemRaftGates[gate.id] = gateMesh;
   });
 
   LEVEL_THREE_LILY_PAD_PLACEHOLDERS.forEach((pad) => {
@@ -261,6 +276,9 @@ function addGenerated(group, levelThreeMeshes, object, id, category, options = {
 }
 
 function createIslandMarker(marker) {
+  if (marker.id === LEVEL_THREE_BRIDGE_PIVOT.id || marker.role === "rotating-bridge-pivot") {
+    return createBridgePivotMarker(marker);
+  }
   const group = new THREE.Group();
   group.name = marker.objectId || marker.id;
   const ring = new THREE.Mesh(
@@ -282,6 +300,37 @@ function createIslandMarker(marker) {
   );
   dot.position.y = 0.08;
   group.add(ring, dot);
+  group.position.set(marker.position.x, SURFACE_Y + 0.04, marker.position.z);
+  return group;
+}
+
+function createBridgePivotMarker(marker) {
+  const group = new THREE.Group();
+  group.name = marker.objectId || marker.id;
+  const baseMaterial = new THREE.MeshStandardMaterial({
+    color: 0xb8a26a,
+    emissive: 0x5e4d27,
+    emissiveIntensity: 0.08,
+    roughness: 0.58,
+    metalness: 0.12
+  });
+  const topMaterial = new THREE.MeshStandardMaterial({
+    color: 0xf2df9c,
+    emissive: 0x9b812f,
+    emissiveIntensity: 0.14,
+    roughness: 0.48,
+    metalness: 0.18
+  });
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.86, 0.96, 0.18, 8), baseMaterial);
+  base.position.y = 0.1;
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(0.64, 0.72, 0.12, 8), topMaterial);
+  top.position.y = 0.27;
+  const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 0.28, 16), topMaterial);
+  axle.position.y = 0.47;
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(LEVEL_THREE_BRIDGE_PIVOT.armLength, 0.09, 0.34), topMaterial);
+  arm.position.set(LEVEL_THREE_BRIDGE_PIVOT.armLength * 0.5 + 0.42, 0.29, 0);
+  arm.userData.levelThreeBridgeArmHint = true;
+  group.add(base, top, axle, arm);
   group.position.set(marker.position.x, SURFACE_Y + 0.04, marker.position.z);
   return group;
 }
@@ -460,9 +509,31 @@ function createTotemRaft() {
 function createRaftMarker(marker) {
   const group = new THREE.Group();
   group.name = marker.id;
+  if (marker.id === "level3TotemDockMarker") {
+    const dockMaterial = new THREE.MeshStandardMaterial({
+      color: 0xd9c183,
+      emissive: 0x6f5e32,
+      emissiveIntensity: 0.08,
+      roughness: 0.62,
+      transparent: true,
+      opacity: 0.82
+    });
+    const plank = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.08, 0.32), dockMaterial);
+    plank.position.y = 0.06;
+    const postA = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.42, 12), dockMaterial);
+    postA.position.set(-0.36, 0.26, -0.24);
+    const postB = postA.clone();
+    postB.position.set(0.36, 0.26, -0.24);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.025, 8, 36), dockMaterial);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.045;
+    group.add(ring, plank, postA, postB);
+    group.position.set(marker.position.x, SURFACE_Y + 0.04, marker.position.z);
+    return group;
+  }
   const material = new THREE.MeshStandardMaterial({
-    color: marker.id === "level3TotemDockMarker" ? 0xd9c183 : 0xb7d9c8,
-    emissive: marker.id === "level3TotemDockMarker" ? 0x6f5e32 : 0x5d8372,
+    color: 0xb7d9c8,
+    emissive: 0x5d8372,
     emissiveIntensity: 0.08,
     roughness: 0.62,
     transparent: true,
@@ -476,6 +547,37 @@ function createRaftMarker(marker) {
   post.castShadow = true;
   group.add(ring, post);
   group.position.set(marker.position.x, SURFACE_Y + 0.04, marker.position.z);
+  return group;
+}
+
+function createRaftGate(gate) {
+  const group = new THREE.Group();
+  group.name = gate.id;
+  const reedMaterial = new THREE.MeshStandardMaterial({
+    color: 0x9dbb63,
+    emissive: 0x3d552c,
+    emissiveIntensity: 0.025,
+    roughness: 0.84,
+    transparent: true,
+    opacity: 0.68
+  });
+  [-0.26, 0.03, 0.31].forEach((offset, index) => {
+    const reed = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.72 - index * 0.06, 8), reedMaterial);
+    reed.position.set(offset, 0.1 + index * 0.01, Math.sin(index + gate.gateIndex) * 0.07);
+    reed.rotation.z = Math.PI / 2;
+    reed.rotation.y = (index - 1) * 0.18;
+    reed.castShadow = true;
+    group.add(reed);
+  });
+  const float = new THREE.Mesh(
+    new THREE.TorusGeometry(0.36, 0.022, 8, 28),
+    reedMaterial
+  );
+  float.rotation.x = Math.PI / 2;
+  float.position.y = 0.055;
+  group.add(float);
+  group.position.set(gate.position.x, SURFACE_Y + 0.02, gate.position.z);
+  group.rotation.y = gate.gateIndex * 0.42;
   return group;
 }
 

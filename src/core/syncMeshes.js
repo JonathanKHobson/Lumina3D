@@ -51,6 +51,14 @@ export function syncActorMeshPositions({
     );
     actorMeshes.elephant.rotation.y = directionToRotation(state.elephant.facing);
   }
+
+  if (actorMeshes.crocodile && state.crocodile) {
+    const waterBob = state.active === "crocodile" && state.scene?.id === "level_three"
+      ? Math.sin(state.elapsed * 2.6) * 0.018
+      : 0;
+    actorMeshes.crocodile.position.set(state.crocodile.x, surfaceY + waterBob, state.crocodile.z);
+    actorMeshes.crocodile.rotation.y = directionToRotation(state.crocodile.facing);
+  }
 }
 
 export function syncMarkerMeshes({

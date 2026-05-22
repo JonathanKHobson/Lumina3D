@@ -9,13 +9,23 @@ export const LEVEL_THREE_HEIGHT = 22;
 export const LEVEL_THREE_BOUNDS = boundsForGrid(LEVEL_THREE_WIDTH, LEVEL_THREE_HEIGHT, TILE);
 export const LEVEL_THREE_TITLE_SECONDS = 1.65;
 export const LEVEL_THREE_CINEMATIC_SPEED = 2.0;
-export const LEVEL_THREE_MAP_SHAPE = "mostly-water-lake-islands-phase-2a-opening-totem";
+export const LEVEL_THREE_MAP_SHAPE = "mostly-water-lake-islands-spatial-contract-repair";
 export const LEVEL_THREE_PLACEHOLDER_LOVE_LETTER_Y = SURFACE_Y + 2.15;
 export const LEVEL_THREE_CLIFF_TOP_Y = SURFACE_Y + 1.42;
 export const LEVEL_THREE_TOTEM_GREEN_BUTTON_RADIUS = 1.05;
 export const LEVEL_THREE_TOTEM_COLLECTION_RADIUS = 1.1;
-export const LEVEL_THREE_FROG_LILY_PAD_SURFACE_PADDING = 0.34;
+export const LEVEL_THREE_FROG_LILY_PAD_SURFACE_PADDING = 0.12;
 export const LEVEL_THREE_FROG_LANE_RESET_COOLDOWN = 0.45;
+export const LEVEL_THREE_FROG_WATER_BLOCK_COOLDOWN = 1.15;
+export const LEVEL_THREE_CROCODILE_RADIUS = 0.62;
+export const LEVEL_THREE_CROCODILE_SPEED = 3.4;
+export const LEVEL_THREE_TOTEM_RAFT_DRIFT_SECONDS = 1.65;
+export const LEVEL_THREE_LILY_PAD_MIN_EDGE_GAP = 1.1;
+export const LEVEL_THREE_LILY_PAD_MIN_ISLAND_GAP = 1.45;
+export const LEVEL_THREE_CROCODILE_SPAWN = {
+  ...point(5.85, 8.65),
+  facing: { x: 1, z: -0.1, name: "east" }
+};
 
 export const LEVEL_THREE_POINTS = {
   entry: {
@@ -52,6 +62,8 @@ export const LEVEL_THREE_ISLANDS = [
       ...LEVEL_THREE_START_EDGE_CONNECTION_TILES,
       ...rectTiles(1, 5, 8, 13),
       ...rectTiles(2, 4, 7, 7),
+      tile(6, 8),
+      tile(7, 8),
       tile(6, 10),
       tile(6, 11)
     ])
@@ -62,8 +74,8 @@ export const LEVEL_THREE_ISLANDS = [
     purpose: "Future Frog timing lane reset perch; layout marker only in Phase 1.",
     role: "frog-lane-start",
     tiles: uniqueTiles([
-      tile(5, 7),
-      tile(6, 7)
+      tile(8, 7),
+      tile(8, 8)
     ])
   },
   {
@@ -72,21 +84,22 @@ export const LEVEL_THREE_ISLANDS = [
     purpose: "Future Frog-reachable island with the opening green button for the Crocodile Totem raft.",
     role: "opening-green-button",
     tiles: uniqueTiles([
-      ...rectTiles(10, 12, 2, 4),
-      tile(9, 3)
+      tile(18, 0),
+      tile(19, 0),
+      tile(18, 1),
+      tile(19, 1),
+      tile(20, 1)
     ])
   },
   {
     id: "level3CenterHub",
-    name: "Center Hub Island",
-    purpose: "Main staging island for the future rotating bridge puzzle.",
-    role: "center-hub",
+    name: "Rotating Bridge Pivot",
+    purpose: "Small artificial turntable for the future rotating bridge assembly.",
+    role: "rotating-bridge-pivot",
+    visualIntent: "small artificial pivot / turntable, not a natural island",
+    futureMechanic: "rotating bridge assembly",
     tiles: uniqueTiles([
-      ...rectTiles(11, 15, 8, 12),
-      tile(10, 10),
-      tile(16, 10),
-      tile(13, 7),
-      tile(13, 13)
+      tile(13, 10)
     ])
   },
   {
@@ -106,8 +119,11 @@ export const LEVEL_THREE_ISLANDS = [
     role: "bridge-destination",
     bridgeState: 1,
     tiles: uniqueTiles([
-      ...rectTiles(11, 14, 2, 4),
-      tile(13, 5)
+      tile(15, 6),
+      tile(16, 6),
+      tile(15, 7),
+      tile(16, 7),
+      tile(15, 8)
     ])
   },
   {
@@ -117,8 +133,11 @@ export const LEVEL_THREE_ISLANDS = [
     role: "bridge-destination",
     bridgeState: 2,
     tiles: uniqueTiles([
-      ...rectTiles(18, 21, 10, 12),
-      tile(17, 11)
+      tile(20, 9),
+      tile(21, 9),
+      tile(20, 10),
+      tile(21, 10),
+      tile(19, 10)
     ])
   },
   {
@@ -128,8 +147,11 @@ export const LEVEL_THREE_ISLANDS = [
     role: "bridge-destination",
     bridgeState: 3,
     tiles: uniqueTiles([
-      ...rectTiles(12, 15, 16, 18),
-      tile(13, 15)
+      tile(12, 16),
+      tile(13, 16),
+      tile(14, 16),
+      tile(13, 17),
+      tile(14, 17)
     ])
   },
   {
@@ -188,29 +210,35 @@ export const LEVEL_THREE_LILY_PAD_PLACEHOLDERS = [
   {
     id: "level3MovingLilyPad1",
     name: "Moving Lily Pad 1",
-    tile: tile(7, 6),
-    position: point(7, 6),
-    trackStart: point(6.55, 6),
-    trackEnd: point(7.45, 6),
-    radius: 0.48
+    tile: tile(10, 6),
+    position: point(10.1, 6.3),
+    trackStart: point(9.35, 6.85),
+    trackEnd: point(10.65, 5.85),
+    trackStartTile: tile(9, 7),
+    trackEndTile: tile(11, 6),
+    radius: 0.98
   },
   {
     id: "level3MovingLilyPad2",
     name: "Moving Lily Pad 2",
-    tile: tile(8, 5),
-    position: point(8, 5),
-    trackStart: point(7.5, 5),
-    trackEnd: point(8.5, 5),
-    radius: 0.46
+    tile: tile(13, 5),
+    position: point(12.8, 4.65),
+    trackStart: point(12.05, 4.05),
+    trackEnd: point(13.45, 4.95),
+    trackStartTile: tile(12, 4),
+    trackEndTile: tile(13, 5),
+    radius: 0.96
   },
   {
     id: "level3MovingLilyPad3",
     name: "Moving Lily Pad 3",
-    tile: tile(9, 4),
-    position: point(9, 4),
-    trackStart: point(8.5, 4),
-    trackEnd: point(9.5, 4),
-    radius: 0.44
+    tile: tile(16, 3),
+    position: point(15.8, 3.1),
+    trackStart: point(15.1, 3.65),
+    trackEnd: point(16.5, 2.55),
+    trackStartTile: tile(15, 4),
+    trackEndTile: tile(17, 3),
+    radius: 0.94
   }
 ];
 
@@ -219,7 +247,7 @@ export const LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS = [
     id: "level3TotemGreenButton",
     name: "Opening Totem Green Button",
     purpose: "Future repeatable button that winches the Crocodile Totem raft toward Start Island.",
-    position: point(10.7, 3.2),
+    position: point(18.8, 0.85),
     islandId: "level3TotemWinchIsland",
     futureMechanism: "crocodile-totem-raft-winch"
   },
@@ -244,19 +272,55 @@ export const LEVEL_THREE_RAFT_MARKERS = [
     id: "level3TotemRaftMarker1",
     name: "Totem Raft Middle Marker",
     stateIndex: 1,
-    position: point(3.6, 5.15)
+    position: point(5.1, 4.7)
   },
   {
     id: "level3TotemRaftMarker2",
     name: "Totem Raft Near Marker",
     stateIndex: 2,
-    position: point(4.8, 7.0)
+    position: point(9.7, 6.25)
   },
   {
     id: "level3TotemDockMarker",
     name: "Start Island Totem Dock Marker",
     stateIndex: 3,
-    position: point(6.2, 10.55)
+    position: point(8.75, 8.25)
+  }
+];
+
+export const LEVEL_THREE_TOTEM_RAFT_GATES = [
+  {
+    id: "level3TotemRaftGate1",
+    name: "Totem Raft Floating Reed Latch 1",
+    gateIndex: 1,
+    fromState: 0,
+    toState: 1,
+    position: midpoint(LEVEL_THREE_RAFT_MARKERS[0].position, LEVEL_THREE_RAFT_MARKERS[1].position),
+    visual: "floating-reed-latch",
+    waterOnly: true,
+    blocksRaftOnly: true
+  },
+  {
+    id: "level3TotemRaftGate2",
+    name: "Totem Raft Floating Reed Latch 2",
+    gateIndex: 2,
+    fromState: 1,
+    toState: 2,
+    position: midpoint(LEVEL_THREE_RAFT_MARKERS[1].position, LEVEL_THREE_RAFT_MARKERS[2].position),
+    visual: "floating-reed-latch",
+    waterOnly: true,
+    blocksRaftOnly: true
+  },
+  {
+    id: "level3TotemRaftGate3",
+    name: "Totem Raft Floating Reed Latch 3",
+    gateIndex: 3,
+    fromState: 2,
+    toState: 3,
+    position: midpoint(LEVEL_THREE_RAFT_MARKERS[2].position, LEVEL_THREE_RAFT_MARKERS[3].position),
+    visual: "floating-reed-latch",
+    waterOnly: true,
+    blocksRaftOnly: true
   }
 ];
 
@@ -282,38 +346,60 @@ export const LEVEL_THREE_BRIDGE_DESTINATION_MARKERS = [
     id: "level3BridgeDestinationStart",
     name: "Bridge Destination Start Island",
     stateIndex: 0,
-    position: point(6.2, 10.2),
+    position: point(8.2, 10.2),
     islandId: "level3StartIsland"
   },
   {
     id: "level3BridgeDestinationElephant",
     name: "Bridge Destination Elephant Island",
     stateIndex: 1,
-    position: point(13.0, 5.0),
+    position: point(15.8, 7.0),
     islandId: "level3ElephantIsland"
   },
   {
     id: "level3BridgeDestinationRedA",
     name: "Bridge Destination Red Button A Island",
     stateIndex: 2,
-    position: point(17.2, 11.0),
+    position: point(19.2, 10.0),
     islandId: "level3RedButtonAIsland"
   },
   {
     id: "level3BridgeDestinationPlatformDock",
     name: "Bridge Destination Platform Dock Island",
     stateIndex: 3,
-    position: point(13.0, 15.2),
+    position: point(13.4, 15.6),
     islandId: "level3PlatformDockIsland"
   }
 ];
+
+export const LEVEL_THREE_BRIDGE_PIVOT = {
+  id: "level3CenterHub",
+  name: "Rotating Bridge Pivot",
+  role: "rotating-bridge-pivot",
+  position: LEVEL_THREE_ISLANDS.find((island) => island.id === "level3CenterHub")?.position || point(13, 10),
+  footprintTiles: 1,
+  artificial: true,
+  bridgeRotationImplemented: false,
+  armLength: 4.6,
+  destinationRadius: 9.4
+};
+
+export const LEVEL_THREE_BRIDGE_STATE_METADATA = LEVEL_THREE_BRIDGE_DESTINATION_MARKERS.map((marker) => ({
+  id: marker.id,
+  name: marker.name,
+  stateIndex: marker.stateIndex,
+  markerId: marker.id,
+  islandId: marker.islandId,
+  angleRadians: Math.atan2(marker.position.z - LEVEL_THREE_BRIDGE_PIVOT.position.z, marker.position.x - LEVEL_THREE_BRIDGE_PIVOT.position.x),
+  distanceFromPivot: distanceBetween(marker.position, LEVEL_THREE_BRIDGE_PIVOT.position)
+}));
 
 export const LEVEL_THREE_RED_BUTTON_PLACEHOLDERS = [
   {
     id: "level3RedButtonA",
     name: "Red Button A Placeholder",
     islandId: "level3RedButtonAIsland",
-    position: point(19.5, 11.2),
+    position: point(20.7, 9.75),
     futureRequirement: "elephant-held-weight"
   },
   {
@@ -347,20 +433,20 @@ export const LEVEL_THREE_RESET_PERCH_PLACEHOLDERS = [
   {
     id: "level3TotemWinchResetPerch",
     name: "Totem Winch Reset Rock",
-    position: point(11.8, 4.2)
+    position: point(19.6, 1.35)
   }
 ];
 
 export const LEVEL_THREE_FROG_LANE_RESET_POINT = {
-  ...point(6, 7),
+  ...point(8.1, 7.05),
   facing: { x: 1, z: -0.2, name: "east" }
 };
 
 export const LEVEL_THREE_FROG_LANE_WATER_RESET_ZONE = {
-  minX: point(6, 7).x - 0.4,
-  maxX: point(10, 4).x + 0.8,
-  minZ: point(9, 4).z - 1.2,
-  maxZ: point(6, 7).z + 0.8
+  minX: point(8, 7).x - 0.4,
+  maxX: point(19, 1).x + 1.0,
+  minZ: point(19, 1).z - 1.2,
+  maxZ: point(8, 7).z + 0.8
 };
 
 export const LEVEL_THREE_FROG_LANE_JUMPS = [
@@ -399,7 +485,7 @@ export const LEVEL_THREE_FROG_LANE_JUMPS = [
     fromId: "level3MovingLilyPad3",
     toId: "level3TotemWinchIsland",
     from: LEVEL_THREE_LILY_PAD_PLACEHOLDERS[2].position,
-    to: point(9, 3),
+    to: point(18, 1),
     fromRadius: 1.35,
     destinationSurface: "level3TotemWinchIsland",
     overWater: true
@@ -410,10 +496,10 @@ export const LEVEL_THREE_PROPS = [
   ["forestTreeA", 1.2, 8.15, 0.7],
   ["forestBush", 4.65, 13.15, 0.7],
   ["forestRock", 4.4, 8.45, 0.56],
-  ["forestGrass", 11.55, 2.75, 0.55],
+  ["forestGrass", 19.35, 1.3, 0.44],
   ["forestRock", 14.8, 8.2, 0.62],
   ["forestGrass", 11.5, 12.15, 0.52],
-  ["forestTreeB", 11.2, 2.35, 0.68],
+  ["forestTreeB", 2.1, 12.75, 0.62],
   ["forestBush", 20.1, 5.25, 0.62],
   ["forestRock", 12.4, 18.1, 0.58],
   ["forestGrass", 21.8, 18.15, 0.52],
@@ -449,6 +535,7 @@ export const LEVEL_THREE_PLACEHOLDER_IDS = [
   ...LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS.map((item) => item.id),
   LEVEL_THREE_TOTEM_RAFT.id,
   ...LEVEL_THREE_RAFT_MARKERS.map((item) => item.id),
+  ...LEVEL_THREE_TOTEM_RAFT_GATES.map((item) => item.id),
   LEVEL_THREE_CROCODILE_ECHO.id,
   ...LEVEL_THREE_BRIDGE_DESTINATION_MARKERS.map((item) => item.id),
   ...LEVEL_THREE_RED_BUTTON_PLACEHOLDERS.map((item) => item.id),
@@ -516,4 +603,15 @@ function centerOfTiles(tiles) {
     return acc;
   }, { x: 0, y: 0 });
   return point(sum.x / tiles.length, sum.y / tiles.length);
+}
+
+function midpoint(a, b) {
+  return {
+    x: Number(((a.x + b.x) * 0.5).toFixed(2)),
+    z: Number(((a.z + b.z) * 0.5).toFixed(2))
+  };
+}
+
+function distanceBetween(a, b) {
+  return Number(Math.hypot(a.x - b.x, a.z - b.z).toFixed(2));
 }

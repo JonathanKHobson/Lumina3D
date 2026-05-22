@@ -28,7 +28,12 @@ import {
   LEVEL_THREE_ANCHOR_STONES,
   LEVEL_THREE_BOUNDS,
   LEVEL_THREE_BRIDGE_DESTINATION_MARKERS,
+  LEVEL_THREE_BRIDGE_PIVOT,
+  LEVEL_THREE_BRIDGE_STATE_METADATA,
   LEVEL_THREE_CROCODILE_ECHO,
+  LEVEL_THREE_CROCODILE_RADIUS,
+  LEVEL_THREE_CROCODILE_SPAWN,
+  LEVEL_THREE_CROCODILE_SPEED,
   LEVEL_THREE_FROG_LANE_JUMPS,
   LEVEL_THREE_FROG_LANE_RESET_POINT,
   LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS,
@@ -37,6 +42,8 @@ import {
   LEVEL_THREE_ISLANDS,
   LEVEL_THREE_LAND_TILES,
   LEVEL_THREE_LILY_PAD_PLACEHOLDERS,
+  LEVEL_THREE_LILY_PAD_MIN_EDGE_GAP,
+  LEVEL_THREE_LILY_PAD_MIN_ISLAND_GAP,
   LEVEL_THREE_MAP_SHAPE,
   LEVEL_THREE_PATH_TILES,
   LEVEL_THREE_PLACEHOLDER_LOVE_LETTER_Y,
@@ -51,6 +58,8 @@ import {
   LEVEL_THREE_TOTEM_COLLECTION_RADIUS,
   LEVEL_THREE_TOTEM_GREEN_BUTTON_RADIUS,
   LEVEL_THREE_TOTEM_RAFT,
+  LEVEL_THREE_TOTEM_RAFT_DRIFT_SECONDS,
+  LEVEL_THREE_TOTEM_RAFT_GATES,
   LEVEL_THREE_WATER_TILES,
   LEVEL_THREE_WIDTH
 } from "../../src/levels/levelThree.js";
@@ -233,12 +242,13 @@ function makeLevelThreeGeneratedObject({
   mechanismLink,
   assetKey = "generated-level-three-placeholder",
   assetPath = "/generated/level-three-placeholder",
+  type = "phase-one-placeholder",
   fingerprint = "Phase 1 visual placeholder only; behavior inactive."
 }) {
   return makeObject({
     id,
     name,
-    type: "phase-one-placeholder",
+    type,
     category,
     asset: {
       key: assetKey,
@@ -883,18 +893,43 @@ function makeLevelMetadata() {
       mechanismLink: "wakes-after-human-totem-collection"
     }),
     makeLevelThreeGeneratedObject({
+      id: "level3CrocodileCubelingActor",
+      name: "Crocodile Cubeling Actor",
+      category: "crocodile-actor-generated-temporary",
+      position: LEVEL_THREE_CROCODILE_SPAWN,
+      mechanismLink: "phase-3a-crocodile-land-water-control",
+      assetKey: "generated-crocodile-cubeling-temporary",
+      assetPath: "/generated/actors/crocodile-cubeling-temporary",
+      type: "actor",
+      fingerprint: `Phase 3A generated Crocodile actor; radius=${LEVEL_THREE_CROCODILE_RADIUS}; speed=${LEVEL_THREE_CROCODILE_SPEED}; no cargo or ferry behavior.`
+    }),
+    makeLevelThreeGeneratedObject({
       id: LEVEL_THREE_TOTEM_RAFT.id,
       name: LEVEL_THREE_TOTEM_RAFT.name,
       category: "totem-raft-placeholder",
       position: LEVEL_THREE_TOTEM_RAFT.position,
-      mechanismLink: "phase-2a-repeatable-green-button-winch"
+      mechanismLink: "spatial-contract-gated-drift-totem-raft",
+      fingerprint: `Moving raft object; drifts between fixed markers over ${LEVEL_THREE_TOTEM_RAFT_DRIFT_SECONDS}s after gates open.`
     }),
     ...LEVEL_THREE_RAFT_MARKERS.map((marker) => makeLevelThreeGeneratedObject({
       id: marker.id,
       name: marker.name,
       category: "totem-raft-state-marker",
       position: marker.position,
-      mechanismLink: `future-raft-state-${marker.stateIndex}`
+      mechanismLink: `fixed-raft-reference-state-${marker.stateIndex}`,
+      fingerprint: marker.id === "level3TotemDockMarker"
+        ? "Fixed Start Island dock/reference marker; this marker does not animate or become the raft."
+        : "Fixed raft waypoint/reference marker; the raft moves toward this marker."
+    })),
+    ...LEVEL_THREE_TOTEM_RAFT_GATES.map((gate) => makeLevelThreeGeneratedObject({
+      id: gate.id,
+      name: gate.name,
+      category: "totem-raft-reed-gate",
+      position: gate.position,
+      mechanismLink: `level3TotemGreenButton opens ${gate.id}; raft ${gate.fromState}->${gate.toState}`,
+      assetKey: "generated-level-three-reed-raft-gate",
+      assetPath: "/generated/level-three/reed-raft-gate",
+      fingerprint: "Visual raft blocker only; opens/fades when the Totem green button starts the next drift."
     })),
     ...LEVEL_THREE_BRIDGE_DESTINATION_MARKERS.map((marker) => makeLevelThreeGeneratedObject({
       id: marker.id,
@@ -1219,7 +1254,10 @@ function makeLevelMetadata() {
           z: LEVEL_THREE_TOTEM_RAFT.position.z
         }
       ]),
-      cubelings: [{ id: "frog", name: "Frog Cubeling", status: "spawned" }],
+      cubelings: [
+        { id: "frog", name: "Frog Cubeling", status: "spawned" },
+        { id: "crocodile", name: "Crocodile Cubeling", status: "unlockable-phase-3a-after-totem" }
+      ],
       collectibles: [{ id: "level_three_placeholder_love_letter", name: "Placeholder Love Letter", position: {
         x: toTwoDecimals(LEVEL_THREE_POINTS.placeholderLoveLetter.x),
         y: toTwoDecimals(LEVEL_THREE_PLACEHOLDER_LOVE_LETTER_Y),
@@ -1231,7 +1269,19 @@ function makeLevelMetadata() {
           fixtureImplemented("level_three_start", "Jump directly to Level Three and wait for play state."),
           fixtureImplemented(
             "level_three_crocodile_totem_opening",
-            "Seed the Phase 2A opening route, verify Frog repeat-presses the Totem green button, the raft docks, Frog cannot collect the Totem, Human collects it, the Crocodile Echo wakes, and Crocodile control remains unavailable."
+            "Seed the Phase 2A opening route, verify Frog repeat-presses the Totem green button, the raft docks, Frog cannot collect the Totem, Human collects it, the Crocodile Echo wakes, and Phase 3A Crocodile control becomes available."
+          ),
+          fixtureImplemented(
+            "level_three_frog_lane_route",
+            "Press Space through the actual Frog lane sequence and verify Start -> Lily Pad 1 -> Lily Pad 2 -> Lily Pad 3 -> Totem Winch Island route priority works without teleporting to the green button."
+          ),
+          fixtureImplemented(
+            "level_three_crocodile_actor",
+            "Seed the post-Totem Level Three state, transfer into Crocodile, verify Crocodile land/water movement, verify Human/Frog water blocking, and confirm deferred bridge/Love Letter mechanics remain inactive."
+          ),
+          fixtureImplemented(
+            "level_three_spatial_contract",
+            "Verify corrected lily lane spacing, small artificial bridge pivot, destination ring, gated raft drift, fixed dock marker, and preserved Phase 2A Totem collection."
           )
         ],
         planned: []
@@ -1247,21 +1297,59 @@ function makeLevelMetadata() {
         mostlyWater: LEVEL_THREE_WATER_TILES.length > LEVEL_THREE_LAND_TILES.length,
         startEdgeConnectionTiles: LEVEL_THREE_START_EDGE_CONNECTION_TILES,
         phase2A: {
-          status: "implemented-automated-verification-only",
-          humanVisualReviewPending: true,
+          status: "implemented-and-visually-cleared-for-forward-progress",
+          humanVisualReviewPending: false,
           movingLilyPadTimingDeferred: true,
           frogLaneJumpCount: LEVEL_THREE_FROG_LANE_JUMPS.length,
           frogLaneResetPoint: LEVEL_THREE_FROG_LANE_RESET_POINT,
+          lilyPadMinEdgeGap: LEVEL_THREE_LILY_PAD_MIN_EDGE_GAP,
+          lilyPadMinIslandGap: LEVEL_THREE_LILY_PAD_MIN_ISLAND_GAP,
           totemGreenButtonRadius: LEVEL_THREE_TOTEM_GREEN_BUTTON_RADIUS,
-          totemCollectionRadius: LEVEL_THREE_TOTEM_COLLECTION_RADIUS
+          totemCollectionRadius: LEVEL_THREE_TOTEM_COLLECTION_RADIUS,
+          totemRaftDriftSeconds: LEVEL_THREE_TOTEM_RAFT_DRIFT_SECONDS
+        },
+        phase3A: {
+          status: "implemented",
+          crocodileSpawn: LEVEL_THREE_CROCODILE_SPAWN,
+          crocodileRadius: LEVEL_THREE_CROCODILE_RADIUS,
+          crocodileSpeed: LEVEL_THREE_CROCODILE_SPEED,
+          waterMovement: true,
+          cargoDeferred: true,
+          ferryingDeferred: true,
+          bridgeCyclingDeferred: true
+        },
+        spatialContractRepair: {
+          status: "implemented-automated-verification-target",
+          humanVisualReviewPending: true,
+          lilyLaneSpacingCorrected: true,
+          centerHubRole: LEVEL_THREE_BRIDGE_PIVOT.role,
+          centerHubFootprintTiles: LEVEL_THREE_BRIDGE_PIVOT.footprintTiles,
+          totemRaftDriftSeconds: LEVEL_THREE_TOTEM_RAFT_DRIFT_SECONDS,
+          bridgeRotationImplemented: false,
+          movingLilyPadTimingDeferred: true
         },
         islands: LEVEL_THREE_ISLANDS.map((island) => island.id),
+        islandTileCounts: Object.fromEntries(LEVEL_THREE_ISLANDS.map((island) => [island.id, island.tileCount])),
         islandMarkers: LEVEL_THREE_ISLAND_MARKERS.map((marker) => marker.objectId || marker.id),
         placeholders: LEVEL_THREE_PLACEHOLDER_IDS,
         greenButtons: LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS.map((button) => button.id),
         raftMarkers: LEVEL_THREE_RAFT_MARKERS.map((marker) => marker.id),
+        raftGates: LEVEL_THREE_TOTEM_RAFT_GATES.map((gate) => gate.id),
+        bridgePivot: {
+          id: LEVEL_THREE_BRIDGE_PIVOT.id,
+          role: LEVEL_THREE_BRIDGE_PIVOT.role,
+          footprintTiles: LEVEL_THREE_BRIDGE_PIVOT.footprintTiles,
+          artificial: LEVEL_THREE_BRIDGE_PIVOT.artificial,
+          bridgeRotationImplemented: LEVEL_THREE_BRIDGE_PIVOT.bridgeRotationImplemented
+        },
+        bridgeDestinationRing: LEVEL_THREE_BRIDGE_STATE_METADATA.map((entry) => ({
+          id: entry.id,
+          stateIndex: entry.stateIndex,
+          angleRadians: toTwoDecimals(entry.angleRadians),
+          distanceFromPivot: toTwoDecimals(entry.distanceFromPivot)
+        })),
         reservedZones: LEVEL_THREE_RESERVED_ZONES.map((zone) => zone.id),
-        authoringContract: "Phase 2A opening Totem puzzle only; no Crocodile control, no central bridge, no cargo, no final route; human visual review pending"
+        authoringContract: "Spatial contract repair: larger spaced Frog lily lane, small artificial bridge pivot, gated Totem raft drift; no moving lily timing, no bridge rotation, no cargo, no red buttons, no final route"
       }
     }
   };

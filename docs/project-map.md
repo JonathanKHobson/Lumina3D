@@ -1,6 +1,6 @@
 # Lumina3D Project Map
 
-Last updated: 2026-05-20
+Last updated: 2026-05-21
 
 ## Purpose
 
@@ -17,8 +17,9 @@ repeating the old pattern of putting everything into `src/main.js`.
 - Project root: `/Volumes/KyleSSD/Documents/My Projects/My Games/Lumina3D`
 - Runtime stack: Vite + Three.js
 - Current major architecture issue: `src/main.js` is still large. The refactor
-  plan reduced it from about 5,300 lines to about 3,600 lines, but it remains
-  an orchestration bottleneck.
+  plan reduced it during the first pass, but later Level Three/editor work grew
+  it again; it is currently over 6,000 lines and remains an orchestration
+  bottleneck.
 - Current rule: new gameplay systems should not be added to `src/main.js` by
   default. Add or extend the smallest existing module lane that fits the change.
 - Active collaboration risk: source files may be dirty because another agent is
@@ -47,6 +48,9 @@ Use the current structure this way:
 | `scripts/` | Deterministic CLI checks and level inspection tooling | Runtime gameplay code |
 | `scripts/codex/` | Lightweight project-local Codex hook helpers, including closeout reminders | Auto-mutating project docs or broad session automation |
 | `scripts/lib/` | Shared tooling logic for level catalogs, command allowlists, validation suites, editor-state reads, and archetype contracts | Browser UI state, runtime-only rendering, unchecked file access |
+| `docs/assets/` | Asset ledger, license/source tracking, and asset audit notes | Runtime assets or unverified license claims |
+| `docs/tooling/` | Scripts-first tooling docs, scene contracts, visual QA contracts, asset-pipeline rules, and AI task contracts | Gameplay source of truth or one-off prompt packets |
+| `docs/research/` | Research-backed audits, prioritization matrices, and external reference notes that have not yet become implementation source | Runtime behavior, active roadmap truth, or speculative scope expansion |
 | `docs/architecture/` | Architecture notes such as naming conventions, audits, and migration plans | Runtime source-of-truth behavior |
 | `docs/game-design-handbook/` | Design intent, mechanic backlog, level plans, smoke-test notes | Source-of-truth runtime logic |
 
@@ -80,12 +84,15 @@ Important asset lanes:
   editor reference index for focused local 3D packs outside the game project.
 - `src/editor/EditorProceduralAssets.js`: editor-only generated asset previews
   such as the draft lily pad; these are not runtime source until implemented.
+- `docs/assets/asset-ledger.md`: source/license/attribution and optimization
+  tracking for third-party and generated assets.
 
 Rules:
 
 - Register any runtime asset in `src/config/assets.js` before using it.
 - Keep raw asset files under `public/assets/...`; do not import them directly
   from source modules unless the build setup intentionally changes.
+- Add or update `docs/assets/asset-ledger.md` before adding a new runtime asset.
 - Before public release or portfolio publication, run a focused license and
   attribution pass.
 

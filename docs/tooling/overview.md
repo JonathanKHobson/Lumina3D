@@ -13,6 +13,8 @@ This lane keeps gameplay/code changes separate from gameplay-inspection and test
   - Targeted fixture runs
   - Collider + float checks
   - Runtime/editor route smoke checks
+  - Future scene contracts, screenshot bookmarks, probe paths, asset audits,
+    and performance budgets
 
 ## Commands in this phase
 
@@ -28,6 +30,14 @@ This lane keeps gameplay/code changes separate from gameplay-inspection and test
 - `tools:validate-float-colliders [<id>]`
 - `tools:validate-editor-sync [<id>|all]`
 - `tools:explain-editor-patch <patch.json>`
+
+Planned contract commands:
+
+- `tools:capture-scene-screenshots [<id>]`
+- `tools:validate-scene-screenshots [<id>]`
+- `tools:run-probe-path <id> <probe_id>`
+- `tools:asset-audit`
+- `tools:validate-performance-budget [<id>]`
 
 All scripts support `--help` usage text and `--pretty` output.
 
@@ -72,6 +82,22 @@ All scripts support `--help` usage text and `--pretty` output.
 - `explain-editor-patch <patch.json>`
   - Use after copying a transform patch from `/editor/`.
   - Prints suggested source edits without modifying files.
+
+## Contract docs
+
+- `docs/tooling/scene-contract.md`
+  - Defines the object/scene evidence model: state, collider, walkable proxy,
+    screenshot, performance, and asset ledger references.
+- `docs/tooling/visual-qa-contract.md`
+  - Defines screenshot bookmark expectations and the warning-only to blocking
+    baseline path.
+- `docs/tooling/asset-pipeline.md`
+  - Defines asset intake, audit, and offline optimization rules.
+- `docs/tooling/ai-task-contract.md`
+  - Defines the standard prompt/acceptance contract for future AI dev work.
+- `docs/assets/asset-ledger.md`
+  - Tracks third-party asset source, license, attribution, format, use, and
+    optimization status.
 
 ## Common workflow examples
 

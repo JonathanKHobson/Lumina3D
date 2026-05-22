@@ -3,7 +3,9 @@ import * as THREE from "three";
 import {
   LEVEL_THREE_ANCHOR_STONES,
   LEVEL_THREE_BRIDGE_DESTINATION_MARKERS,
+  LEVEL_THREE_BRIDGE_PIVOT,
   LEVEL_THREE_CROCODILE_ECHO,
+  LEVEL_THREE_CROCODILE_SPAWN,
   LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS,
   LEVEL_THREE_HEIGHT,
   LEVEL_THREE_ISLAND_MARKERS,
@@ -16,6 +18,7 @@ import {
   LEVEL_THREE_RED_BUTTON_PLACEHOLDERS,
   LEVEL_THREE_RESET_PERCH_PLACEHOLDERS,
   LEVEL_THREE_TOTEM_RAFT,
+  LEVEL_THREE_TOTEM_RAFT_GATES,
   LEVEL_THREE_WATER_TILES,
   LEVEL_THREE_WIDTH
 } from "../../levels/levelThree.js";
@@ -96,17 +99,18 @@ export function buildLevelThreeEditorScene({ cloneAsset, placeAsset }) {
   });
 
   LEVEL_THREE_ISLAND_MARKERS.forEach((marker) => {
+    const isPivot = marker.id === LEVEL_THREE_BRIDGE_PIVOT.id;
     addPlaceholderRecord({
       group,
       editableObjects,
-      object: createEditorPlate(marker.id === "level3CenterHub" ? 0xf3d982 : 0xe0c889, "island-zone"),
+      object: createEditorPlate(isPivot ? 0x5f6f78 : 0xe0c889, isPivot ? "rotating-bridge-pivot" : "island-zone"),
       id: `level_three.${marker.objectId || marker.id}`,
       name: marker.name,
-      category: "island_zone_marker",
+      category: isPivot ? "rotating_bridge_pivot_marker" : "island_zone_marker",
       position: marker.position,
       sourceExport: "LEVEL_THREE_ISLANDS",
       sourcePath: marker.id,
-      tags: ["level-three", "island", marker.role]
+      tags: ["level-three", isPivot ? "bridge-pivot" : "island", marker.role]
     });
   });
 
@@ -124,6 +128,18 @@ export function buildLevelThreeEditorScene({ cloneAsset, placeAsset }) {
   addPlaceholderRecord({
     group,
     editableObjects,
+    object: createEditorPlate(0x4f9a5c, "crocodile-actor"),
+    id: "level_three.level3CrocodileCubelingActor",
+    name: "Crocodile Cubeling Actor",
+    category: "crocodile_actor_generated_temporary",
+    position: LEVEL_THREE_CROCODILE_SPAWN,
+    sourceExport: "LEVEL_THREE_CROCODILE_SPAWN",
+    assetKey: "generated-crocodile-cubeling-temporary"
+  });
+
+  addPlaceholderRecord({
+    group,
+    editableObjects,
     object: createEditorPlate(0xd9b85f, "raft"),
     id: "level_three.level3TotemRaft",
     name: "Crocodile Totem Raft",
@@ -133,9 +149,10 @@ export function buildLevelThreeEditorScene({ cloneAsset, placeAsset }) {
   });
 
   [
-    ...LEVEL_THREE_LILY_PAD_PLACEHOLDERS.map((item) => ({ ...item, category: "moving_lily_pad_placeholder", color: 0x4a9b4d, sourceExport: "LEVEL_THREE_LILY_PAD_PLACEHOLDERS", assetKey: "generated-level-three-placeholder" })),
+    ...LEVEL_THREE_LILY_PAD_PLACEHOLDERS.map((item) => ({ ...item, category: "moving_lily_pad_placeholder", color: 0x4a9b4d, sourceExport: "LEVEL_THREE_LILY_PAD_PLACEHOLDERS", assetKey: "generated-level-one-lily-pad-shared-visual" })),
     ...LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS.map((item) => ({ ...item, category: "green_button_placeholder", color: 0x52b96a, sourceExport: "LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS", assetKey: "buttonBaseBlue", previewKind: "green-button" })),
     ...LEVEL_THREE_RAFT_MARKERS.map((item) => ({ ...item, category: "totem_raft_marker", color: 0xb7d9c8, sourceExport: "LEVEL_THREE_RAFT_MARKERS" })),
+    ...LEVEL_THREE_TOTEM_RAFT_GATES.map((item) => ({ ...item, category: "totem_raft_reed_gate", color: 0xa5b95a, sourceExport: "LEVEL_THREE_TOTEM_RAFT_GATES", assetKey: "generated-level-three-reed-raft-gate" })),
     ...LEVEL_THREE_BRIDGE_DESTINATION_MARKERS.map((item) => ({ ...item, category: "bridge_destination_marker", color: 0x8fb8d8, sourceExport: "LEVEL_THREE_BRIDGE_DESTINATION_MARKERS" })),
     ...LEVEL_THREE_RED_BUTTON_PLACEHOLDERS.map((item) => ({ ...item, category: "red_button_placeholder", color: 0xd94848, sourceExport: "LEVEL_THREE_RED_BUTTON_PLACEHOLDERS", assetKey: "buttonBaseRed", previewKind: "red-button" })),
     ...LEVEL_THREE_ANCHOR_STONES.map((item) => ({ ...item, category: "anchor_stone_placeholder", color: 0x7b7d78, sourceExport: "LEVEL_THREE_ANCHOR_STONES" })),

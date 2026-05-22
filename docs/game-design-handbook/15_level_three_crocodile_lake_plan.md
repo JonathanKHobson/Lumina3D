@@ -35,7 +35,19 @@ The shell contract repair after Phase 1.5 tightened the visual language before m
 - all three lily pad centers are authored on water tiles and use the shared Level One lily pad visual.
 - Level Three green/red button placeholders use the established KayKit two-part button geometry family; green is a material variant because no green KayKit button asset is present.
 
-After Phase 2A, the opening Crocodile Totem puzzle is active under automated coverage only. Human visual review is still pending, so do not treat the shell or Phase 2A as visually accepted yet.
+After Phase 2A, Jonathan visually reviewed the opening shell/play state and cleared Level Three for forward progress with minor polish notes. Phase 3A addressed those notes by enlarging lily pads, changing Frog walking-water behavior from reset to block/hint, and adding Crocodile actor/control with amphibious movement only.
+
+The spatial contract repair after Phase 3A corrects the layout before future bridge/cargo systems are built:
+
+- the Frog lily lane now uses larger, more separated pads with reserved open-water motion corridors;
+- Lily Pad 3 has a meaningful water gap before Totem Winch Island;
+- non-start bridge islands have smaller puzzle footprints;
+- `level3CenterHub` is now a small artificial rotating-bridge pivot/turntable, not a large natural island;
+- bridge destination markers form a ring around the pivot while `level3BridgeGreenButton` remains inactive;
+- the Totem raft now drifts smoothly after reed gates open instead of teleporting between markers;
+- `level3TotemDockMarker` remains fixed as a destination/reference marker and is not the moving raft.
+
+Automated verification has passed for this repair, and screenshot artifacts are captured for later human review. The corrected screenshots are not human-approved yet.
 
 ## Design Locks
 
@@ -73,20 +85,19 @@ Correct the Phase 1 shell visual contract before mechanics: connect Start Island
 
 ### Phase 2A - Crocodile Totem Opening Puzzle
 
-Status: implemented with automated verification; human visual review pending.
+Status: implemented and visually cleared for forward progress.
 
 Build only the opening puzzle:
 
 - Frog crosses a short static lily-pad jump lane.
-- If controlled Frog enters the intended lane water while off a lily-pad surface, Frog splash-resets to the Frog Lane Start Perch.
-- Splash reset is Level Three lane-specific and does not globally change Frog water behavior.
+- If controlled Frog walks into lane water, movement is blocked with a gentle hint such as "I need to hop to the leaf."
+- Splash reset is reserved for future failed moving-lily timing, not ordinary walking.
 - Frog reaches Totem Winch Island.
 - Frog repeatedly presses `level3TotemGreenButton`.
 - Each green press winches `level3TotemRaft` one state closer to Start Island.
 - After enough presses, the raft docks at the Start Island Totem Dock.
 - Human collects the Crocodile Totem.
 - `level3CrocodileEcho` wakes.
-- Crocodile control remains out of scope until Phase 3.
 
 The static lily-pad lane is deliberate for Phase 2A. Moving lily-pad timing is deferred to Phase 2B unless review decides the static route is sufficient for this opening lesson.
 
@@ -94,9 +105,29 @@ The static lily-pad lane is deliberate for Phase 2A. Moving lily-pad timing is d
 
 Add deterministic small lily-pad motion and tune splash-reset feel if the opening route needs more timing texture after human review. Keep it lane-specific and cozy. Do not add Crocodile control, central bridge cycling, cargo, red buttons, elevators, or the final Love Letter route.
 
-### Phase 3 - Crocodile Actor
+### Phase 3A - Crocodile Actor And Water Movement
 
-Add Crocodile as a controllable Cubeling with amphibious land/water movement. Keep cargo and bridge puzzle behavior out of scope unless explicitly pulled forward.
+Status: implemented; automated verification passed; screenshots captured for human review.
+
+Add Crocodile as a controllable Cubeling with amphibious land/water movement. Crocodile appears after Human collects the Crocodile Totem, can be possessed with Shift near the Human, can move on Level Three land/water, and cannot collect Totems or Love Letters. Keep cargo, ferrying, bridge puzzle behavior, red buttons, elevators, and final Love Letter routing out of scope.
+
+### Spatial Contract Repair - Lily Lane, Pivot, And Raft Drift
+
+Status: implemented; automated verification passed; human visual review pending.
+
+Correct the spatial and movement contract before Phase 4:
+
+- Lily pads are larger, farther apart, and surrounded by enough water for future movement tracks.
+- Track start/end metadata stays over water.
+- Totem Winch Island, Elephant Island, Red Button A Island, Platform Dock Island, and the center hub/pivot are reduced to puzzle-sized footprints.
+- `level3CenterHub` has role `rotating-bridge-pivot` and should read as a small artificial turntable.
+- The future bridge contract is a small center pivot plus protruding bridge arm; actual bridge rotation remains unimplemented.
+- Red Button A Island is meaningfully distant from the pivot so the future rotating bridge matters.
+- `level3TotemRaftGate1/2/3` are simple reed blockers opened by the Totem green button.
+- `level3TotemRaft` is the moving raft object.
+- `level3TotemDockMarker` is fixed and should never animate.
+
+Deferred after this repair: moving lily timing, bridge rotation, Crocodile cargo/ferrying, red-button logic, elevators/platforms, final Love Letter route, and Level Three completion.
 
 ### Phase 4 - Central Green Button And Bridge
 
@@ -129,9 +160,11 @@ Tune readability, Crocodile idle/patrol, hints, camera framing, screenshot cover
 
 The opening puzzle should teach green repeatability without asking the player to understand the whole lake system. Frog should see the lane, hop through a tiny water crossing, reach the winch island, and press the button enough times to bring the raft home.
 
-Splash reset should feel cozy and specific, not like death or punishment. A miss means Frog pops or splashes back to the Frog Lane Start Perch, ready to try again. Do not make global Frog water behavior harsher to support this one lane.
+Walking into water should feel like a readable boundary, not a failure. Frog walking into Level Three water is blocked with a gentle hint. Splash reset should feel cozy and specific only when a future moving-lily timing miss happens; a miss means Frog pops or splashes back to the Frog Lane Start Perch, ready to try again. Do not make global Frog water behavior harsher to support this one lane.
 
 The first green button is `level3TotemGreenButton`. It is separate from `level3BridgeGreenButton`; do not share state between them.
+
+The Totem green button should feel like it opens the lake path. Each press opens the next reed gate and lets the raft drift to the next resting point. It should not feel like a magical teleport. While the raft is drifting, extra presses should not skip states.
 
 ## Dev And Editor Note
 
@@ -153,3 +186,4 @@ Important source-authored IDs:
 - `level3WeightCacheIsland`
 - `level3RedButtonBIsland`
 - `level3LoveLetterCliff`
+- `level3CrocodileCubelingActor`

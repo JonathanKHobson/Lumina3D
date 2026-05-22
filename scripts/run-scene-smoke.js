@@ -116,6 +116,11 @@ function buildInvariantChecks(state, targetLevel) {
       details: `lilyPadTiles=${(state?.levelThree?.lilyPadLane || []).map((pad) => `${pad.id}:${pad.tileX},${pad.tileY}:${pad.centerTileIsWater}`).join(",")}`
     });
     checks.push({
+      name: "level_three_lily_lane_spatial_contract",
+      pass: state?.levelThree?.lilyPadSpatialContract?.futureMotionCorridorsReserved === true,
+      details: JSON.stringify(state?.levelThree?.lilyPadSpatialContract || {})
+    });
+    checks.push({
       name: "level_three_phase_one_placeholders_present",
       pass: Array.isArray(state?.levelThree?.placeholders) &&
         ["level3StartIsland", "level3TotemGreenButton", "level3BridgeGreenButton", "level3TotemRaft", "level3CrocodileEcho", "level3LoveLetterCliff"].every((id) =>
@@ -148,6 +153,26 @@ function buildInvariantChecks(state, targetLevel) {
         Array.isArray(state?.levelThree?.redButtonPlaceholders) &&
         state.levelThree.redButtonPlaceholders.every((button) => button.visualAsset === "kaykit-platformer-button-red-placeholder"),
       details: `greenAssets=${(state?.levelThree?.greenButtons || []).map((button) => button.visualAsset).join(",")}; redAssets=${(state?.levelThree?.redButtonPlaceholders || []).map((button) => button.visualAsset).join(",")}`
+    });
+    checks.push({
+      name: "level_three_pivot_and_raft_contract",
+      pass: state?.levelThree?.bridgePlaceholders?.pivot?.role === "rotating-bridge-pivot" &&
+        state?.levelThree?.bridgePlaceholders?.pivot?.footprintTiles === 1 &&
+        state?.levelThree?.bridgePlaceholders?.cycleImplemented === false &&
+        state?.levelThree?.totemRaft?.movementStyle === "smooth-gated-drift-spatial-contract-repair" &&
+        state?.levelThree?.totemRaft?.dockMarkerFixed === true &&
+        state?.levelThree?.totemRaft?.pathContract?.avoidsLand === true &&
+        Array.isArray(state?.levelThree?.totemRaft?.gates) &&
+        state.levelThree.totemRaft.gates.length === 3,
+      details: JSON.stringify({
+        pivot: state?.levelThree?.bridgePlaceholders?.pivot || {},
+        raft: {
+          movementStyle: state?.levelThree?.totemRaft?.movementStyle,
+          dockMarkerFixed: state?.levelThree?.totemRaft?.dockMarkerFixed,
+          pathAvoidsLand: state?.levelThree?.totemRaft?.pathContract?.avoidsLand,
+          gateCount: state?.levelThree?.totemRaft?.gates?.length || 0
+        }
+      })
     });
     checks.push({
       name: "level_three_editor_marker_debug_output",

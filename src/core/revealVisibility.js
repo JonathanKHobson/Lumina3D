@@ -34,6 +34,9 @@ export function applySceneRevealVisibility({
   });
   if (actorMeshes.frog) actorMeshes.frog.visible = state.scene.id !== sceneIds.HOME && state.reveals.frog;
   if (actorMeshes.elephant) actorMeshes.elephant.visible = state.scene.id === sceneIds.LEVEL_TWO && state.levelTwo.elephantSpawned;
+  if (actorMeshes.crocodile) {
+    actorMeshes.crocodile.visible = state.scene.id === sceneIds.LEVEL_THREE && Boolean(state.levelThree.crocodileSpawned);
+  }
   if (markerMeshes.frogEcho) markerMeshes.frogEcho.visible = state.scene.id === sceneIds.TUTORIAL && state.reveals.frogEcho && !state.reveals.frog;
   if (markerMeshes.frogEchoCircle) markerMeshes.frogEchoCircle.visible = state.scene.id === sceneIds.TUTORIAL && state.reveals.frogEcho && !state.reveals.frog;
   if (markerMeshes.frogTotem) markerMeshes.frogTotem.visible = state.scene.id === sceneIds.TUTORIAL && state.reveals.frogTotem && !state.frogTotem.collected;

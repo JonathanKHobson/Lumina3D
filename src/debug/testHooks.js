@@ -22,7 +22,9 @@ export function installTestHooks({
   levelThreePoints,
   levelThreeGreenButtons = [],
   levelThreeRaftMarkers = [],
+  levelThreeRaftGates = [],
   levelThreeFrogLaneResetPoint,
+  levelThreeCrocodileSpawn,
   levelTwoRedPlatforms = [],
   levelTwoRedButtonSurfaceY,
   updateLevelTwoSurfaceState,
@@ -910,7 +912,9 @@ export function installTestHooks({
     state.cubelings.crocodile = { unlocked: false, unlockedPending: false, active: false, spawned: false, controllable: false };
     state.levelThree.frogLaneSurfaceId = null;
     state.levelThree.frogLaneResetCount = 0;
+    state.levelThree.frogWaterBlockedCount = 0;
     state.levelThree.lastFrogLaneResetAt = -Infinity;
+    state.levelThree.lastFrogWaterBlockAt = -Infinity;
     state.levelThree.totemGreenButtonPresses = 0;
     state.levelThree.openingGreenPressCount = 0;
     state.levelThree.totemGreenButtonPressed = false;
@@ -919,16 +923,32 @@ export function installTestHooks({
     state.levelThree.totemGreenButtonHeldActor = "";
     state.levelThree.totemRaftState = 0;
     state.levelThree.totemRaftDocked = false;
+    state.levelThree.totemRaftLastMovedAt = -Infinity;
+    state.levelThree.totemRaftGateState = 0;
+    state.levelThree.totemRaftDrifting = false;
+    state.levelThree.totemRaftFromState = 0;
+    state.levelThree.totemRaftTargetState = 0;
+    state.levelThree.totemRaftDriftProgress = 0;
+    state.levelThree.totemRaftOpenedGates = [];
     state.levelThree.crocodileTotemCollected = false;
     state.levelThree.crocodileUnlocked = false;
     state.levelThree.crocodileEchoAwake = false;
+    state.levelThree.crocodileSpawned = false;
     state.levelThree.crocodileControlAvailable = false;
+    state.levelThree.crocodileSurfaceId = null;
+    state.levelThree.lastCrocodileTransferPromptAt = -Infinity;
+    state.levelThree.crocodileWaterPromptShown = false;
     state.human.x = levelThreePoints?.humanStart?.x ?? state.human.x;
     state.human.z = levelThreePoints?.humanStart?.z ?? state.human.z;
     state.human.facing = { ...(levelThreePoints?.humanStart?.facing || { x: 1, z: 0, name: "east" }) };
     state.frog.x = levelThreeFrogLaneResetPoint?.x ?? levelThreePoints?.frogStart?.x ?? state.frog.x;
     state.frog.z = levelThreeFrogLaneResetPoint?.z ?? levelThreePoints?.frogStart?.z ?? state.frog.z;
     state.frog.facing = { ...(levelThreeFrogLaneResetPoint?.facing || { x: 1, z: 0, name: "east" }) };
+    if (state.crocodile && levelThreeCrocodileSpawn) {
+      state.crocodile.x = levelThreeCrocodileSpawn.x;
+      state.crocodile.z = levelThreeCrocodileSpawn.z;
+      state.crocodile.facing = { ...(levelThreeCrocodileSpawn.facing || { x: 1, z: 0, name: "east" }) };
+    }
     state.frogAi.timer = 999;
     state.frogAi.target = { x: state.frog.x, z: state.frog.z };
     input.keys.clear();
@@ -977,8 +997,8 @@ export function installTestHooks({
   windowRef.set_game_test_level_three_actor_at_totem_raft = (actorKey = "human") => {
     const marker = levelThreeRaftMarkers[Math.min(Math.max(state.levelThree.totemRaftState || 0, 0), Math.max(0, levelThreeRaftMarkers.length - 1))] || levelThreeRaftMarkers[levelThreeRaftMarkers.length - 1];
     if (!marker) return null;
-    const actor = actorKey === "frog" ? state.frog : state.human;
-    state.active = actorKey === "frog" ? "frog" : "human";
+    const actor = actorKey === "frog" ? state.frog : actorKey === "crocodile" ? state.crocodile : state.human;
+    state.active = actorKey === "frog" ? "frog" : actorKey === "crocodile" ? "crocodile" : "human";
     actor.x = marker.position.x;
     actor.z = marker.position.z;
     actor.facing = { x: 1, z: 0, name: "east" };
@@ -991,12 +1011,79 @@ export function installTestHooks({
     return JSON.parse(renderGameToText());
   };
 
+  windowRef.set_game_test_level_three_crocodile_ready = () => {
+    const ready = windowRef.set_game_test_level_three_opening_ready?.();
+    if (!ready) return null;
+    state.levelThree.totemRaftState = Math.max(0, levelThreeRaftMarkers.length - 1);
+    state.levelThree.totemRaftDocked = true;
+    state.levelThree.totemRaftGateState = state.levelThree.totemRaftState;
+    state.levelThree.totemRaftDrifting = false;
+    state.levelThree.totemRaftFromState = state.levelThree.totemRaftState;
+    state.levelThree.totemRaftTargetState = state.levelThree.totemRaftState;
+    state.levelThree.totemRaftDriftProgress = 1;
+    state.levelThree.totemRaftOpenedGates = levelThreeRaftGates.map((gate) => gate.id);
+    state.levelThree.crocodileTotemCollected = true;
+    state.levelThree.crocodileUnlocked = true;
+    state.levelThree.crocodileEchoAwake = true;
+    state.levelThree.crocodileSpawned = true;
+    state.levelThree.crocodileControlAvailable = true;
+    state.levelThree.crocodileSurfaceId = "level3CrocodileEcho";
+    state.cubelings.crocodile = {
+      unlocked: true,
+      unlockedPending: false,
+      active: false,
+      spawned: true,
+      controllable: true
+    };
+    state.active = "human";
+    state.human.x = (levelThreeCrocodileSpawn?.x ?? state.crocodile.x) - 0.95;
+    state.human.z = levelThreeCrocodileSpawn?.z ?? state.crocodile.z;
+    state.human.facing = { x: 1, z: 0, name: "east" };
+    state.crocodile.x = levelThreeCrocodileSpawn?.x ?? state.crocodile.x;
+    state.crocodile.z = levelThreeCrocodileSpawn?.z ?? state.crocodile.z;
+    state.crocodile.facing = { ...(levelThreeCrocodileSpawn?.facing || { x: 1, z: 0, name: "east" }) };
+    input.keys.clear();
+    clearSpeechQueue();
+    state.speech = { text: "", anchor: "", until: 0 };
+    state.secondarySpeech = { text: "", anchor: "", until: 0 };
+    update(1 / 60);
+    syncAll();
+    updateCamera(1);
+    updateHud();
+    return JSON.parse(renderGameToText());
+  };
+
+  windowRef.set_game_test_level_three_actor_at_love_letter = (actorKey = "human") => {
+    const actor = actorKey === "frog" ? state.frog : actorKey === "crocodile" ? state.crocodile : state.human;
+    state.active = actorKey === "frog" ? "frog" : actorKey === "crocodile" ? "crocodile" : "human";
+    actor.x = (levelThreePoints?.placeholderLoveLetter?.x ?? actor.x) - 1.4;
+    actor.z = levelThreePoints?.placeholderLoveLetter?.z ?? actor.z;
+    actor.facing = { x: 1, z: 0, name: "east" };
+    input.keys.clear();
+    clearSpeechQueue();
+    update(1 / 60);
+    syncAll();
+    updateCamera(1);
+    updateHud();
+    return JSON.parse(renderGameToText());
+  };
+
   windowRef.set_game_test_actor_position = (payload = {}) => {
-    const actor = payload.actor === "frog" ? state.frog : payload.actor === "elephant" ? state.elephant : state.human;
+    const actor = payload.actor === "frog"
+      ? state.frog
+      : payload.actor === "elephant"
+        ? state.elephant
+        : payload.actor === "crocodile"
+          ? state.crocodile
+          : state.human;
     if (Number.isFinite(payload.x)) actor.x = Number(payload.x);
     if (Number.isFinite(payload.z)) actor.z = Number(payload.z);
     if (payload.facing && typeof payload.facing === "object") actor.facing = directionName(payload.facing);
-    if (payload.active === "frog" || payload.active === "human" || payload.active === "elephant") state.active = payload.active;
+    if (payload.active === "frog" || payload.active === "human" || payload.active === "elephant" || payload.active === "crocodile") {
+      state.active = payload.active;
+      if (state.cubelings.elephant) state.cubelings.elephant.active = payload.active === "elephant";
+      if (state.cubelings.crocodile) state.cubelings.crocodile.active = payload.active === "crocodile";
+    }
     if (state.scene.id === sceneIds.LEVEL_TWO && payload.actor === "frog") {
       state.levelTwo.frogSurfaceId = payload.frogSurfaceId || null;
     }
@@ -1005,6 +1092,9 @@ export function installTestHooks({
     }
     if (state.scene.id === sceneIds.LEVEL_TWO && payload.actor === "elephant") {
       state.levelTwo.elephantSurfaceId = payload.elephantSurfaceId || state.levelTwo.elephantSurfaceId || null;
+    }
+    if (state.scene.id === sceneIds.LEVEL_THREE && payload.actor === "crocodile") {
+      state.levelThree.crocodileSurfaceId = payload.crocodileSurfaceId || state.levelThree.crocodileSurfaceId || null;
     }
     input.keys.clear();
     updateLevelTwoSurfaceState();

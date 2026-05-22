@@ -12,6 +12,9 @@ import {
 } from "../state/gameState.js";
 import {
   LEVEL_THREE_CINEMATIC_SPEED,
+  LEVEL_THREE_CROCODILE_RADIUS,
+  LEVEL_THREE_CROCODILE_SPAWN,
+  LEVEL_THREE_CROCODILE_SPEED,
   LEVEL_THREE_POINTS,
   LEVEL_THREE_TITLE_SECONDS
 } from "../levels/levelThree.js";
@@ -49,6 +52,7 @@ export function startLevelThreeScene(context, options = {}) {
   state.targetCameraYaw = 0;
   state.human = createActorState(LEVEL_THREE_POINTS.entry, 0.45, 4.2);
   state.frog = createActorState(LEVEL_THREE_POINTS.frogStart, 0.53, 3.45);
+  state.crocodile = createActorState(LEVEL_THREE_CROCODILE_SPAWN, LEVEL_THREE_CROCODILE_RADIUS, LEVEL_THREE_CROCODILE_SPEED);
   state.unlocks.frogCubeling = true;
   saveCubelingUnlocks();
   state.cubelings = {

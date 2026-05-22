@@ -81,6 +81,17 @@ Use `progress.md` for session history, `backlog.md` for deferred work, and `docs
 - Verification: scene smokes assert Level Two never renders `Level One` as title text and that Level One/Level Two title cards clear after the title window.
 - Follow-up: keep player control disabled until arrival completes in every new scene-flow shell.
 
+## 2026-05-22 - Level Three Frog Water Reset Overreach
+
+- Status: fixed in Phase 3A; prevention rule active.
+- Scene: Level Three.
+- Symptom/risk: controlled Frog walking into water in the opening lane triggered the cozy splash reset. That made normal movement mistakes feel like a failed jump/timing miss and weakened the rule that water is a boundary unless Frog intentionally hops to a valid leaf.
+- Root cause: Phase 2A used the lane water collider as both a movement blocker and a future failed-lily timing reset trigger.
+- Fix: ordinary Frog walking into Level Three water now blocks movement and shows a gentle hint. `resetLevelThreeFrogLane()` remains available for future intentional failed moving-lily timing, but walking-water collision no longer calls it. Level Three lily pads were also enlarged so the Frog visibly fits on the landing surface.
+- Prevention rule: separate blocked movement from failed timing. Walking into water should block; missed moving-lily timing may reset only inside a specific authored timing challenge.
+- Verification: Phase 3A fixture coverage passed with `npm run tools:run-fixture -- level_three level_three_crocodile_actor --pretty` and `npm run tools:run-fixture -- level_three level_three_frog_lane_route --pretty`; Frog walking-water blocking does not increment `frogLaneResetCount`, and the manual lily-pad route still works.
+- Follow-up: if Phase 2B adds moving lily pads, wire splash reset to explicit timing-miss detection rather than generic water collision.
+
 ## 2026-05-21 - Level Three Placeholder Identity Drift
 
 - Status: fixed for Phase 1.5; prevention rule active.

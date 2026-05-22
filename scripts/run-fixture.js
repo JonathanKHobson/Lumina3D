@@ -6,6 +6,7 @@ import {
   waitForState,
   setPaused,
   advance,
+  tap,
   hold,
   jumpToLevel
 } from "./lib/cli-utils.js";
@@ -213,9 +214,16 @@ async function runLevelThreeStart(page) {
     details: `editorSelectableIds=${(state.levelThree?.editorSelectableIds || []).join(",")}`
   });
   checks.push({
-    name: "level_three_authoring_contract_shell_only",
-    ok: String(state.levelThree?.authoringContract || "").includes("Phase 2A opening Totem puzzle only"),
+    name: "level_three_authoring_contract_spatial_repair",
+    ok: String(state.levelThree?.authoringContract || "").includes("Spatial contract repair") &&
+      state.levelThree?.spatialContractRepairState?.implemented === true,
     details: state.levelThree?.authoringContract || ""
+  });
+  checks.push({
+    name: "level_three_lily_pads_enlarged_for_frog",
+    ok: Array.isArray(state.levelThree?.lilyPadLane) &&
+      state.levelThree.lilyPadLane.every((pad) => Number(pad.radius || 0) >= 0.9),
+    details: `radii=${(state.levelThree?.lilyPadLane || []).map((pad) => `${pad.id}:${pad.radius}`).join(",")}`
   });
   return { checks, state };
 }
@@ -245,12 +253,30 @@ async function runLevelThreeCrocodileTotemOpening(page) {
   let state = readyState;
   for (let index = 1; index <= 3; index += 1) {
     state = await page.evaluate(() => window.set_game_test_level_three_frog_at_totem_button?.());
-    const raftState = state?.levelThree?.phase2AState?.totemRaftState;
+    const driftState = state?.levelThree?.phase2AState || {};
     checks.push({
-      name: `totem_green_press_${index}_advances_raft`,
-      ok: state?.levelThree?.phase2AState?.totemGreenButtonPresses === index &&
-        raftState === Math.min(index, 3),
-      details: `presses=${state?.levelThree?.phase2AState?.totemGreenButtonPresses}, raftState=${raftState}`
+      name: `totem_green_press_${index}_starts_raft_drift`,
+      ok: driftState.totemGreenButtonPresses === index &&
+        driftState.totemRaftState === index - 1 &&
+        driftState.totemRaftTargetState === index &&
+        driftState.totemRaftDrifting === true,
+      details: `presses=${driftState.totemGreenButtonPresses}, raftState=${driftState.totemRaftState}, target=${driftState.totemRaftTargetState}, drifting=${Boolean(driftState.totemRaftDrifting)}`
+    });
+    const driftPressState = await page.evaluate(() => window.set_game_test_level_three_frog_at_totem_button?.());
+    checks.push({
+      name: `totem_green_press_${index}_ignored_while_drifting`,
+      ok: driftPressState?.levelThree?.phase2AState?.totemGreenButtonPresses === index &&
+        driftPressState?.levelThree?.phase2AState?.totemRaftTargetState === index,
+      details: `presses=${driftPressState?.levelThree?.phase2AState?.totemGreenButtonPresses}, target=${driftPressState?.levelThree?.phase2AState?.totemRaftTargetState}`
+    });
+    await advance(page, 1900);
+    state = await readState(page);
+    const landedState = state?.levelThree?.phase2AState || {};
+    checks.push({
+      name: `totem_raft_drift_${index}_reaches_resting_marker`,
+      ok: landedState.totemRaftState === Math.min(index, 3) &&
+        landedState.totemRaftDrifting === false,
+      details: `raftState=${landedState.totemRaftState}, drifting=${Boolean(landedState.totemRaftDrifting)}, progress=${landedState.totemRaftDriftProgress}`
     });
     if (index < 3) {
       state = await page.evaluate(() => window.set_game_test_level_three_frog_off_totem_button?.());
@@ -285,16 +311,394 @@ async function runLevelThreeCrocodileTotemOpening(page) {
     details: `collected=${Boolean(humanCollectState?.levelThree?.phase2AState?.crocodileTotemCollected)}, unlocked=${Boolean(humanCollectState?.levelThree?.phase2AState?.crocodileUnlocked)}`
   });
   checks.push({
-    name: "crocodile_echo_wakes_without_control",
+    name: "crocodile_echo_wakes_and_control_becomes_available",
     ok: humanCollectState?.levelThree?.phase2AState?.crocodileEchoAwake === true &&
-      humanCollectState?.levelThree?.phase2AState?.crocodileControlAvailable === false &&
-      humanCollectState?.cubelings?.crocodile?.controllable === false,
+      humanCollectState?.levelThree?.phase2AState?.crocodileControlAvailable === true &&
+      humanCollectState?.levelThree?.phase2AState?.crocodileSpawned === true &&
+      humanCollectState?.cubelings?.crocodile?.controllable === true,
     details: JSON.stringify({
       phase2A: humanCollectState?.levelThree?.phase2AState || {},
       crocodile: humanCollectState?.cubelings?.crocodile || {}
     })
   });
   return { checks, state: humanCollectState };
+}
+
+async function runLevelThreeSpatialContract(page) {
+  const checks = [];
+  await setPaused(page, true);
+  let state = await page.evaluate(() => {
+    if (typeof window.set_game_test_level_three_opening_ready !== "function") return null;
+    return window.set_game_test_level_three_opening_ready();
+  });
+  checks.push({
+    name: "seeded_level_three_spatial_contract",
+    ok: state?.scene?.id === "level_three",
+    details: `scene=${state?.scene?.id || "missing"}`
+  });
+
+  const lilyContract = state?.levelThree?.lilyPadSpatialContract || {};
+  checks.push({
+    name: "lily_pad_centers_and_tracks_are_over_water",
+    ok: lilyContract.allCentersOnWater === true && lilyContract.allTrackEndpointsOnWater === true,
+    details: JSON.stringify(lilyContract.trackEndpointChecks || [])
+  });
+  checks.push({
+    name: "lily_pad_spacing_reserves_future_motion_corridors",
+    ok: lilyContract.futureMotionCorridorsReserved === true &&
+      Number(lilyContract.nearestPadEdgeGap || 0) >= Number(lilyContract.minPadEdgeGap || 0),
+    details: JSON.stringify({
+      nearestPadEdgeGap: lilyContract.nearestPadEdgeGap,
+      minPadEdgeGap: lilyContract.minPadEdgeGap,
+      padEdgeGaps: lilyContract.padEdgeGaps
+    })
+  });
+  checks.push({
+    name: "lily_pad_three_has_gap_to_totem_winch_island",
+    ok: Number(lilyContract.pad3ToTotemWinchIslandGap || 0) >= Number(lilyContract.minPadToIslandGap || 0),
+    details: `gap=${lilyContract.pad3ToTotemWinchIslandGap}, min=${lilyContract.minPadToIslandGap}`
+  });
+
+  const islands = state?.levelThree?.islands || [];
+  const islandCount = (id) => islands.find((island) => island.id === id)?.tileCount || 999;
+  checks.push({
+    name: "non_start_islands_have_small_puzzle_footprints",
+    ok: islandCount("level3TotemWinchIsland") <= 5 &&
+      islandCount("level3CenterHub") <= 1 &&
+      islandCount("level3ElephantIsland") <= 5 &&
+      islandCount("level3RedButtonAIsland") <= 5 &&
+      islandCount("level3PlatformDockIsland") <= 5,
+    details: JSON.stringify({
+      totemWinch: islandCount("level3TotemWinchIsland"),
+      centerHub: islandCount("level3CenterHub"),
+      elephant: islandCount("level3ElephantIsland"),
+      redA: islandCount("level3RedButtonAIsland"),
+      platformDock: islandCount("level3PlatformDockIsland")
+    })
+  });
+
+  const bridge = state?.levelThree?.bridgePlaceholders || {};
+  checks.push({
+    name: "center_hub_is_small_artificial_pivot",
+    ok: bridge.pivot?.role === "rotating-bridge-pivot" &&
+      bridge.pivot?.artificial === true &&
+      Number(bridge.pivot?.footprintTiles || 0) === 1 &&
+      bridge.cycleImplemented === false,
+    details: JSON.stringify(bridge.pivot || {})
+  });
+  checks.push({
+    name: "bridge_destinations_form_ring_and_red_a_is_distant",
+    ok: Array.isArray(bridge.destinationRing) &&
+      bridge.destinationRing.length >= 4 &&
+      bridge.redButtonAMeaningfullyDistant === true,
+    details: JSON.stringify({
+      redButtonADistanceFromPivot: bridge.redButtonADistanceFromPivot,
+      destinationRing: bridge.destinationRing
+    })
+  });
+
+  const raftBefore = state?.levelThree?.totemRaft || {};
+  state = await page.evaluate(() => window.set_game_test_level_three_frog_at_totem_button?.());
+  const raftStarted = state?.levelThree?.totemRaft || {};
+  await advance(page, 450);
+  const raftMidState = await readState(page);
+  const raftMid = raftMidState?.levelThree?.totemRaft || {};
+  checks.push({
+    name: "raft_drift_changes_position_over_multiple_frames",
+    ok: raftStarted.drifting === true &&
+      raftMid.drifting === true &&
+      raftMid.stateIndex === raftBefore.stateIndex &&
+      (Number(raftMid.x) !== Number(raftStarted.x) || Number(raftMid.z) !== Number(raftStarted.z)),
+    details: JSON.stringify({
+      before: { x: raftBefore.x, z: raftBefore.z, state: raftBefore.stateIndex },
+      started: { x: raftStarted.x, z: raftStarted.z, state: raftStarted.stateIndex, progress: raftStarted.driftProgress },
+      mid: { x: raftMid.x, z: raftMid.z, state: raftMid.stateIndex, progress: raftMid.driftProgress }
+    })
+  });
+  const repeatDuringDrift = await page.evaluate(() => window.set_game_test_level_three_frog_at_totem_button?.());
+  checks.push({
+    name: "button_press_while_raft_drifts_does_not_skip_state",
+    ok: repeatDuringDrift?.levelThree?.phase2AState?.totemGreenButtonPresses === 1 &&
+      repeatDuringDrift?.levelThree?.phase2AState?.totemRaftTargetState === 1,
+    details: JSON.stringify(repeatDuringDrift?.levelThree?.phase2AState || {})
+  });
+  await advance(page, 1600);
+  state = await readState(page);
+  checks.push({
+    name: "raft_reaches_first_resting_marker_after_drift",
+    ok: state?.levelThree?.phase2AState?.totemRaftState === 1 &&
+      state?.levelThree?.phase2AState?.totemRaftDrifting === false,
+    details: JSON.stringify(state?.levelThree?.phase2AState || {})
+  });
+
+  for (let index = 2; index <= 3; index += 1) {
+    await page.evaluate(() => window.set_game_test_level_three_frog_off_totem_button?.());
+    state = await page.evaluate(() => window.set_game_test_level_three_frog_at_totem_button?.());
+    await advance(page, 1900);
+    state = await readState(page);
+    checks.push({
+      name: `raft_drift_gate_${index}_reaches_expected_state`,
+      ok: state?.levelThree?.phase2AState?.totemRaftState === index &&
+        state?.levelThree?.phase2AState?.totemRaftDrifting === false,
+      details: `raftState=${state?.levelThree?.phase2AState?.totemRaftState}, docked=${Boolean(state?.levelThree?.phase2AState?.totemRaftDocked)}`
+    });
+  }
+
+  checks.push({
+    name: "dock_marker_remains_fixed_and_distinct_from_moving_raft",
+    ok: state?.levelThree?.totemRaft?.dockMarkerFixed === true &&
+      state?.levelThree?.totemRaft?.fixedDockMarkerId === "level3TotemDockMarker" &&
+      state?.levelThree?.totemRaft?.movingObjectId === "level3TotemRaft",
+    details: JSON.stringify({
+      dockMarkerFixed: state?.levelThree?.totemRaft?.dockMarkerFixed,
+      fixedDockMarkerId: state?.levelThree?.totemRaft?.fixedDockMarkerId,
+      movingObjectId: state?.levelThree?.totemRaft?.movingObjectId
+    })
+  });
+  checks.push({
+    name: "raft_path_stays_in_water_until_fixed_dock",
+    ok: state?.levelThree?.totemRaft?.pathContract?.avoidsLand === true &&
+      state?.levelThree?.totemRaft?.pathContract?.dockMarkerInsideLand === false,
+    details: JSON.stringify(state?.levelThree?.totemRaft?.pathContract || {})
+  });
+
+  const frogTouchState = await page.evaluate(() => window.set_game_test_level_three_actor_at_totem_raft?.("frog"));
+  const humanCollectState = await page.evaluate(() => window.set_game_test_level_three_actor_at_totem_raft?.("human"));
+  checks.push({
+    name: "phase2a_totem_collection_still_human_only",
+    ok: frogTouchState?.levelThree?.phase2AState?.crocodileTotemCollected === false &&
+      humanCollectState?.levelThree?.phase2AState?.crocodileTotemCollected === true &&
+      humanCollectState?.levelThree?.phase2AState?.crocodileEchoAwake === true,
+    details: JSON.stringify({
+      frogCollected: frogTouchState?.levelThree?.phase2AState?.crocodileTotemCollected,
+      humanCollected: humanCollectState?.levelThree?.phase2AState?.crocodileTotemCollected,
+      echoAwake: humanCollectState?.levelThree?.phase2AState?.crocodileEchoAwake
+    })
+  });
+
+  return { checks, state: humanCollectState };
+}
+
+async function runLevelThreeFrogLaneRoute(page) {
+  const checks = [];
+  await setPaused(page, true);
+  const readyState = await page.evaluate(() => {
+    if (typeof window.set_game_test_level_three_opening_ready !== "function") return null;
+    return window.set_game_test_level_three_opening_ready();
+  });
+  checks.push({
+    name: "seeded_level_three_frog_lane",
+    ok: readyState?.scene?.id === "level_three" && readyState?.activeActor === "frog",
+    details: `scene=${readyState?.scene?.id || "missing"}, active=${readyState?.activeActor || "missing"}`
+  });
+
+  const expectedSurfaces = [
+    "level3MovingLilyPad1",
+    "level3MovingLilyPad2",
+    "level3MovingLilyPad3",
+    ""
+  ];
+  let state = readyState;
+  for (let index = 0; index < expectedSurfaces.length; index += 1) {
+    await tap(page, "Space", 70, 35);
+    await advance(page, 700);
+    state = await readState(page);
+    const expected = expectedSurfaces[index];
+    const actual = state?.levelThree?.phase2AState?.frogLaneSurfaceId || "";
+    checks.push({
+      name: `frog_lane_manual_jump_${index + 1}`,
+      ok: actual === expected,
+      details: `expectedSurface=${expected || "totem-winch-island"}, actualSurface=${actual || "totem-winch-island"}, frog=(${state?.frog?.x},${state?.frog?.z})`
+    });
+  }
+
+  checks.push({
+    name: "frog_lane_ends_on_totem_winch_island",
+    ok: Number(state?.levelThree?.totemGreenButtonReachability?.frogDistance) <= 3.8,
+    details: `frogDistanceToButton=${state?.levelThree?.totemGreenButtonReachability?.frogDistance}; Frog lands on the island edge and can walk to the button.`
+  });
+  checks.push({
+    name: "frog_lane_route_does_not_unlock_crocodile",
+    ok: state?.levelThree?.phase2AState?.crocodileUnlocked === false &&
+      state?.cubelings?.crocodile?.controllable === false,
+    details: JSON.stringify({
+      phase2A: state?.levelThree?.phase2AState || {},
+      crocodile: state?.cubelings?.crocodile || {}
+    })
+  });
+
+  return { checks, state };
+}
+
+async function runLevelThreeCrocodileActor(page) {
+  const checks = [];
+  await setPaused(page, true);
+  const readyState = await page.evaluate(() => {
+    if (typeof window.set_game_test_level_three_crocodile_ready !== "function") return null;
+    return window.set_game_test_level_three_crocodile_ready();
+  });
+  checks.push({
+    name: "seeded_level_three_crocodile_ready",
+    ok: readyState?.scene?.id === "level_three" &&
+      readyState?.levelThree?.phase3AState?.crocodileSpawned === true &&
+      readyState?.cubelings?.crocodile?.controllable === true,
+    details: JSON.stringify({
+      scene: readyState?.scene?.id || "",
+      phase3A: readyState?.levelThree?.phase3AState || {},
+      crocodile: readyState?.cubelings?.crocodile || {}
+    })
+  });
+
+  await tap(page, "Shift", 80, 60);
+  let state = await readState(page);
+  checks.push({
+    name: "human_transfers_into_crocodile",
+    ok: state?.activeActor === "crocodile" &&
+      state?.levelThree?.crocodileCubeling?.active === true,
+    details: `active=${state?.activeActor || ""}, crocodileActive=${Boolean(state?.levelThree?.crocodileCubeling?.active)}`
+  });
+
+  const laneStart = state?.levelThreePoints ? state.levelThreePoints : null;
+  const frogLaneReset = state?.levelThreeFrogLaneResetPoint || null;
+  const startX = frogLaneReset?.x ?? -13;
+  const startZ = frogLaneReset?.z ?? -7;
+  await page.evaluate(({ x, z }) => window.set_game_test_actor_position?.({
+    actor: "human",
+    x: x - 3.8,
+    z: z + 2.6
+  }), { x: startX, z: startZ });
+  await page.evaluate(({ x, z }) => window.set_game_test_actor_position?.({
+    actor: "frog",
+    x: x - 2.2,
+    z: z - 2.2
+  }), { x: startX, z: startZ });
+  state = await page.evaluate(({ x, z }) => window.set_game_test_actor_position?.({
+    actor: "crocodile",
+    active: "crocodile",
+    x,
+    z,
+    crocodileSurfaceId: "level3IslandLand",
+    facing: { x: 1, z: 0 }
+  }), { x: startX, z: startZ });
+  const crocodileLandX = Number(state?.crocodile?.x || startX);
+  await hold(page, "KeyD", 1650, 180);
+  const crocodileWaterState = await readState(page);
+  checks.push({
+    name: "crocodile_moves_from_land_into_water",
+    ok: crocodileWaterState?.activeActor === "crocodile" &&
+      crocodileWaterState?.levelThree?.crocodileCubeling?.surfaceId === "level3LakeWater" &&
+      Number(crocodileWaterState?.crocodile?.x || 0) > crocodileLandX + 1.2,
+    details: `surface=${crocodileWaterState?.levelThree?.crocodileCubeling?.surfaceId || ""}, beforeX=${crocodileLandX}, afterX=${crocodileWaterState?.crocodile?.x}`
+  });
+
+  state = await page.evaluate(() => window.set_game_test_actor_position?.({
+    actor: "crocodile",
+    active: "crocodile",
+    x: -15,
+    z: -7,
+    crocodileSurfaceId: "level3LakeWater",
+    facing: { x: 0, z: 1 }
+  }));
+  const crocodileWaterZ = Number(state?.crocodile?.z || -7);
+  await hold(page, "KeyS", 2300, 180);
+  const crocodileLandState = await readState(page);
+  checks.push({
+    name: "crocodile_moves_from_water_back_to_land",
+    ok: crocodileLandState?.activeActor === "crocodile" &&
+      crocodileLandState?.levelThree?.crocodileCubeling?.surfaceId === "level3IslandLand" &&
+      Number(crocodileLandState?.crocodile?.z || 0) > crocodileWaterZ + 1.2,
+    details: `surface=${crocodileLandState?.levelThree?.crocodileCubeling?.surfaceId || ""}, waterZ=${crocodileWaterZ}, landZ=${crocodileLandState?.crocodile?.z}`
+  });
+
+  await page.evaluate(({ x, z }) => window.set_game_test_actor_position?.({
+    actor: "crocodile",
+    x: x - 4.2,
+    z: z + 2.8,
+    crocodileSurfaceId: "level3IslandLand"
+  }), { x: startX, z: startZ });
+  state = await page.evaluate(({ x, z }) => window.set_game_test_actor_position?.({
+    actor: "human",
+    active: "human",
+    x,
+    z,
+    facing: { x: 1, z: 0 }
+  }), { x: startX, z: startZ });
+  const humanBeforeX = Number(state?.human?.x || startX);
+  await hold(page, "KeyD", 900, 120);
+  const humanBlockedState = await readState(page);
+  checks.push({
+    name: "human_still_blocked_by_level_three_water",
+    ok: Number(humanBlockedState?.human?.x || 0) < humanBeforeX + 0.9 &&
+      humanBlockedState?.activeActor === "human",
+    details: `beforeX=${humanBeforeX}, afterX=${humanBlockedState?.human?.x}, prompt=${humanBlockedState?.speech?.text || ""}`
+  });
+
+  await page.evaluate(({ x, z }) => window.set_game_test_actor_position?.({
+    actor: "human",
+    x: x - 3.8,
+    z: z + 2.6
+  }), { x: startX, z: startZ });
+  state = await page.evaluate(({ x, z }) => window.set_game_test_actor_position?.({
+    actor: "frog",
+    active: "frog",
+    x,
+    z,
+    facing: { x: 1, z: 0 }
+  }), { x: startX, z: startZ });
+  const frogBeforeX = Number(state?.frog?.x || startX);
+  const resetCountBefore = Number(state?.levelThree?.phase2AState?.frogLaneResetCount || 0);
+  const blockCountBefore = Number(state?.levelThree?.phase2AState?.frogWaterBlockedCount || 0);
+  await hold(page, "KeyD", 900, 120);
+  const frogBlockedState = await readState(page);
+  checks.push({
+    name: "frog_walks_into_water_blocked_without_reset",
+    ok: Number(frogBlockedState?.frog?.x || 0) < frogBeforeX + 0.9 &&
+      Number(frogBlockedState?.levelThree?.phase2AState?.frogLaneResetCount || 0) === resetCountBefore &&
+      Number(frogBlockedState?.levelThree?.phase2AState?.frogWaterBlockedCount || 0) > blockCountBefore,
+    details: `beforeX=${frogBeforeX}, afterX=${frogBlockedState?.frog?.x}, resetBefore=${resetCountBefore}, resetAfter=${frogBlockedState?.levelThree?.phase2AState?.frogLaneResetCount}, blockBefore=${blockCountBefore}, blockAfter=${frogBlockedState?.levelThree?.phase2AState?.frogWaterBlockedCount}`
+  });
+
+  const loveLetterState = await page.evaluate(() => window.set_game_test_level_three_actor_at_love_letter?.("crocodile"));
+  checks.push({
+    name: "crocodile_cannot_collect_love_letter_placeholder",
+    ok: loveLetterState?.activeActor === "crocodile" &&
+      loveLetterState?.levelThree?.complete === false &&
+      loveLetterState?.levelThree?.placeholderLoveLetterCollectable === false &&
+      loveLetterState?.reward?.collected === false,
+    details: `active=${loveLetterState?.activeActor || ""}, complete=${Boolean(loveLetterState?.levelThree?.complete)}, collected=${Boolean(loveLetterState?.reward?.collected)}`
+  });
+
+  checks.push({
+    name: "bridge_green_button_remains_inactive",
+    ok: loveLetterState?.levelThree?.greenButtons?.some((button) =>
+      button.id === "level3BridgeGreenButton" &&
+      button.behaviorImplemented === false &&
+      button.linkedMechanismActive === false &&
+      button.activeForCrocodileThisSlice === false
+    ),
+    details: JSON.stringify((loveLetterState?.levelThree?.greenButtons || []).find((button) => button.id === "level3BridgeGreenButton") || {})
+  });
+
+  const routeReadyState = await page.evaluate(() => window.set_game_test_level_three_opening_ready?.());
+  let routeState = routeReadyState;
+  const expectedSurfaces = ["level3MovingLilyPad1", "level3MovingLilyPad2", "level3MovingLilyPad3", ""];
+  const routeResults = [];
+  for (const expected of expectedSurfaces) {
+    await tap(page, "Space", 70, 35);
+    await advance(page, 700);
+    routeState = await readState(page);
+    routeResults.push({
+      expected,
+      actual: routeState?.levelThree?.phase2AState?.frogLaneSurfaceId || ""
+    });
+  }
+  checks.push({
+    name: "frog_lily_pad_route_still_sequences_manually",
+    ok: routeResults.every((result) => result.actual === result.expected),
+    details: JSON.stringify(routeResults)
+  });
+
+  return { checks, state: routeState };
 }
 
 async function runLevelTwoLoveLetterReady(page) {
@@ -833,7 +1237,10 @@ const IMPLEMENTED_FIXTURES = {
   level_two_red_b_route: runLevelTwoRedBRoute,
   level_two_unpossessed_frog_blue_button_activation: runLevelTwoUnpossessedFrogBlueButtonActivation,
   level_three_start: runLevelThreeStart,
-  level_three_crocodile_totem_opening: runLevelThreeCrocodileTotemOpening
+  level_three_crocodile_totem_opening: runLevelThreeCrocodileTotemOpening,
+  level_three_frog_lane_route: runLevelThreeFrogLaneRoute,
+  level_three_crocodile_actor: runLevelThreeCrocodileActor,
+  level_three_spatial_contract: runLevelThreeSpatialContract
 };
 
 async function run() {

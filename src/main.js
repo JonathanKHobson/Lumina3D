@@ -199,12 +199,18 @@ import {
 import {
   LEVEL_THREE_ANCHOR_STONES,
   LEVEL_THREE_BOUNDS,
+  LEVEL_THREE_BRIDGE_PIVOT,
+  LEVEL_THREE_BRIDGE_STATE_METADATA,
   LEVEL_THREE_BRIDGE_DESTINATION_MARKERS,
   LEVEL_THREE_CROCODILE_ECHO,
+  LEVEL_THREE_CROCODILE_RADIUS,
+  LEVEL_THREE_CROCODILE_SPAWN,
+  LEVEL_THREE_CROCODILE_SPEED,
   LEVEL_THREE_FROG_LANE_JUMPS,
   LEVEL_THREE_FROG_LANE_RESET_COOLDOWN,
   LEVEL_THREE_FROG_LANE_RESET_POINT,
   LEVEL_THREE_FROG_LANE_WATER_RESET_ZONE,
+  LEVEL_THREE_FROG_WATER_BLOCK_COOLDOWN,
   LEVEL_THREE_FROG_LILY_PAD_SURFACE_PADDING,
   LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS,
   LEVEL_THREE_HEIGHT,
@@ -212,6 +218,8 @@ import {
   LEVEL_THREE_ISLANDS,
   LEVEL_THREE_LAND_TILES,
   LEVEL_THREE_LILY_PAD_PLACEHOLDERS,
+  LEVEL_THREE_LILY_PAD_MIN_EDGE_GAP,
+  LEVEL_THREE_LILY_PAD_MIN_ISLAND_GAP,
   LEVEL_THREE_MAP_SHAPE,
   LEVEL_THREE_PATH_TILES,
   LEVEL_THREE_PLACEHOLDER_LOVE_LETTER_Y,
@@ -222,6 +230,8 @@ import {
   LEVEL_THREE_RESERVED_ZONES,
   LEVEL_THREE_RESET_PERCH_PLACEHOLDERS,
   LEVEL_THREE_START_EDGE_CONNECTION_TILES,
+  LEVEL_THREE_TOTEM_RAFT_DRIFT_SECONDS,
+  LEVEL_THREE_TOTEM_RAFT_GATES,
   LEVEL_THREE_TOTEM_COLLECTION_RADIUS,
   LEVEL_THREE_TOTEM_GREEN_BUTTON_RADIUS,
   LEVEL_THREE_TOTEM_RAFT,
@@ -391,6 +401,7 @@ const state = {
     ...LEVEL_TWO_POINTS.elephantEcho,
     facing: { x: 0, z: 1, name: "south" }
   }, LEVEL_TWO_ELEPHANT_RADIUS, LEVEL_TWO_ELEPHANT_SPEED),
+  crocodile: createActorState(LEVEL_THREE_CROCODILE_SPAWN, LEVEL_THREE_CROCODILE_RADIUS, LEVEL_THREE_CROCODILE_SPEED),
   unlocks: loadCubelingUnlocks(),
   cubelings: {
     frog: { unlocked: false, unlockedThisTutorial: false },
@@ -627,6 +638,7 @@ const levelTwoInteractiveMeshes = {
 const levelThreeInteractiveMeshes = {
   greenButtons: {},
   greenButtonTops: {},
+  totemRaftGates: {},
   totemRaft: null,
   crocodileEcho: null
 };
@@ -634,7 +646,7 @@ const sceneObjectColliders = [];
 const barrierMeshes = new Map();
 const barrierEndCapMeshes = [];
 const barrierColliders = [];
-const actorMeshes = { human: null, frog: null, elephant: null };
+const actorMeshes = { human: null, frog: null, elephant: null, crocodile: null };
 const markerMeshes = {
   active: null,
   frogEcho: null,
@@ -928,7 +940,7 @@ function handleKeyDown(event) {
 function getCurrentEditableSceneMeshes() {
   if (state.scene.id === SCENES.TUTORIAL) {
     return {
-      actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant },
+      actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant, crocodile: actorMeshes.crocodile },
       markers: [
         markerMeshes.frogEcho,
         markerMeshes.frogTotem,
@@ -940,11 +952,11 @@ function getCurrentEditableSceneMeshes() {
     };
   }
   if (state.scene.id === SCENES.HOME) {
-    return { actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant }, markers: [markerMeshes.frogEcho, markerMeshes.frogTotem], arrays: [homeMeshes] };
+    return { actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant, crocodile: actorMeshes.crocodile }, markers: [markerMeshes.frogEcho, markerMeshes.frogTotem], arrays: [homeMeshes] };
   }
   if (state.scene.id === SCENES.LEVEL_ONE) {
     return {
-      actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant },
+      actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant, crocodile: actorMeshes.crocodile },
       markers: [
         markerMeshes.frogEcho,
         markerMeshes.frogTotem,
@@ -963,7 +975,7 @@ function getCurrentEditableSceneMeshes() {
   }
   if (state.scene.id === SCENES.LEVEL_TWO) {
     return {
-      actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant },
+      actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant, crocodile: actorMeshes.crocodile },
       markers: [
         markerMeshes.frogEcho,
         markerMeshes.frogTotem,
@@ -974,8 +986,8 @@ function getCurrentEditableSceneMeshes() {
     };
   }
   return {
-    actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant },
-    markers: [markerMeshes.frogEcho, markerMeshes.frogTotem],
+    actorMeshes: { human: actorMeshes.human, frog: actorMeshes.frog, elephant: actorMeshes.elephant, crocodile: actorMeshes.crocodile },
+    markers: [markerMeshes.frogEcho, markerMeshes.frogTotem, levelThreeInteractiveMeshes.crocodileEcho],
     arrays: [levelThreeMeshes, levelThreeGoalMeshes]
   };
 }
@@ -2012,6 +2024,20 @@ function updateActiveMovement(dt) {
   if (moved <= 0.001) return;
 
   if (state.active === "frog") state.frogMoveHop += dt * 10.5;
+  if (
+    state.scene.id === SCENES.LEVEL_THREE &&
+    state.active === "crocodile" &&
+    levelThreeActorIntersectsWater(state.crocodile)
+  ) {
+    state.levelThree.crocodileSurfaceId = "level3LakeWater";
+    if (!state.levelThree.crocodileWaterPromptShown) {
+      state.levelThree.crocodileWaterPromptShown = true;
+      showPrompt("Crocodile feels at home in the lake.", 1.9);
+      showSpeech("crocodile", "Crocodile feels at home in the lake.", 1.8);
+    }
+  } else if (state.scene.id === SCENES.LEVEL_THREE && state.active === "crocodile") {
+    state.levelThree.crocodileSurfaceId = "level3IslandLand";
+  }
 
   if (state.scene.id === SCENES.TUTORIAL && state.active === "frog" && currentStepId() === "frog_move") {
     state.frogMoveProgress += moved;
@@ -2200,7 +2226,7 @@ function updateInteractions(dt = 0) {
     return;
   }
   if (state.scene.id === SCENES.LEVEL_THREE) {
-    updateLevelThreeInteractions();
+    updateLevelThreeInteractions(dt);
     return;
   }
   if (state.active === "human" && state.reveals.frogEcho && !state.reveals.frog && distance2D(state.human, START.frog) <= FROG_ECHO_RADIUS) {
@@ -2269,7 +2295,8 @@ function updateInteractions(dt = 0) {
   }
 }
 
-function updateLevelThreeInteractions() {
+function updateLevelThreeInteractions(dt = 0) {
+  updateLevelThreeTotemRaftDrift(dt);
   updateLevelThreeTotemGreenButton();
   updateLevelThreeCrocodileTotemCollection();
   updateLevelThreeLoveLetterPlaceholder();
@@ -2297,25 +2324,63 @@ function updateLevelThreeTotemGreenButton() {
 }
 
 function pressLevelThreeTotemGreenButton() {
-  state.levelThree.totemGreenButtonPresses += 1;
-  state.levelThree.openingGreenPressCount = state.levelThree.totemGreenButtonPresses;
+  if (state.levelThree.totemRaftDrifting) {
+    showPrompt("The raft is still floating closer.", 1.8);
+    showSpeech("frog", "The raft is still floating closer.", 1.5);
+    return;
+  }
   const maxState = LEVEL_THREE_RAFT_MARKERS.length - 1;
   if (state.levelThree.totemRaftState < maxState) {
-    state.levelThree.totemRaftState += 1;
+    const fromState = state.levelThree.totemRaftState;
+    const targetState = fromState + 1;
+    const gate = LEVEL_THREE_TOTEM_RAFT_GATES.find((item) => item.fromState === fromState && item.toState === targetState);
+    state.levelThree.totemGreenButtonPresses += 1;
+    state.levelThree.openingGreenPressCount = state.levelThree.totemGreenButtonPresses;
+    state.levelThree.totemRaftGateState = targetState;
+    state.levelThree.totemRaftDrifting = true;
+    state.levelThree.totemRaftFromState = fromState;
+    state.levelThree.totemRaftTargetState = targetState;
+    state.levelThree.totemRaftDriftProgress = 0;
     state.levelThree.totemRaftLastMovedAt = state.elapsed;
-    const marker = LEVEL_THREE_RAFT_MARKERS[state.levelThree.totemRaftState];
-    spawnRevealSparkles(particleContext, marker.position.x, marker.position.z, 0x8feeb0, 16);
-    if (state.levelThree.totemRaftState >= maxState) {
-      state.levelThree.totemRaftDocked = true;
-      showPrompt("The Totem has reached the shore. The Human should take it.", 2.8);
-      showSpeech("frog", "The Totem reached the shore.", 2.0);
-    } else {
-      showPrompt("Something across the water is drifting closer.", 2.1);
-      showSpeech("frog", "Something is drifting closer.", 1.8);
+    if (gate && !state.levelThree.totemRaftOpenedGates.includes(gate.id)) {
+      state.levelThree.totemRaftOpenedGates.push(gate.id);
+      spawnRevealSparkles(particleContext, gate.position.x, gate.position.z, 0xcfeab0, 12);
     }
+    showPrompt("The reeds open. The raft starts drifting closer.", 2.2);
+    showSpeech("frog", "Something is drifting closer.", 1.8);
   } else {
     state.levelThree.totemRaftDocked = true;
     showPrompt("The Totem is already docked. The Human should take it.", 2.1);
+  }
+}
+
+function updateLevelThreeTotemRaftDrift(dt = 0) {
+  if (!state.levelThree.totemRaftDrifting) return;
+  state.levelThree.totemRaftDriftProgress = clamp(
+    (state.levelThree.totemRaftDriftProgress || 0) + dt / LEVEL_THREE_TOTEM_RAFT_DRIFT_SECONDS,
+    0,
+    1
+  );
+  if (state.levelThree.totemRaftDriftProgress < 1) return;
+
+  const targetState = clamp(
+    Math.round(state.levelThree.totemRaftTargetState || 0),
+    0,
+    LEVEL_THREE_RAFT_MARKERS.length - 1
+  );
+  state.levelThree.totemRaftState = targetState;
+  state.levelThree.totemRaftFromState = targetState;
+  state.levelThree.totemRaftTargetState = targetState;
+  state.levelThree.totemRaftDrifting = false;
+  state.levelThree.totemRaftDriftProgress = 1;
+  state.levelThree.totemRaftLastMovedAt = state.elapsed;
+
+  const marker = LEVEL_THREE_RAFT_MARKERS[targetState] || LEVEL_THREE_RAFT_MARKERS[0];
+  spawnRevealSparkles(particleContext, marker.position.x, marker.position.z, 0x8feeb0, 16);
+  if (targetState >= LEVEL_THREE_RAFT_MARKERS.length - 1) {
+    state.levelThree.totemRaftDocked = true;
+    showPrompt("The Totem has reached the shore. The Human should take it.", 2.8);
+    showSpeech("frog", "The Totem reached the shore.", 2.0);
   }
 }
 
@@ -2331,7 +2396,7 @@ function updateLevelThreeCrocodileTotemCollection() {
   if (state.elapsed - state.loveLetterLesson.lastFrogPromptAt < LOVE_LETTER_LESSON_COOLDOWN) return;
   state.loveLetterLesson.lastFrogPromptAt = state.elapsed;
   showPrompt("The Human should pick this one up.", 2.2);
-  showSpeech("frog", "The Human should pick this one up.", 1.8);
+  showSpeech(state.active === "crocodile" ? "crocodile" : "frog", "The Human should pick this one up.", 1.8);
 }
 
 function collectLevelThreeCrocodileTotem() {
@@ -2339,16 +2404,9 @@ function collectLevelThreeCrocodileTotem() {
   state.levelThree.crocodileTotemCollected = true;
   state.levelThree.crocodileUnlocked = true;
   state.levelThree.crocodileEchoAwake = true;
-  state.levelThree.crocodileControlAvailable = false;
-  state.cubelings.crocodile = {
-    unlocked: true,
-    unlockedPending: true,
-    active: false,
-    spawned: false,
-    controllable: false
-  };
+  spawnLevelThreeCrocodileCubeling();
   const echoPosition = LEVEL_THREE_CROCODILE_ECHO.position;
-  showPrompt("Crocodile Totem found. Crocodile control waits for a later puzzle.", 2.8);
+  showPrompt("The Crocodile Cubeling woke up.", 2.6);
   queueSpeech([
     { anchor: "human", text: "Crocodile Totem found.", seconds: 1.7 },
     { anchor: "level3CrocodileEcho", text: "A patient lake friend is listening.", seconds: 2.4 }
@@ -2356,15 +2414,41 @@ function collectLevelThreeCrocodileTotem() {
   spawnRevealSparkles(particleContext, echoPosition.x, echoPosition.z, 0xaef5cf, 28);
 }
 
+function spawnLevelThreeCrocodileCubeling() {
+  state.levelThree.crocodileSpawned = true;
+  state.levelThree.crocodileControlAvailable = true;
+  state.levelThree.crocodileSurfaceId = "level3CrocodileEcho";
+  state.cubelings.crocodile = {
+    unlocked: true,
+    unlockedPending: false,
+    active: state.active === "crocodile",
+    spawned: true,
+    controllable: true
+  };
+  state.crocodile.x = LEVEL_THREE_CROCODILE_SPAWN.x;
+  state.crocodile.z = LEVEL_THREE_CROCODILE_SPAWN.z;
+  state.crocodile.facing = { ...LEVEL_THREE_CROCODILE_SPAWN.facing };
+  spawnRevealSparkles(particleContext, state.crocodile.x, state.crocodile.z, 0x9ee6a6, 18);
+}
+
 function updateLevelThreeLoveLetterPlaceholder() {
-  if (state.active !== "human") return;
   if (!state.levelThree.placeholderLoveLetterVisible || state.levelThree.placeholderLoveLetterCollectable) return;
-  const distanceToPlaceholder = distance2D(state.human, LEVEL_THREE_POINTS.placeholderLoveLetter);
+  const activeActor = getActiveActor();
+  const distanceToPlaceholder = distance2D(activeActor, LEVEL_THREE_POINTS.placeholderLoveLetter);
   if (distanceToPlaceholder > LOVE_LETTER_APPROACH_RADIUS) return;
-  if (state.elapsed - state.loveLetterLesson.lastHumanPromptAt < LOVE_LETTER_LESSON_COOLDOWN) return;
-  state.loveLetterLesson.lastHumanPromptAt = state.elapsed;
-  showPrompt("Placeholder Love Letter: Level Three route is not authored yet.", 2.2);
-  showSpeech("loveLetter", "Not yet. Sketch the path first.", 1.9);
+  if (state.active === "crocodile") {
+    if (state.elapsed - state.loveLetterLesson.lastFrogPromptAt < LOVE_LETTER_LESSON_COOLDOWN) return;
+    state.loveLetterLesson.lastFrogPromptAt = state.elapsed;
+    showPrompt("The Human should collect Love Letters.", 2.1);
+    showSpeech("crocodile", "The Human should collect Love Letters.", 1.9);
+    return;
+  }
+  if (state.active === "human") {
+    if (state.elapsed - state.loveLetterLesson.lastHumanPromptAt < LOVE_LETTER_LESSON_COOLDOWN) return;
+    state.loveLetterLesson.lastHumanPromptAt = state.elapsed;
+    showPrompt("Placeholder Love Letter: Level Three route is not authored yet.", 2.2);
+    showSpeech("loveLetter", "Not yet. Sketch the path first.", 1.9);
+  }
 }
 
 function updateLevelOneInteractions() {
@@ -2646,6 +2730,30 @@ function updateLevelThreeOpeningVisuals(dt) {
     });
   }
 
+  LEVEL_THREE_TOTEM_RAFT_GATES.forEach((gate) => {
+    const gateMesh = levelThreeInteractiveMeshes.totemRaftGates?.[gate.id];
+    if (!gateMesh) return;
+    const opened = state.levelThree.totemRaftOpenedGates?.includes(gate.id);
+    const bob = Math.sin(state.elapsed * 2.4 + gate.gateIndex) * 0.025;
+    gateMesh.visible = state.scene.id === SCENES.LEVEL_THREE;
+    gateMesh.position.set(
+      gate.position.x + (opened ? 0.26 : 0),
+      SURFACE_Y + 0.02 + bob - (opened ? 0.42 : 0),
+      gate.position.z
+    );
+    gateMesh.rotation.z = opened ? -0.38 : 0;
+    gateMesh.traverse((child) => {
+      if (!child.isMesh || !child.material) return;
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      materials.forEach((material) => {
+        if (material.opacity !== undefined) {
+          material.transparent = true;
+          material.opacity = opened ? 0.28 : 0.92;
+        }
+      });
+    });
+  });
+
   if (levelThreeInteractiveMeshes.crocodileEcho) {
     const awake = Boolean(state.levelThree.crocodileEchoAwake);
     const pulse = 0.5 + Math.sin(state.elapsed * (awake ? 4.2 : 2.8)) * 0.5;
@@ -2819,11 +2927,11 @@ function switchActor() {
 
 function switchActorFree() {
   if (!sceneAllowsInput()) return;
-  if (!state.reveals.frog && !canUseElephantCubeling()) {
+  if (!state.reveals.frog && !canUseElephantCubeling() && !canUseCrocodileCubeling()) {
     showPrompt("No Cubeling is available here.", 1.4);
     return;
   }
-  if (state.active === "frog" || state.active === "elephant") {
+  if (state.active === "frog" || state.active === "elephant" || state.active === "crocodile") {
     const returningActor = getActiveActor();
     const returningKey = state.active;
     state.active = "human";
@@ -2834,6 +2942,7 @@ function switchActorFree() {
       state.frogAi.usesHumanAsTarget = false;
     }
     if (returningKey === "elephant") state.cubelings.elephant.active = false;
+    if (returningKey === "crocodile") state.cubelings.crocodile.active = false;
     spawnTransferParticles(particleContext, returningActor, state.human);
     if (state.scene.id === SCENES.LEVEL_ONE && state.levelOne.blueBloomDocked && !state.spellbookCollected) {
       showPrompt("Bring your character across the blue blooms to the Love Letter.", 2.2);
@@ -2850,6 +2959,8 @@ function switchActorFree() {
     if (nearest?.key === "elephant") {
       showPrompt("Come a little closer to the Elephant Cubeling.", 1.4);
       showSpeech("elephant", "Come a little closer to the Elephant Cubeling.", 1.5);
+    } else if (nearest?.key === "crocodile") {
+      registerCrocodileTransferPrompt();
     } else {
       showPrompt("Come a little closer to the Frog Cubeling.", 1.4);
       showSpeech("frog", "Come a little closer to the Frog Cubeling.", 1.5);
@@ -2865,7 +2976,22 @@ function switchActorFree() {
     showSpeech("elephant", "You are the Elephant Cubeling now.", 1.4);
     return;
   }
+  if (transferTarget.key === "crocodile") {
+    state.active = "crocodile";
+    state.cubelings.crocodile.active = true;
+    spawnTransferParticles(particleContext, state.human, state.crocodile);
+    showPrompt("You are the Crocodile Cubeling now.", 1.8);
+    showSpeech("crocodile", "You are the Crocodile Cubeling now.", 1.5);
+    return;
+  }
   possessFrogCubeling();
+}
+
+function registerCrocodileTransferPrompt() {
+  if (state.elapsed - state.levelThree.lastCrocodileTransferPromptAt < LOVE_LETTER_LESSON_COOLDOWN) return;
+  state.levelThree.lastCrocodileTransferPromptAt = state.elapsed;
+  showPrompt("Come a little closer to the Crocodile Cubeling.", 1.6);
+  showSpeech("crocodile", "Come a little closer to the Crocodile Cubeling.", 1.5);
 }
 
 function registerFrogLoveLetterBlock() {
@@ -2992,13 +3118,20 @@ function getFrogJump() {
 }
 
 function getLevelThreeFrogJump() {
-  const jump = LEVEL_THREE_FROG_LANE_JUMPS.find((candidate) =>
-    distance2D(state.frog, candidate.from) <= candidate.fromRadius ||
-    (
-      state.levelThree.frogLaneSurfaceId === candidate.fromId &&
+  const currentSurface = state.levelThree.frogLaneSurfaceId || "";
+  const currentSurfaceJump = currentSurface
+    ? LEVEL_THREE_FROG_LANE_JUMPS.find((candidate) =>
+      candidate.fromId === currentSurface &&
       distance2D(state.frog, candidate.from) <= candidate.fromRadius + 0.65
     )
-  );
+    : null;
+  const startJump = !currentSurface
+    ? LEVEL_THREE_FROG_LANE_JUMPS.find((candidate) =>
+      candidate.fromId === "level3FrogLaneStart" &&
+      distance2D(state.frog, candidate.from) <= candidate.fromRadius
+    )
+    : null;
+  const jump = currentSurfaceJump || startJump;
   if (!jump) return null;
   const landing = { x: jump.to.x, z: jump.to.z };
   if (collidesAt(state.frog, landing.x, landing.z, { ignoreActor: true })) return null;
@@ -3364,6 +3497,7 @@ function activeActorCollisionCandidates(actor) {
   if (actor !== state.human) candidates.push(state.human);
   if (actor !== state.frog && state.scene.id !== SCENES.HOME && state.reveals.frog) candidates.push(state.frog);
   if (actor !== state.elephant && canUseElephantCubeling()) candidates.push(state.elephant);
+  if (actor !== state.crocodile && canUseCrocodileCubeling()) candidates.push(state.crocodile);
   return candidates;
 }
 
@@ -3407,10 +3541,17 @@ function sceneColliderBlocks(actor, x, z) {
       if (
         actor === state.frog &&
         state.active === "frog" &&
-        collider.levelThreeWater &&
-        pointInBounds({ x, z }, LEVEL_THREE_FROG_LANE_WATER_RESET_ZONE)
+        collider.levelThreeWater
       ) {
-        resetLevelThreeFrogLane();
+        registerLevelThreeFrogWaterBlock();
+        return true;
+      }
+      if (
+        actor === state.human &&
+        state.active === "human" &&
+        collider.levelThreeWater
+      ) {
+        registerLevelThreeHumanWaterBlock();
         return true;
       }
       return true;
@@ -3422,6 +3563,7 @@ function sceneColliderBlocks(actor, x, z) {
 
 function levelThreeWalkableSurfaceAllows(actor, x, z, collider) {
   if (!collider.levelThreeWater) return false;
+  if (actor === state.crocodile && canUseCrocodileCubeling()) return true;
   return actor === state.frog && levelThreeFrogLilyPadWalkableAt({ x, z }, actor.radius);
 }
 
@@ -3533,6 +3675,29 @@ function levelThreeFrogLilyPadWalkableAt(point, actorRadius = 0) {
   );
 }
 
+function levelThreeActorIntersectsWater(actor) {
+  return sceneObjectColliders
+    .filter((item) => item.scene === SCENES.LEVEL_THREE && item.levelThreeWater)
+    .some((collider) => circleIntersectsAabb(actor.x, actor.z, actor.radius, collider));
+}
+
+function registerLevelThreeFrogWaterBlock() {
+  if (state.scene.id !== SCENES.LEVEL_THREE || state.active !== "frog") return;
+  if (state.elapsed - state.levelThree.lastFrogWaterBlockAt < LEVEL_THREE_FROG_WATER_BLOCK_COOLDOWN) return;
+  state.levelThree.lastFrogWaterBlockAt = state.elapsed;
+  state.levelThree.frogWaterBlockedCount += 1;
+  showPrompt("I need to hop to the leaf.", 1.6);
+  showSpeech("frog", "I need to hop to the leaf.", 1.5);
+}
+
+function registerLevelThreeHumanWaterBlock() {
+  if (state.scene.id !== SCENES.LEVEL_THREE || state.active !== "human") return;
+  if (state.elapsed - state.loveLetterLesson.lastHumanPromptAt < LOVE_LETTER_LESSON_COOLDOWN) return;
+  state.loveLetterLesson.lastHumanPromptAt = state.elapsed;
+  showPrompt("That water is too deep for me.", 1.6);
+  showSpeech("human", "That water is too deep for me.", 1.5);
+}
+
 function resetLevelThreeFrogLane() {
   if (state.scene.id !== SCENES.LEVEL_THREE) return;
   if (state.elapsed - state.levelThree.lastFrogLaneResetAt < LEVEL_THREE_FROG_LANE_RESET_COOLDOWN) return;
@@ -3553,12 +3718,140 @@ function resetLevelThreeFrogLane() {
 }
 
 function currentLevelThreeTotemRaftPosition() {
+  if (state.levelThree?.totemRaftDrifting) {
+    const fromMarker = LEVEL_THREE_RAFT_MARKERS[clamp(
+      Math.round(state.levelThree.totemRaftFromState ?? state.levelThree.totemRaftState ?? 0),
+      0,
+      LEVEL_THREE_RAFT_MARKERS.length - 1
+    )] || LEVEL_THREE_RAFT_MARKERS[0];
+    const targetMarker = LEVEL_THREE_RAFT_MARKERS[clamp(
+      Math.round(state.levelThree.totemRaftTargetState ?? state.levelThree.totemRaftState ?? 0),
+      0,
+      LEVEL_THREE_RAFT_MARKERS.length - 1
+    )] || fromMarker;
+    const progress = easeInOutSmooth(state.levelThree.totemRaftDriftProgress || 0);
+    return {
+      x: fromMarker.position.x + (targetMarker.position.x - fromMarker.position.x) * progress,
+      z: fromMarker.position.z + (targetMarker.position.z - fromMarker.position.z) * progress
+    };
+  }
   const marker = LEVEL_THREE_RAFT_MARKERS[clamp(
     Math.round(state.levelThree?.totemRaftState ?? 0),
     0,
     LEVEL_THREE_RAFT_MARKERS.length - 1
   )] || LEVEL_THREE_RAFT_MARKERS[0];
   return marker.position;
+}
+
+function levelThreeTileIsWater(tile) {
+  return Boolean(tile && LEVEL_THREE_WATER_TILES.some((candidate) =>
+    candidate.x === tile.x && candidate.y === tile.y
+  ));
+}
+
+function levelThreeTileWorldPoint(tile) {
+  return sceneGridPoint(LEVEL_THREE_WIDTH, LEVEL_THREE_HEIGHT, tile.x, tile.y, TILE);
+}
+
+function levelThreeDistanceFromNearestLandTile(point, radius = 0) {
+  return Math.min(...LEVEL_THREE_LAND_TILES.map((tile) => {
+    const tilePoint = levelThreeTileWorldPoint(tile);
+    return distance2D(point, tilePoint) - radius - TILE * 0.5;
+  }));
+}
+
+function levelThreePointInsideLandTile(point) {
+  const half = TILE * 0.5 - 0.04;
+  return LEVEL_THREE_LAND_TILES.some((tile) => {
+    const tilePoint = levelThreeTileWorldPoint(tile);
+    return point.x >= tilePoint.x - half &&
+      point.x <= tilePoint.x + half &&
+      point.z >= tilePoint.z - half &&
+      point.z <= tilePoint.z + half;
+  });
+}
+
+function levelThreeSegmentLandHits(from, to, steps = 30) {
+  const hits = [];
+  for (let index = 0; index <= steps; index += 1) {
+    const t = index / steps;
+    const point = {
+      x: from.x + (to.x - from.x) * t,
+      z: from.z + (to.z - from.z) * t
+    };
+    if (!levelThreePointInsideLandTile(point)) continue;
+    hits.push({
+      x: Number(point.x.toFixed(2)),
+      z: Number(point.z.toFixed(2)),
+      t: Number(t.toFixed(2))
+    });
+  }
+  return hits;
+}
+
+function levelThreeRaftPathContract() {
+  const segments = LEVEL_THREE_RAFT_MARKERS.slice(0, -1).map((marker, index) => {
+    const next = LEVEL_THREE_RAFT_MARKERS[index + 1];
+    const landHits = levelThreeSegmentLandHits(marker.position, next.position);
+    return {
+      fromId: marker.id,
+      toId: next.id,
+      fromState: marker.stateIndex,
+      toState: next.stateIndex,
+      landHitCount: landHits.length,
+      landHits
+    };
+  });
+  return {
+    avoidsLand: segments.every((segment) => segment.landHitCount === 0),
+    dockMarkerFixed: true,
+    dockMarkerInsideLand: levelThreePointInsideLandTile(LEVEL_THREE_RAFT_MARKERS[LEVEL_THREE_RAFT_MARKERS.length - 1].position),
+    dockMarkerShoreClearance: Number(levelThreeDistanceFromNearestLandTile(LEVEL_THREE_RAFT_MARKERS[LEVEL_THREE_RAFT_MARKERS.length - 1].position).toFixed(2)),
+    segments
+  };
+}
+
+function levelThreePadEdgeGap(a, b) {
+  return distance2D(a.position, b.position) - (a.radius || 0) - (b.radius || 0);
+}
+
+function levelThreeLilyPadSpatialContract() {
+  const padEdgeGaps = [];
+  for (let index = 0; index < LEVEL_THREE_LILY_PAD_PLACEHOLDERS.length - 1; index += 1) {
+    const from = LEVEL_THREE_LILY_PAD_PLACEHOLDERS[index];
+    const to = LEVEL_THREE_LILY_PAD_PLACEHOLDERS[index + 1];
+    padEdgeGaps.push({
+      fromId: from.id,
+      toId: to.id,
+      edgeGap: Number(levelThreePadEdgeGap(from, to).toFixed(2))
+    });
+  }
+  const finalPad = LEVEL_THREE_LILY_PAD_PLACEHOLDERS[LEVEL_THREE_LILY_PAD_PLACEHOLDERS.length - 1];
+  const finalJump = LEVEL_THREE_FROG_LANE_JUMPS.find((jump) => jump.toId === "level3TotemWinchIsland");
+  const pad3ToTotemWinchIslandGap = finalPad && finalJump
+    ? distance2D(finalPad.position, finalJump.to) - (finalPad.radius || 0) - TILE * 0.5
+    : 0;
+  const trackEndpointChecks = LEVEL_THREE_LILY_PAD_PLACEHOLDERS.map((pad) => ({
+    id: pad.id,
+    startTileIsWater: levelThreeTileIsWater(pad.trackStartTile),
+    endTileIsWater: levelThreeTileIsWater(pad.trackEndTile),
+    startLandClearance: Number(levelThreeDistanceFromNearestLandTile(pad.trackStart, pad.radius || 0).toFixed(2)),
+    endLandClearance: Number(levelThreeDistanceFromNearestLandTile(pad.trackEnd, pad.radius || 0).toFixed(2))
+  }));
+  const nearestPadEdgeGap = Math.min(...padEdgeGaps.map((gap) => gap.edgeGap));
+  return {
+    minPadEdgeGap: LEVEL_THREE_LILY_PAD_MIN_EDGE_GAP,
+    minPadToIslandGap: LEVEL_THREE_LILY_PAD_MIN_ISLAND_GAP,
+    padEdgeGaps,
+    nearestPadEdgeGap: Number(nearestPadEdgeGap.toFixed(2)),
+    pad3ToTotemWinchIslandGap: Number(pad3ToTotemWinchIslandGap.toFixed(2)),
+    allCentersOnWater: LEVEL_THREE_LILY_PAD_PLACEHOLDERS.every((pad) => levelThreeTileIsWater(pad.tile)),
+    allTrackEndpointsOnWater: trackEndpointChecks.every((check) => check.startTileIsWater && check.endTileIsWater),
+    trackEndpointChecks,
+    futureMotionCorridorsReserved: nearestPadEdgeGap >= LEVEL_THREE_LILY_PAD_MIN_EDGE_GAP &&
+      pad3ToTotemWinchIslandGap >= LEVEL_THREE_LILY_PAD_MIN_ISLAND_GAP &&
+      trackEndpointChecks.every((check) => check.startTileIsWater && check.endTileIsWater)
+  };
 }
 
 function pointInLevelTwoRamp(point) {
@@ -4361,6 +4654,7 @@ function updateTutorialBannerAttention(stepLabel, prompt) {
 function activeActorLabel() {
   if (state.active === "frog") return "Frog Cubeling";
   if (state.active === "elephant") return "Elephant Cubeling";
+  if (state.active === "crocodile") return "Crocodile Cubeling";
   return "Character";
 }
 
@@ -4951,6 +5245,7 @@ function getSecondarySpeechBubble() {
 function getSpeechAnchorPoint(anchor) {
   if (anchor === "frog") return { x: state.frog.x, y: SURFACE_Y + 2.0, z: state.frog.z };
   if (anchor === "elephant") return { x: state.elephant.x, y: LEVEL_TWO_ELEPHANT_ECHO_TOP_Y + 2.0, z: state.elephant.z };
+  if (anchor === "crocodile") return { x: state.crocodile.x, y: SURFACE_Y + 1.15, z: state.crocodile.z };
   if (anchor === "frogEcho") return { x: START.frog.x, y: SURFACE_Y + 2.0, z: START.frog.z };
   if (anchor === "frogTotem") return { x: FROG_TOTEM.x, y: SURFACE_Y + 2.0, z: FROG_TOTEM.z };
   if (anchor === "elephantEcho") return { x: LEVEL_TWO_POINTS.elephantEcho.x, y: (LEVEL_TWO_POINTS.elephantEcho.y ?? SURFACE_Y) + 2.0, z: LEVEL_TWO_POINTS.elephantEcho.z };
@@ -4993,6 +5288,7 @@ function getSpeechAnchorPoint(anchor) {
 function getActiveActor() {
   if (state.active === "frog") return state.frog;
   if (state.active === "elephant") return state.elephant;
+  if (state.active === "crocodile") return state.crocodile;
   return state.human;
 }
 
@@ -5088,6 +5384,14 @@ function canUseElephantCubeling() {
     Boolean(state.cubelings.elephant?.unlocked);
 }
 
+function canUseCrocodileCubeling() {
+  return state.scene.id === SCENES.LEVEL_THREE &&
+    Boolean(state.levelThree.crocodileSpawned) &&
+    Boolean(state.levelThree.crocodileControlAvailable) &&
+    Boolean(state.cubelings.crocodile?.unlocked) &&
+    Boolean(state.cubelings.crocodile?.controllable);
+}
+
 function clearHumanFromElephantExitLane() {
   if (state.scene.id !== SCENES.LEVEL_TWO || !state.levelTwo.elephantSpawned) return;
   if (!levelTwoRedPlatformAt(state.elephant) && state.levelTwo.elephantSurfaceId !== "red-elevator-a") return;
@@ -5109,6 +5413,11 @@ function canTransferToElephant(graceRadius = 0) {
     distance2D(state.human, state.elephant) <= POSSESSION_RADIUS + graceRadius;
 }
 
+function canTransferToCrocodile(graceRadius = 0) {
+  return canUseCrocodileCubeling() &&
+    distance2D(state.human, state.crocodile) <= POSSESSION_RADIUS + graceRadius;
+}
+
 function availableTransferTargets() {
   const targets = [];
   if (state.reveals.frog) {
@@ -5116,6 +5425,9 @@ function availableTransferTargets() {
   }
   if (canUseElephantCubeling()) {
     targets.push({ key: "elephant", actor: state.elephant, distance: distance2D(state.human, state.elephant) });
+  }
+  if (canUseCrocodileCubeling()) {
+    targets.push({ key: "crocodile", actor: state.crocodile, distance: distance2D(state.human, state.crocodile) });
   }
   return targets.sort((a, b) => a.distance - b.distance);
 }
@@ -5161,6 +5473,13 @@ function currentVisibleAssets() {
 function renderGameToText() {
   const levelThreeTotemButton = LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS.find((button) => button.id === "level3TotemGreenButton");
   const levelThreeRaftPosition = currentLevelThreeTotemRaftPosition();
+  const levelThreeLilyContract = levelThreeLilyPadSpatialContract();
+  const levelThreeRaftPath = levelThreeRaftPathContract();
+  const levelThreeOpenedRaftGates = state.levelThree.totemRaftOpenedGates || [];
+  const redButtonADistanceFromPivot = Number(distance2D(
+    LEVEL_THREE_BRIDGE_PIVOT.position,
+    LEVEL_THREE_BRIDGE_DESTINATION_MARKERS.find((marker) => marker.id === "level3BridgeDestinationRedA")?.position || LEVEL_THREE_BRIDGE_PIVOT.position
+  ).toFixed(2));
   return JSON.stringify({
   title: "Lumina3D",
   ready: state.ready,
@@ -5176,6 +5495,7 @@ function renderGameToText() {
   human: roundedPoint(state.human),
   frog: roundedPoint(state.frog),
   elephant: roundedPoint(state.elephant),
+  crocodile: roundedPoint(state.crocodile),
   tutorial: {
     stepIndex: state.tutorialIndex,
     stepId: currentStepId(),
@@ -5241,10 +5561,13 @@ function renderGameToText() {
       name: "Crocodile Cubeling",
       unlocked: Boolean(state.cubelings.crocodile?.unlocked),
       unlockedPending: Boolean(state.cubelings.crocodile?.unlockedPending),
-      active: false,
-      spawned: false,
-      controllable: false,
-      behavior: "found through Level Three Totem in Phase 2A; control waits for Phase 3"
+      active: state.active === "crocodile",
+      spawned: Boolean(state.cubelings.crocodile?.spawned),
+      controllable: Boolean(state.cubelings.crocodile?.controllable),
+      radius: LEVEL_THREE_CROCODILE_RADIUS,
+      speed: LEVEL_THREE_CROCODILE_SPEED,
+      waterMovement: "level-three-only land and water movement after Crocodile Totem collection",
+      behavior: "Phase 3A controllable amphibious Cubeling; no cargo, ferrying, red buttons, bridge cycling, or Love Letter collection"
     }
   },
   persistentUnlocks: {
@@ -5941,26 +6264,65 @@ function renderGameToText() {
     neutralFutureState: {
       level3TotemRaftState: state.levelThree.totemRaftState ?? 0,
       level3TotemRaftDocked: Boolean(state.levelThree.totemRaftDocked),
+      level3TotemRaftDrifting: Boolean(state.levelThree.totemRaftDrifting),
+      level3TotemRaftGateState: state.levelThree.totemRaftGateState ?? 0,
       level3CrocodileUnlocked: Boolean(state.levelThree.crocodileUnlocked),
       level3BridgeState: state.levelThree.bridgeState ?? 0,
       level3OpeningGreenPressCount: state.levelThree.openingGreenPressCount ?? 0,
+      level3CrocodileSpawned: Boolean(state.levelThree.crocodileSpawned),
       level3CrocodileControlAvailable: Boolean(state.levelThree.crocodileControlAvailable)
     },
     phase2AState: {
       implemented: true,
       movingLilyPadTimingDeferred: true,
-      humanVisualReviewPending: true,
+      humanVisualReviewPending: false,
       totemRaftState: state.levelThree.totemRaftState ?? 0,
       totemRaftDocked: Boolean(state.levelThree.totemRaftDocked),
+      totemRaftGateState: state.levelThree.totemRaftGateState ?? 0,
+      totemRaftDrifting: Boolean(state.levelThree.totemRaftDrifting),
+      totemRaftFromState: state.levelThree.totemRaftFromState ?? 0,
+      totemRaftTargetState: state.levelThree.totemRaftTargetState ?? 0,
+      totemRaftDriftProgress: Number((state.levelThree.totemRaftDriftProgress || 0).toFixed(2)),
+      totemRaftOpenedGates: [...levelThreeOpenedRaftGates],
       crocodileTotemCollected: Boolean(state.levelThree.crocodileTotemCollected),
       crocodileEchoAwake: Boolean(state.levelThree.crocodileEchoAwake),
       crocodileUnlocked: Boolean(state.levelThree.crocodileUnlocked),
+      crocodileSpawned: Boolean(state.levelThree.crocodileSpawned),
       crocodileControlAvailable: Boolean(state.levelThree.crocodileControlAvailable),
       frogLaneResetCount: state.levelThree.frogLaneResetCount ?? 0,
+      frogWaterBlockedCount: state.levelThree.frogWaterBlockedCount ?? 0,
       frogLaneSurfaceId: state.levelThree.frogLaneSurfaceId || "",
       totemGreenButtonPresses: state.levelThree.totemGreenButtonPresses ?? 0,
       totemGreenButtonPressed: Boolean(state.levelThree.totemGreenButtonPressed),
       totemGreenButtonHeldActor: state.levelThree.totemGreenButtonHeldActor || ""
+    },
+    phase3AState: {
+      implemented: true,
+      lilyPadsEnlarged: true,
+      frogWalkingWaterResetDisabled: true,
+      frogWalkingWaterBehavior: "blocked-with-hint",
+      crocodileActorVisual: "generated-crocodile-cubeling-temporary",
+      crocodileUnlocked: Boolean(state.levelThree.crocodileUnlocked),
+      crocodileSpawned: Boolean(state.levelThree.crocodileSpawned),
+      crocodileControlAvailable: Boolean(state.levelThree.crocodileControlAvailable),
+      crocodileActive: state.active === "crocodile",
+      crocodileWaterMovement: true,
+      crocodileCargo: false,
+      crocodileFerrying: false,
+      bridgeGreenButtonActive: false,
+      redButtonActivation: false
+    },
+    spatialContractRepairState: {
+      implemented: true,
+      humanVisualReviewPending: true,
+      lilyLaneSpacingCorrected: true,
+      movingLilyPadTimingDeferred: true,
+      centerHubRole: LEVEL_THREE_BRIDGE_PIVOT.role,
+      centerHubFootprintTiles: LEVEL_THREE_BRIDGE_PIVOT.footprintTiles,
+      bridgeRotationImplemented: false,
+      totemRaftDriftImplemented: true,
+      totemRaftGated: true,
+      dockMarkerFixed: true
     },
     lilyPadLane: LEVEL_THREE_LILY_PAD_PLACEHOLDERS.map((pad) => ({
       id: pad.id,
@@ -5969,18 +6331,35 @@ function renderGameToText() {
       z: Number(pad.position.z.toFixed(2)),
       tileX: pad.tile?.x ?? null,
       tileY: pad.tile?.y ?? null,
-      centerTileIsWater: Boolean(pad.tile && LEVEL_THREE_WATER_TILES.some((tile) => tile.x === pad.tile.x && tile.y === pad.tile.y)),
+      centerTileIsWater: levelThreeTileIsWater(pad.tile),
+      trackStart: {
+        x: Number(pad.trackStart.x.toFixed(2)),
+        z: Number(pad.trackStart.z.toFixed(2))
+      },
+      trackEnd: {
+        x: Number(pad.trackEnd.x.toFixed(2)),
+        z: Number(pad.trackEnd.z.toFixed(2))
+      },
+      trackStartTile: { x: pad.trackStartTile?.x ?? null, y: pad.trackStartTile?.y ?? null },
+      trackEndTile: { x: pad.trackEndTile?.x ?? null, y: pad.trackEndTile?.y ?? null },
+      trackStartTileIsWater: levelThreeTileIsWater(pad.trackStartTile),
+      trackEndTileIsWater: levelThreeTileIsWater(pad.trackEndTile),
+      trackStartLandClearance: Number(levelThreeDistanceFromNearestLandTile(pad.trackStart, pad.radius || 0).toFixed(2)),
+      trackEndLandClearance: Number(levelThreeDistanceFromNearestLandTile(pad.trackEnd, pad.radius || 0).toFixed(2)),
       visualAsset: "generated-level-one-lily-pad-shared-visual",
       radius: pad.radius,
+      walkableRadius: Number((pad.radius + Math.min(state.frog.radius, 0.35) + LEVEL_THREE_FROG_LILY_PAD_SURFACE_PADDING).toFixed(2)),
       staticPhaseOne: false,
       staticPhase2A: true,
       movementImplemented: false,
-      splashResetImplemented: true,
+      splashResetImplemented: false,
+      walkingWaterResetImplemented: false,
       frogWalkable: true,
       frogJumpSurface: true,
       movingTimingDeferred: true,
       humanUsable: false
     })),
+    lilyPadSpatialContract: levelThreeLilyContract,
     greenButtons: LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS.map((button) => ({
       id: button.id,
       name: button.name,
@@ -5996,7 +6375,8 @@ function renderGameToText() {
       pressed: button.id === "level3TotemGreenButton" ? Boolean(state.levelThree.totemGreenButtonPressed) : false,
       heldActor: button.id === "level3TotemGreenButton" ? state.levelThree.totemGreenButtonHeldActor || "" : "",
       reachableByFrog: button.id === "level3TotemGreenButton",
-      linkedMechanismActive: button.id === "level3TotemGreenButton"
+      linkedMechanismActive: button.id === "level3TotemGreenButton",
+      activeForCrocodileThisSlice: false
     })),
     crocodileEcho: {
       id: LEVEL_THREE_CROCODILE_ECHO.id,
@@ -6009,8 +6389,31 @@ function renderGameToText() {
       z: Number(LEVEL_THREE_CROCODILE_ECHO.position.z.toFixed(2)),
       radius: LEVEL_THREE_CROCODILE_ECHO.radius,
       unlockImplemented: true,
-      possessionImplemented: false,
-      waterMovementImplemented: false
+      possessionImplemented: true,
+      waterMovementImplemented: true
+    },
+    crocodileCubeling: {
+      name: "Crocodile Cubeling",
+      visible: state.scene.id === SCENES.LEVEL_THREE && Boolean(state.levelThree.crocodileSpawned),
+      unlocked: Boolean(state.levelThree.crocodileUnlocked),
+      spawned: Boolean(state.levelThree.crocodileSpawned),
+      active: state.active === "crocodile",
+      controllable: Boolean(state.levelThree.crocodileControlAvailable),
+      x: Number(state.crocodile.x.toFixed(2)),
+      z: Number(state.crocodile.z.toFixed(2)),
+      radius: LEVEL_THREE_CROCODILE_RADIUS,
+      speed: LEVEL_THREE_CROCODILE_SPEED,
+      surfaceId: state.levelThree.crocodileSurfaceId || "",
+      waterCapable: true,
+      landCapable: true,
+      canCollectTotems: false,
+      canCollectLoveLetters: false,
+      canHoldRedButtons: false,
+      canCarryStones: false,
+      canCarryHuman: false,
+      canCarryCubelings: false,
+      generatedVisual: true,
+      visualAsset: "generated-crocodile-cubeling-temporary"
     },
     totemRaft: {
       id: LEVEL_THREE_TOTEM_RAFT.id,
@@ -6018,18 +6421,39 @@ function renderGameToText() {
       x: Number(levelThreeRaftPosition.x.toFixed(2)),
       z: Number(levelThreeRaftPosition.z.toFixed(2)),
       stateIndex: state.levelThree.totemRaftState ?? 0,
+      fromState: state.levelThree.totemRaftFromState ?? 0,
+      targetState: state.levelThree.totemRaftTargetState ?? 0,
+      drifting: Boolean(state.levelThree.totemRaftDrifting),
+      driftProgress: Number((state.levelThree.totemRaftDriftProgress || 0).toFixed(2)),
       docked: Boolean(state.levelThree.totemRaftDocked),
       collectable: Boolean(state.levelThree.totemRaftDocked && !state.levelThree.crocodileTotemCollected),
       collected: Boolean(state.levelThree.crocodileTotemCollected),
       movementImplemented: true,
-      movementStyle: "stepped-snap-phase-2a",
+      movementStyle: "smooth-gated-drift-spatial-contract-repair",
+      driftSeconds: LEVEL_THREE_TOTEM_RAFT_DRIFT_SECONDS,
+      movingObjectId: "level3TotemRaft",
+      fixedDockMarkerId: "level3TotemDockMarker",
+      dockMarkerFixed: true,
+      pathContract: levelThreeRaftPath,
       collectionRadius: LEVEL_THREE_TOTEM_COLLECTION_RADIUS,
       markers: LEVEL_THREE_RAFT_MARKERS.map((marker) => ({
         id: marker.id,
         name: marker.name,
         stateIndex: marker.stateIndex,
+        fixedMarker: marker.id === "level3TotemDockMarker",
         x: Number(marker.position.x.toFixed(2)),
         z: Number(marker.position.z.toFixed(2))
+      })),
+      gates: LEVEL_THREE_TOTEM_RAFT_GATES.map((gate) => ({
+        id: gate.id,
+        name: gate.name,
+        fromState: gate.fromState,
+        toState: gate.toState,
+        opened: levelThreeOpenedRaftGates.includes(gate.id),
+        blocksRaftOnly: Boolean(gate.blocksRaftOnly),
+        visual: gate.visual,
+        x: Number(gate.position.x.toFixed(2)),
+        z: Number(gate.position.z.toFixed(2))
       }))
     },
     totemGreenButtonReachability: {
@@ -6041,6 +6465,18 @@ function renderGameToText() {
     },
     bridgePlaceholders: {
       cycleImplemented: false,
+      pivot: {
+        id: LEVEL_THREE_BRIDGE_PIVOT.id,
+        role: LEVEL_THREE_BRIDGE_PIVOT.role,
+        visualIntent: LEVEL_THREE_BRIDGE_PIVOT.visualIntent,
+        futureMechanic: LEVEL_THREE_BRIDGE_PIVOT.futureMechanic,
+        artificial: Boolean(LEVEL_THREE_BRIDGE_PIVOT.artificial),
+        footprintTiles: LEVEL_THREE_BRIDGE_PIVOT.footprintTiles,
+        bridgeRotationImplemented: Boolean(LEVEL_THREE_BRIDGE_PIVOT.bridgeRotationImplemented),
+        armLength: LEVEL_THREE_BRIDGE_PIVOT.armLength,
+        x: Number(LEVEL_THREE_BRIDGE_PIVOT.position.x.toFixed(2)),
+        z: Number(LEVEL_THREE_BRIDGE_PIVOT.position.z.toFixed(2))
+      },
       destinations: LEVEL_THREE_BRIDGE_DESTINATION_MARKERS.map((marker) => ({
         id: marker.id,
         name: marker.name,
@@ -6049,6 +6485,14 @@ function renderGameToText() {
         x: Number(marker.position.x.toFixed(2)),
         z: Number(marker.position.z.toFixed(2))
       })),
+      destinationRing: LEVEL_THREE_BRIDGE_STATE_METADATA.map((entry) => ({
+        id: entry.id,
+        stateIndex: entry.stateIndex,
+        angleRadians: Number(entry.angleRadians.toFixed(2)),
+        distanceFromPivot: Number(entry.distanceFromPivot.toFixed(2))
+      })),
+      redButtonADistanceFromPivot,
+      redButtonAMeaningfullyDistant: redButtonADistanceFromPivot >= 5.5,
       notDirectlyConnected: ["level3GreenButtonIsland", "level3WeightCacheIsland", "level3RedButtonBIsland", "level3LoveLetterCliff"]
     },
     redButtonPlaceholders: LEVEL_THREE_RED_BUTTON_PLACEHOLDERS.map((button) => ({
@@ -6085,8 +6529,8 @@ function renderGameToText() {
       completionImplemented: false
     },
     inactiveMechanics: {
-      crocodilePossession: false,
       crocodileCargo: false,
+      crocodileFerrying: false,
       movingLilyPads: false,
       centralBridgeCycle: false,
       redButtons: false,
@@ -6101,7 +6545,7 @@ function renderGameToText() {
       z: Number(zone.position.z.toFixed(2)),
       radius: zone.radius
     })),
-    authoringContract: "Phase 2A opening Totem puzzle only; no Crocodile control, no central bridge, no cargo, no final route; human visual review pending",
+    authoringContract: "Spatial contract repair: larger spaced Frog lily lane, small artificial bridge pivot, gated Totem raft drift; no moving lily timing, no bridge rotation, no cargo, no red buttons, no final route",
     colliderLabels: sceneObjectColliders
       .filter((collider) => collider.scene === SCENES.LEVEL_THREE)
       .map((collider) => collider.label)
@@ -6191,7 +6635,9 @@ installTestHooks({
   levelThreePoints: LEVEL_THREE_POINTS,
   levelThreeGreenButtons: LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS,
   levelThreeRaftMarkers: LEVEL_THREE_RAFT_MARKERS,
+  levelThreeRaftGates: LEVEL_THREE_TOTEM_RAFT_GATES,
   levelThreeFrogLaneResetPoint: LEVEL_THREE_FROG_LANE_RESET_POINT,
+  levelThreeCrocodileSpawn: LEVEL_THREE_CROCODILE_SPAWN,
   levelTwoRedPlatforms: LEVEL_TWO_RED_PLATFORMS,
   levelTwoRedButtonSurfaceY,
   updateLevelTwoSurfaceState,

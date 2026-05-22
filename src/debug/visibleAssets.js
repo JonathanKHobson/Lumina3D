@@ -80,8 +80,13 @@ export function currentVisibleAssetsForState(state, sceneIds) {
       "kaykit-platformer-button-green-material-variant-repeatable-phase-2a",
       "kaykit-platformer-button-red-placeholder",
       "generated-level-three-crocodile-echo-dormant-awake-visual",
-      "generated-level-three-crocodile-totem-raft-stepped-winch",
-      "generated-level-three-totem-raft-state-markers",
+      state.levelThree.crocodileSpawned ? "generated-crocodile-cubeling-temporary-phase-3a" : null,
+      "generated-level-three-crocodile-totem-raft-smooth-gated-drift",
+      "generated-level-three-totem-raft-fixed-state-markers",
+      "generated-level-three-totem-raft-reed-gates",
+      "generated-level-three-start-island-fixed-totem-dock-marker",
+      "generated-level-three-small-artificial-bridge-pivot",
+      "generated-level-three-inactive-bridge-arm-hint",
       "generated-level-three-bridge-destination-markers",
       "generated-level-three-red-button-b-stone-sockets",
       "generated-level-three-anchor-stone-placeholders",
@@ -95,7 +100,7 @@ export function currentVisibleAssetsForState(state, sceneIds) {
       "frog-cubeling",
       "kaykit-love-letter-closed-placeholder-noncollectable",
       "animals-farm-background-clouds-under-scene"
-    ];
+    ].filter(Boolean);
   }
   return [
     "kaykit-blockbits-sand-with-grass",
