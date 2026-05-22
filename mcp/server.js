@@ -6,6 +6,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 
 import { ARCHETYPE_TOOL_NAMES, registerArchetypeTools } from "./tools/archetypeTools.js";
 import { EDITOR_TOOL_NAMES, registerEditorTools } from "./tools/editorTools.js";
+import { PUBLISH_TOOL_NAMES, registerPublishTools } from "./tools/publishTools.js";
 import { PROJECT_TOOL_NAMES, registerProjectTools } from "./tools/projectTools.js";
 import { VALIDATION_TOOL_NAMES, registerValidationTools } from "./tools/validationTools.js";
 
@@ -13,7 +14,8 @@ export const LUMINA_MCP_TOOL_NAMES = [
   ...PROJECT_TOOL_NAMES,
   ...VALIDATION_TOOL_NAMES,
   ...EDITOR_TOOL_NAMES,
-  ...ARCHETYPE_TOOL_NAMES
+  ...ARCHETYPE_TOOL_NAMES,
+  ...PUBLISH_TOOL_NAMES
 ];
 
 export function createLuminaMcpServer() {
@@ -21,13 +23,14 @@ export function createLuminaMcpServer() {
     name: "lumina3d",
     version: "0.1.0",
     instructions:
-      "Local Lumina3D read-only and validation MCP. Use compact project, level, editor-state, validation, and archetype tools. No source-writing tools are exposed."
+      "Local Lumina3D MCP. Use compact project, level, editor-state, validation, archetype, and guarded current-branch publish tools. No source-writing patch tools or arbitrary shell tools are exposed."
   });
 
   registerProjectTools(server, LUMINA_MCP_TOOL_NAMES);
   registerValidationTools(server);
   registerEditorTools(server);
   registerArchetypeTools(server);
+  registerPublishTools(server);
 
   return server;
 }

@@ -92,6 +92,17 @@ Use `progress.md` for session history, `backlog.md` for deferred work, and `docs
 - Verification: Level Three scene smoke, fixture smoke, missing/float collider validators, manifest/object list, editor-sync validation, `/editor/` smoke, a focused Level Three runtime Dev Editor probe, and screenshot QA all identify the key shell objects. Editor-sync still reports non-blocking `LEVEL_THREE_PROPS` array-index source-reference warnings.
 - Follow-up: when Phase 2 turns lily pads, green button presses, or raft states into mechanics, update this metadata rather than replacing it with parallel ad hoc state.
 
+## 2026-05-21 - Level Three Shell Visual Contract Drift
+
+- Status: fixed in the shell contract repair; prevention rule active.
+- Scene: Level Three.
+- Symptom/risk: the Phase 1 shell could teach the wrong spatial language before mechanics existed. Start Island arrival visually crossed water, lily pads read too close to or on land, generated cylinder buttons did not match the established KayKit button family, and sand path tiles looked like accidental or unfinished routes.
+- Root cause: placeholder geometry and path tiles were used as authoring markers, but in-game visuals still communicate rules to the player even when mechanics are inactive.
+- Fix: added a left-edge grass/shore connection to Start Island, removed unmotivated Level Three path tiles, moved the Frog lane/Totem Winch spacing apart, placed all lily pad centers on water tiles, extracted the established Level One lily pad visual for Level Three reuse, and replaced generated button cylinders with KayKit two-part button geometry. Green buttons use the same geometry with a controlled green material variant because no green button OBJ asset is present.
+- Prevention rule: placeholder visuals must use the same visual grammar as implemented mechanics. Do not use sand tiles, generated cylinders, or near-land floating objects as future-mechanism markers if they teach the wrong traversal or interaction contract.
+- Verification: build, Level Three manifest/object listing, scene smoke, fixture, missing/float collider validators, editor-sync validation, Tutorial/Home/Level One/Level Two regression smokes, and screenshot QA in `test-output/level-three-shell-contract-repair/` passed. Editor-sync still reports the known non-blocking `LEVEL_THREE_PROPS` array-index source-reference warnings.
+- Follow-up: Phase 2 can build the opening Crocodile Totem puzzle on this repaired shell, but should keep Crocodile control, central bridge cycling, red-button behavior, cargo, elevators, and final Love Letter routing out of scope.
+
 ## 2026-05-19 - Refactor Lesson: Module Extraction With Pre-Init Call Sites
 
 - Status: caught and fixed during 2026-05-19 debug editor extraction.

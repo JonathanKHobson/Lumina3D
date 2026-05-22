@@ -13,11 +13,16 @@ export function installTestHooks({
   renderFrame,
   startLevelOne,
   startLevelTwo,
+  startLevelThree,
   tutorialButton,
   tutorialStart,
   spellbook,
   levelOneButton,
   levelOneLoveLetterPoint,
+  levelThreePoints,
+  levelThreeGreenButtons = [],
+  levelThreeRaftMarkers = [],
+  levelThreeFrogLaneResetPoint,
   levelTwoRedPlatforms = [],
   levelTwoRedButtonSurfaceY,
   updateLevelTwoSurfaceState,
@@ -887,6 +892,99 @@ export function installTestHooks({
     state.speech = { text: "", anchor: "human", until: 0 };
     state.secondarySpeech = { text: "", anchor: "", until: 0 };
     updateLevelTwoSurfaceState();
+    syncAll();
+    updateCamera(1);
+    updateHud();
+    return JSON.parse(renderGameToText());
+  };
+
+  windowRef.set_game_test_level_three_opening_ready = () => {
+    startLevelThree?.({ showTitle: false });
+    state.scene.phase = "play";
+    state.scene.titleCardVisible = false;
+    state.scene.titleCardText = "";
+    state.levelThree.phase = "play";
+    state.active = "frog";
+    state.reveals.frog = true;
+    state.cubelings.frog = { unlocked: true, unlockedThisTutorial: false };
+    state.cubelings.crocodile = { unlocked: false, unlockedPending: false, active: false, spawned: false, controllable: false };
+    state.levelThree.frogLaneSurfaceId = null;
+    state.levelThree.frogLaneResetCount = 0;
+    state.levelThree.lastFrogLaneResetAt = -Infinity;
+    state.levelThree.totemGreenButtonPresses = 0;
+    state.levelThree.openingGreenPressCount = 0;
+    state.levelThree.totemGreenButtonPressed = false;
+    state.levelThree.totemGreenButtonHeld = false;
+    state.levelThree.totemGreenButtonWasHeld = false;
+    state.levelThree.totemGreenButtonHeldActor = "";
+    state.levelThree.totemRaftState = 0;
+    state.levelThree.totemRaftDocked = false;
+    state.levelThree.crocodileTotemCollected = false;
+    state.levelThree.crocodileUnlocked = false;
+    state.levelThree.crocodileEchoAwake = false;
+    state.levelThree.crocodileControlAvailable = false;
+    state.human.x = levelThreePoints?.humanStart?.x ?? state.human.x;
+    state.human.z = levelThreePoints?.humanStart?.z ?? state.human.z;
+    state.human.facing = { ...(levelThreePoints?.humanStart?.facing || { x: 1, z: 0, name: "east" }) };
+    state.frog.x = levelThreeFrogLaneResetPoint?.x ?? levelThreePoints?.frogStart?.x ?? state.frog.x;
+    state.frog.z = levelThreeFrogLaneResetPoint?.z ?? levelThreePoints?.frogStart?.z ?? state.frog.z;
+    state.frog.facing = { ...(levelThreeFrogLaneResetPoint?.facing || { x: 1, z: 0, name: "east" }) };
+    state.frogAi.timer = 999;
+    state.frogAi.target = { x: state.frog.x, z: state.frog.z };
+    input.keys.clear();
+    clearSpeechQueue();
+    state.speech = { text: "", anchor: "", until: 0 };
+    state.secondarySpeech = { text: "", anchor: "", until: 0 };
+    syncAll();
+    updateCamera(1);
+    updateHud();
+    return JSON.parse(renderGameToText());
+  };
+
+  windowRef.set_game_test_level_three_frog_at_totem_button = () => {
+    const button = levelThreeGreenButtons.find((item) => item.id === "level3TotemGreenButton") || levelThreeGreenButtons[0];
+    if (!button) return null;
+    state.active = "frog";
+    state.frog.x = button.position.x;
+    state.frog.z = button.position.z;
+    state.frog.facing = { x: 1, z: 0, name: "east" };
+    state.levelThree.frogLaneSurfaceId = null;
+    state.levelThree.totemGreenButtonWasHeld = false;
+    input.keys.clear();
+    clearSpeechQueue();
+    update(1 / 60);
+    syncAll();
+    updateCamera(1);
+    updateHud();
+    return JSON.parse(renderGameToText());
+  };
+
+  windowRef.set_game_test_level_three_frog_off_totem_button = () => {
+    const button = levelThreeGreenButtons.find((item) => item.id === "level3TotemGreenButton") || levelThreeGreenButtons[0];
+    if (!button) return null;
+    state.active = "frog";
+    state.frog.x = button.position.x + 1.65;
+    state.frog.z = button.position.z;
+    state.frog.facing = { x: -1, z: 0, name: "west" };
+    input.keys.clear();
+    update(1 / 60);
+    syncAll();
+    updateCamera(1);
+    updateHud();
+    return JSON.parse(renderGameToText());
+  };
+
+  windowRef.set_game_test_level_three_actor_at_totem_raft = (actorKey = "human") => {
+    const marker = levelThreeRaftMarkers[Math.min(Math.max(state.levelThree.totemRaftState || 0, 0), Math.max(0, levelThreeRaftMarkers.length - 1))] || levelThreeRaftMarkers[levelThreeRaftMarkers.length - 1];
+    if (!marker) return null;
+    const actor = actorKey === "frog" ? state.frog : state.human;
+    state.active = actorKey === "frog" ? "frog" : "human";
+    actor.x = marker.position.x;
+    actor.z = marker.position.z;
+    actor.facing = { x: 1, z: 0, name: "east" };
+    input.keys.clear();
+    clearSpeechQueue();
+    update(1 / 60);
     syncAll();
     updateCamera(1);
     updateHud();

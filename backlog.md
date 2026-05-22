@@ -1,18 +1,18 @@
 # Lumina3D Backlog
 
-## Current Priority - Level Three Phase 1.5
+## Current Priority - Level Three Phase 2A Review
 
-1. P1 - Level 3 Phase 2: Crocodile Totem opening puzzle
-   - Current state: Level Three exists as a 26x22 mostly-water lake/island shell with named zones, placeholder objects, registry/catalog/editor/smoke coverage, and no active Level Three mechanics.
-   - Expected behavior: build the opening Frog lane and Crocodile Totem raft unlock only. Crocodile control waits until Phase 3.
+1. P1 - Human review Level 3 Phase 2A: Crocodile Totem opening puzzle
+   - Current state: Phase 2A automated verification passes. Frog uses a static lily-pad jump lane, repeat-presses `level3TotemGreenButton`, docks `level3TotemRaft`, Human collects the Crocodile Totem, and the Crocodile Echo wakes. Crocodile control remains unavailable.
+   - Expected behavior: review the captured Phase 2A screenshots/play state before moving to Phase 2B or Phase 3. Do not mark the shell or Phase 2A as human-approved yet.
 
 2. P1 - Human review the cleaned Level Two Red Button B / Elevator B route
    - Current state: automated fixture coverage verifies the full Love Letter completion route.
    - Expected behavior: the route should read clearly enough in browser before more Level Two mechanics are added.
 
-3. P1 - Human review the Level Three lake/island shell and authoring packet loop
-   - Current state: Phase 1 shell screenshots and smoke tests pass; Phase 1.5 adds documentation and editor prep.
-   - Expected behavior: the shell should be useful for small Phase 2 layout/mechanic edits without implying central bridge, cargo, red-button, or final route behavior.
+3. P1 - Decide whether Level Three needs Phase 2B moving-lily timing before Crocodile control
+   - Current state: Phase 2A intentionally uses a static lily-pad crossing to avoid compounding unapproved shell visuals with moving-platform collision risk.
+   - Expected behavior: if the Frog lane feels too flat in review, do Phase 2B as a small moving-lily/splash-polish pass. Otherwise proceed to Phase 3 Crocodile actor only.
 
 4. P1 - Home house collision/doorway cleanup
    - Current issue: the player can partially enter/clip into the house doorway, then hit an invisible blocker deeper inside.
@@ -24,13 +24,15 @@
 
 ## Next Level Three Feature Slice
 
-Current gate: implement only the opening Crocodile Totem puzzle.
+Current gate: human review Phase 2A screenshots/play state. Automated verification has passed; human visual review is still pending.
 
-### Phase 2 - Crocodile Totem Opening Puzzle
+### Phase 2A - Crocodile Totem Opening Puzzle
 
-- Frog crosses a short moving-lily-pad timing lane.
-- If Frog misses during this intended lane, Frog splash-resets to the Frog Lane Start Perch.
-- This splash-reset behavior is Level Three lane-specific and must not globally change Frog water behavior.
+Status: automated verification passed; screenshot artifacts captured for later human review.
+
+- Frog crosses a short static lily-pad jump lane.
+- If Frog enters the intended lane water while controlled and off the lily-pad surfaces, Frog splash-resets to the Frog Lane Start Perch.
+- This splash-reset behavior is Level Three lane-specific and does not globally change Frog water behavior.
 - Frog reaches Totem Winch Island.
 - Frog repeatedly presses `level3TotemGreenButton`.
 - Each green press moves/winches `level3TotemRaft` one state closer to Start Island.
@@ -38,6 +40,12 @@ Current gate: implement only the opening Crocodile Totem puzzle.
 - Human collects the Crocodile Totem.
 - Crocodile Echo wakes.
 - Crocodile control remains out of scope until Phase 3.
+
+### Phase 2B - Optional Moving Lily Timing Polish
+
+- Add deterministic small lily-pad motion only if human review says the static Phase 2A crossing needs more timing texture.
+- Keep the splash reset lane-specific and cozy.
+- Do not add Crocodile control, bridge cycling, red buttons, cargo, elevators, or the final Love Letter route in this slice.
 
 ### Later Level Three Phases
 
@@ -90,7 +98,7 @@ Stop there. Do not add Red Button C, optional collectibles, new Cubelings, or ex
 - Level One title card timing is currently resolved. Keep the later pacing polish idea, but no immediate action is needed.
 - Level Two Red Elevator A and Red Elevator B are implemented with continuous cycling and automated smoke coverage. The next step is human review of the cleaned full Level Two route.
 - Git/GitHub setup is complete; continue local-first development with intentional commits/pushes after stable slices.
-- Level Three is a lake/island shell only. It has named islands, water blockers, placeholder Love Letter, Crocodile Echo/Totem raft placeholders, distinct green button placeholders, registry/catalog/editor/smoke wiring, and no active Level Three mechanics.
+- Level Three has a lake/island shell plus the Phase 2A opening Crocodile Totem puzzle under automated coverage. It has named islands, water blockers, placeholder Love Letter, Crocodile Echo/Totem raft state, distinct green buttons, registry/catalog/editor/smoke wiring, and no Crocodile control, central bridge, cargo, red-button, elevator, or final Love Letter route behavior.
 
 ## Shipped In This Pass
 
@@ -117,7 +125,7 @@ Stop there. Do not add Red Button C, optional collectibles, new Cubelings, or ex
 - Continue Level Two in phases using `docs/game-design-handbook/07_level_two_phased_implementation_plan.md`.
 - Current Level Two state: shell, Frog low-ledge / blue-ramp / Elephant Totem access, Elephant Echo/Totem visuals, Elephant unlock/spawn/possession, Red Elevator A, Red Button B / Red Elevator B, Level Two Love Letter collection, and Level Two completion are functionally present.
 - Next feature slice after human review: polish blockers only, then decide whether Cubeling Recall belongs in Level Two or a later level.
-- Next Level Three slice after Phase 1.5: Phase 2 Crocodile Totem opening puzzle only, not Crocodile control, central bridge cycling, cargo, red-button systems, or the final Love Letter route.
+- Next Level Three slice after Phase 2A human review: optional Phase 2B moving-lily timing polish or Phase 3 Crocodile actor/control. Do not add central bridge cycling, cargo, red-button systems, elevators, or the final Love Letter route yet.
 - Replace temporary Level One Love Letter copy with final writing.
 - Add a real level select/start-flow router so replaying Level One can skip the Home Space intro.
 - Move testing-only reset into a menu when the pause/menu surface exists.

@@ -23,6 +23,7 @@ import { TILE } from "../../config/constants.js";
 import { sceneGridPoint } from "../../core/grid.js";
 import {
   addSceneGridTile,
+  createButtonGroup,
   createReadOnlyBounds,
   EDITOR_SURFACE_Y,
   makeObjectColliderProxies,
@@ -132,24 +133,25 @@ export function buildLevelThreeEditorScene({ cloneAsset, placeAsset }) {
   });
 
   [
-    ...LEVEL_THREE_LILY_PAD_PLACEHOLDERS.map((item) => ({ ...item, category: "moving_lily_pad_placeholder", color: 0x4a9b4d, sourceExport: "LEVEL_THREE_LILY_PAD_PLACEHOLDERS" })),
-    ...LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS.map((item) => ({ ...item, category: "green_button_placeholder", color: 0x52b96a, sourceExport: "LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS" })),
+    ...LEVEL_THREE_LILY_PAD_PLACEHOLDERS.map((item) => ({ ...item, category: "moving_lily_pad_placeholder", color: 0x4a9b4d, sourceExport: "LEVEL_THREE_LILY_PAD_PLACEHOLDERS", assetKey: "generated-level-three-placeholder" })),
+    ...LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS.map((item) => ({ ...item, category: "green_button_placeholder", color: 0x52b96a, sourceExport: "LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS", assetKey: "buttonBaseBlue", previewKind: "green-button" })),
     ...LEVEL_THREE_RAFT_MARKERS.map((item) => ({ ...item, category: "totem_raft_marker", color: 0xb7d9c8, sourceExport: "LEVEL_THREE_RAFT_MARKERS" })),
     ...LEVEL_THREE_BRIDGE_DESTINATION_MARKERS.map((item) => ({ ...item, category: "bridge_destination_marker", color: 0x8fb8d8, sourceExport: "LEVEL_THREE_BRIDGE_DESTINATION_MARKERS" })),
-    ...LEVEL_THREE_RED_BUTTON_PLACEHOLDERS.map((item) => ({ ...item, category: "red_button_placeholder", color: 0xd94848, sourceExport: "LEVEL_THREE_RED_BUTTON_PLACEHOLDERS" })),
+    ...LEVEL_THREE_RED_BUTTON_PLACEHOLDERS.map((item) => ({ ...item, category: "red_button_placeholder", color: 0xd94848, sourceExport: "LEVEL_THREE_RED_BUTTON_PLACEHOLDERS", assetKey: "buttonBaseRed", previewKind: "red-button" })),
     ...LEVEL_THREE_ANCHOR_STONES.map((item) => ({ ...item, category: "anchor_stone_placeholder", color: 0x7b7d78, sourceExport: "LEVEL_THREE_ANCHOR_STONES" })),
     ...LEVEL_THREE_RESET_PERCH_PLACEHOLDERS.map((item) => ({ ...item, category: "reset_perch_placeholder", color: 0x6c7c72, sourceExport: "LEVEL_THREE_RESET_PERCH_PLACEHOLDERS" }))
   ].forEach((item) => {
     addPlaceholderRecord({
       group,
       editableObjects,
-      object: createEditorPlate(item.color, item.category),
+      object: createLevelThreePlaceholderPreview(item, cloneAsset),
       id: `level_three.${item.id}`,
       name: item.name || item.id,
       category: item.category,
       position: item.position,
       sourceExport: item.sourceExport,
-      sourcePath: item.id
+      sourcePath: item.id,
+      assetKey: item.assetKey
     });
   });
 
@@ -180,14 +182,14 @@ export function buildLevelThreeEditorScene({ cloneAsset, placeAsset }) {
   };
 }
 
-function addPlaceholderRecord({ group, editableObjects, object, id, name, category, position, sourceExport, sourcePath = "position", tags = [] }) {
+function addPlaceholderRecord({ group, editableObjects, object, id, name, category, position, sourceExport, sourcePath = "position", tags = [], assetKey = "generated-level-three-placeholder" }) {
   setPointPosition(object, position, EDITOR_SURFACE_Y + 0.28);
   group.add(object);
   editableObjects.push(tagEditorRoot(object, {
     id,
     name,
     category,
-    assetKey: "generated-level-three-placeholder",
+    assetKey,
     sourceRef: sourceRef(SOURCE_FILE, sourceExport, sourcePath),
     readOnly: false,
     transformLocked: false,
@@ -198,6 +200,42 @@ function addPlaceholderRecord({ group, editableObjects, object, id, name, catego
     tags: ["level-three", "placeholder", category, ...tags],
     lockReason: ""
   }));
+}
+
+function createLevelThreePlaceholderPreview(item, cloneAsset) {
+  if (item.previewKind === "green-button") {
+    const button = createButtonGroup({ cloneAsset, baseAsset: "buttonBaseBlue", topAsset: "buttonTopBlue" });
+    applyPreviewMaterialVariant(button.children[0], 0x7b756c);
+    applyPreviewMaterialVariant(button.children[1], 0x52b96a, 0x2f7f47);
+    button.name = `editor-${item.category}`;
+    return button;
+  }
+  if (item.previewKind === "red-button") {
+    const button = createButtonGroup({ cloneAsset, baseAsset: "buttonBaseRed", topAsset: "buttonTopRed" });
+    button.name = `editor-${item.category}`;
+    return button;
+  }
+  return createEditorPlate(item.color, item.category);
+}
+
+function applyPreviewMaterialVariant(root, color, emissive = null) {
+  if (!root) return;
+  root.traverse((child) => {
+    if (!child.isMesh || !child.material) return;
+    child.material = Array.isArray(child.material)
+      ? child.material.map((material) => tintPreviewMaterial(material, color, emissive))
+      : tintPreviewMaterial(child.material, color, emissive);
+  });
+}
+
+function tintPreviewMaterial(material, color, emissive) {
+  const next = material.clone();
+  if (next.color) next.color.setHex(color);
+  if (next.emissive && emissive !== null) {
+    next.emissive.setHex(emissive);
+    next.emissiveIntensity = 0.08;
+  }
+  return next;
 }
 
 function createEditorPlate(color, name) {

@@ -201,6 +201,11 @@ import {
   LEVEL_THREE_BOUNDS,
   LEVEL_THREE_BRIDGE_DESTINATION_MARKERS,
   LEVEL_THREE_CROCODILE_ECHO,
+  LEVEL_THREE_FROG_LANE_JUMPS,
+  LEVEL_THREE_FROG_LANE_RESET_COOLDOWN,
+  LEVEL_THREE_FROG_LANE_RESET_POINT,
+  LEVEL_THREE_FROG_LANE_WATER_RESET_ZONE,
+  LEVEL_THREE_FROG_LILY_PAD_SURFACE_PADDING,
   LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS,
   LEVEL_THREE_HEIGHT,
   LEVEL_THREE_ISLAND_MARKERS,
@@ -208,6 +213,7 @@ import {
   LEVEL_THREE_LAND_TILES,
   LEVEL_THREE_LILY_PAD_PLACEHOLDERS,
   LEVEL_THREE_MAP_SHAPE,
+  LEVEL_THREE_PATH_TILES,
   LEVEL_THREE_PLACEHOLDER_LOVE_LETTER_Y,
   LEVEL_THREE_PLACEHOLDER_IDS,
   LEVEL_THREE_POINTS,
@@ -215,6 +221,9 @@ import {
   LEVEL_THREE_RED_BUTTON_PLACEHOLDERS,
   LEVEL_THREE_RESERVED_ZONES,
   LEVEL_THREE_RESET_PERCH_PLACEHOLDERS,
+  LEVEL_THREE_START_EDGE_CONNECTION_TILES,
+  LEVEL_THREE_TOTEM_COLLECTION_RADIUS,
+  LEVEL_THREE_TOTEM_GREEN_BUTTON_RADIUS,
   LEVEL_THREE_TOTEM_RAFT,
   LEVEL_THREE_WATER_TILES,
   LEVEL_THREE_WIDTH
@@ -385,7 +394,8 @@ const state = {
   unlocks: loadCubelingUnlocks(),
   cubelings: {
     frog: { unlocked: false, unlockedThisTutorial: false },
-    elephant: { unlocked: false, unlockedPending: false, active: false, spawned: false }
+    elephant: { unlocked: false, unlockedPending: false, active: false, spawned: false },
+    crocodile: { unlocked: false, unlockedPending: false, active: false, spawned: false, controllable: false }
   },
   tutorialIndex: 0,
   maxTutorialIndexReached: 0,
@@ -614,6 +624,12 @@ const levelTwoInteractiveMeshes = {
   redButtonTops: {},
   redPlatforms: {}
 };
+const levelThreeInteractiveMeshes = {
+  greenButtons: {},
+  greenButtonTops: {},
+  totemRaft: null,
+  crocodileEcho: null
+};
 const sceneObjectColliders = [];
 const barrierMeshes = new Map();
 const barrierEndCapMeshes = [];
@@ -690,6 +706,7 @@ async function init() {
       cloneAsset,
       levelThreeMeshes,
       levelThreeGoalMeshes,
+      levelThreeInteractiveMeshes,
       addSceneCollider,
       colliderForProp
     });
@@ -2159,6 +2176,15 @@ function updateFrogJump(dt) {
       if (state.levelTwo.frogSurfaceId === "blue-button-ledge") {
         showPrompt("Step on the blue button.", 1.6);
       }
+    } else if (jumpKind === "level_three_lily_lane") {
+      state.levelThree.frogLaneSurfaceId = jumpLedgeId === "level3TotemWinchIsland" ? null : jumpLedgeId;
+      if (jumpLedgeId === "level3TotemWinchIsland") {
+        showPrompt("This green button can be pressed again and again.", 2.2);
+        showSpeech("frog", "This green button can be pressed again and again.", 2.0);
+        state.levelThree.totemGreenButtonPromptShown = true;
+      } else {
+        showPrompt("Frog landed on a floating leaf.", 1.3);
+      }
     }
   }
 }
@@ -2244,6 +2270,93 @@ function updateInteractions(dt = 0) {
 }
 
 function updateLevelThreeInteractions() {
+  updateLevelThreeTotemGreenButton();
+  updateLevelThreeCrocodileTotemCollection();
+  updateLevelThreeLoveLetterPlaceholder();
+}
+
+function updateLevelThreeTotemGreenButton() {
+  const button = LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS.find((item) => item.id === "level3TotemGreenButton");
+  if (!button) return;
+  const frogOnButton = distance2D(state.frog, button.position) <= LEVEL_THREE_TOTEM_GREEN_BUTTON_RADIUS;
+  state.levelThree.totemGreenButtonPressed = frogOnButton;
+  state.levelThree.totemGreenButtonHeld = frogOnButton;
+  state.levelThree.totemGreenButtonHeldActor = frogOnButton ? "frog" : "";
+  if (frogOnButton && !state.levelThree.totemGreenButtonPromptShown) {
+    state.levelThree.totemGreenButtonPromptShown = true;
+    showPrompt("This green button can be pressed again and again.", 2.2);
+    showSpeech("frog", "This green button can be pressed again and again.", 2.0);
+  }
+  if (!frogOnButton) {
+    state.levelThree.totemGreenButtonWasHeld = false;
+    return;
+  }
+  if (state.levelThree.totemGreenButtonWasHeld) return;
+  state.levelThree.totemGreenButtonWasHeld = true;
+  pressLevelThreeTotemGreenButton();
+}
+
+function pressLevelThreeTotemGreenButton() {
+  state.levelThree.totemGreenButtonPresses += 1;
+  state.levelThree.openingGreenPressCount = state.levelThree.totemGreenButtonPresses;
+  const maxState = LEVEL_THREE_RAFT_MARKERS.length - 1;
+  if (state.levelThree.totemRaftState < maxState) {
+    state.levelThree.totemRaftState += 1;
+    state.levelThree.totemRaftLastMovedAt = state.elapsed;
+    const marker = LEVEL_THREE_RAFT_MARKERS[state.levelThree.totemRaftState];
+    spawnRevealSparkles(particleContext, marker.position.x, marker.position.z, 0x8feeb0, 16);
+    if (state.levelThree.totemRaftState >= maxState) {
+      state.levelThree.totemRaftDocked = true;
+      showPrompt("The Totem has reached the shore. The Human should take it.", 2.8);
+      showSpeech("frog", "The Totem reached the shore.", 2.0);
+    } else {
+      showPrompt("Something across the water is drifting closer.", 2.1);
+      showSpeech("frog", "Something is drifting closer.", 1.8);
+    }
+  } else {
+    state.levelThree.totemRaftDocked = true;
+    showPrompt("The Totem is already docked. The Human should take it.", 2.1);
+  }
+}
+
+function updateLevelThreeCrocodileTotemCollection() {
+  if (!state.levelThree.totemRaftDocked || state.levelThree.crocodileTotemCollected) return;
+  const raftPosition = currentLevelThreeTotemRaftPosition();
+  const activeActor = getActiveActor();
+  if (distance2D(activeActor, raftPosition) > LEVEL_THREE_TOTEM_COLLECTION_RADIUS) return;
+  if (state.active === "human") {
+    collectLevelThreeCrocodileTotem();
+    return;
+  }
+  if (state.elapsed - state.loveLetterLesson.lastFrogPromptAt < LOVE_LETTER_LESSON_COOLDOWN) return;
+  state.loveLetterLesson.lastFrogPromptAt = state.elapsed;
+  showPrompt("The Human should pick this one up.", 2.2);
+  showSpeech("frog", "The Human should pick this one up.", 1.8);
+}
+
+function collectLevelThreeCrocodileTotem() {
+  if (state.levelThree.crocodileTotemCollected) return;
+  state.levelThree.crocodileTotemCollected = true;
+  state.levelThree.crocodileUnlocked = true;
+  state.levelThree.crocodileEchoAwake = true;
+  state.levelThree.crocodileControlAvailable = false;
+  state.cubelings.crocodile = {
+    unlocked: true,
+    unlockedPending: true,
+    active: false,
+    spawned: false,
+    controllable: false
+  };
+  const echoPosition = LEVEL_THREE_CROCODILE_ECHO.position;
+  showPrompt("Crocodile Totem found. Crocodile control waits for a later puzzle.", 2.8);
+  queueSpeech([
+    { anchor: "human", text: "Crocodile Totem found.", seconds: 1.7 },
+    { anchor: "level3CrocodileEcho", text: "A patient lake friend is listening.", seconds: 2.4 }
+  ]);
+  spawnRevealSparkles(particleContext, echoPosition.x, echoPosition.z, 0xaef5cf, 28);
+}
+
+function updateLevelThreeLoveLetterPlaceholder() {
   if (state.active !== "human") return;
   if (!state.levelThree.placeholderLoveLetterVisible || state.levelThree.placeholderLoveLetterCollectable) return;
   const distanceToPlaceholder = distance2D(state.human, LEVEL_THREE_POINTS.placeholderLoveLetter);
@@ -2378,6 +2491,7 @@ function levelOneBloomDriftProgress() {
 function updateVisualEffects(dt) {
   markerMeshes.active.rotation.z += dt * 1.8;
   updateLevelOneBloomVisuals(dt);
+  updateLevelThreeOpeningVisuals(dt);
   if (state.frogReveal.active) {
     state.frogReveal.elapsed += dt;
     if (state.frogReveal.elapsed >= FROG_REVEAL_SECONDS) state.frogReveal.active = false;
@@ -2517,6 +2631,47 @@ function updateVisualEffects(dt) {
   }
 
   updateParticles(particleContext, dt);
+}
+
+function updateLevelThreeOpeningVisuals(dt) {
+  if (levelThreeInteractiveMeshes.totemRaft) {
+    const raftPosition = currentLevelThreeTotemRaftPosition();
+    const bob = Math.sin(state.elapsed * 2.1) * 0.045;
+    levelThreeInteractiveMeshes.totemRaft.position.set(raftPosition.x, SURFACE_Y + 0.12 + bob, raftPosition.z);
+    levelThreeInteractiveMeshes.totemRaft.rotation.y += dt * 0.18;
+    levelThreeInteractiveMeshes.totemRaft.traverse((child) => {
+      if (child.userData?.levelThreeRaftTotem) {
+        child.visible = state.scene.id === SCENES.LEVEL_THREE && !state.levelThree.crocodileTotemCollected;
+      }
+    });
+  }
+
+  if (levelThreeInteractiveMeshes.crocodileEcho) {
+    const awake = Boolean(state.levelThree.crocodileEchoAwake);
+    const pulse = 0.5 + Math.sin(state.elapsed * (awake ? 4.2 : 2.8)) * 0.5;
+    levelThreeInteractiveMeshes.crocodileEcho.position.set(
+      LEVEL_THREE_CROCODILE_ECHO.position.x,
+      SURFACE_Y + 0.14 + Math.sin(state.elapsed * 2.3) * 0.04,
+      LEVEL_THREE_CROCODILE_ECHO.position.z
+    );
+    levelThreeInteractiveMeshes.crocodileEcho.traverse((child) => {
+      if (!child.isMesh || !child.material) return;
+      const part = child.userData?.levelThreeEchoPart || "body";
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      materials.forEach((material) => {
+        if (material.opacity !== undefined) {
+          material.opacity = part === "ring"
+            ? awake ? 0.74 + pulse * 0.16 : 0.48 + pulse * 0.08
+            : awake ? 0.58 + pulse * 0.08 : 0.32 + pulse * 0.06;
+        }
+        if (material.emissiveIntensity !== undefined) {
+          material.emissiveIntensity = part === "ring"
+            ? awake ? 0.34 + pulse * 0.12 : 0.1
+            : awake ? 0.18 + pulse * 0.08 : 0.08;
+        }
+      });
+    });
+  }
 }
 
 function updateFrogUnlockVisuals(dt) {
@@ -2787,7 +2942,7 @@ function frogJump() {
       : state.scene.id === SCENES.LEVEL_TWO
         ? (state.levelTwo.lastFrogJumpReason === "too_high" ? "That ledge is too high for the Frog Cubeling." : "Line up with a low ledge, then press Space.")
         : state.scene.id === SCENES.LEVEL_THREE
-          ? "No Frog jump route is authored in this shell yet."
+          ? "Line up with the next floating leaf, then press Space."
           : "Face the barrier from close range, then press Space.";
     showPrompt(text, 1.4);
     const speech = state.scene.id === SCENES.LEVEL_ONE
@@ -2795,7 +2950,7 @@ function frogJump() {
       : state.scene.id === SCENES.LEVEL_TWO
         ? (state.levelTwo.lastFrogJumpReason === "too_high" ? "That's too high for me." : "Line me up with a ledge first.")
         : state.scene.id === SCENES.LEVEL_THREE
-          ? "No jump path here yet."
+          ? "I can hop from leaf to leaf."
           : "Line me up with the barrier first.";
     showSpeech("frog", speech, 1.5);
     return;
@@ -2812,6 +2967,7 @@ function frogJump() {
 function getFrogJump() {
   if (state.scene.id === SCENES.LEVEL_ONE) return getLevelOneFrogJump();
   if (state.scene.id === SCENES.LEVEL_TWO) return getLevelTwoFrogJump();
+  if (state.scene.id === SCENES.LEVEL_THREE) return getLevelThreeFrogJump();
   const barrierX = gridPoint(WALL_COLUMN, DOOR_ROW).x;
   const side = state.frog.x < barrierX ? 1 : -1;
   const facingTowardBarrier = state.frog.facing.x * side > 0.35;
@@ -2830,6 +2986,29 @@ function getFrogJump() {
     start: { x: state.frog.x, z: state.frog.z },
     end: landing,
     over: { x: barrierX, z: matchingBarrier.z, topHeight: BARRIER_TOP_HEIGHT },
+    elapsed: 0,
+    duration: JUMP_DURATION
+  };
+}
+
+function getLevelThreeFrogJump() {
+  const jump = LEVEL_THREE_FROG_LANE_JUMPS.find((candidate) =>
+    distance2D(state.frog, candidate.from) <= candidate.fromRadius ||
+    (
+      state.levelThree.frogLaneSurfaceId === candidate.fromId &&
+      distance2D(state.frog, candidate.from) <= candidate.fromRadius + 0.65
+    )
+  );
+  if (!jump) return null;
+  const landing = { x: jump.to.x, z: jump.to.z };
+  if (collidesAt(state.frog, landing.x, landing.z, { ignoreActor: true })) return null;
+  return {
+    kind: "level_three_lily_lane",
+    jumpId: jump.id,
+    destinationSurface: jump.destinationSurface,
+    start: { x: state.frog.x, z: state.frog.z },
+    end: landing,
+    over: { x: landing.x, z: landing.z, topHeight: 0.18 },
     elapsed: 0,
     duration: JUMP_DURATION
   };
@@ -3222,11 +3401,28 @@ function sceneColliderBlocks(actor, x, z) {
     return false;
   }
   if (state.scene.id === SCENES.LEVEL_THREE) {
-    return sceneObjectColliders
-      .filter((collider) => collider.scene === SCENES.LEVEL_THREE)
-      .some((collider) => circleIntersectsAabb(x, z, actor.radius, collider));
+    for (const collider of sceneObjectColliders.filter((item) => item.scene === SCENES.LEVEL_THREE)) {
+      if (!circleIntersectsAabb(x, z, actor.radius, collider)) continue;
+      if (levelThreeWalkableSurfaceAllows(actor, x, z, collider)) continue;
+      if (
+        actor === state.frog &&
+        state.active === "frog" &&
+        collider.levelThreeWater &&
+        pointInBounds({ x, z }, LEVEL_THREE_FROG_LANE_WATER_RESET_ZONE)
+      ) {
+        resetLevelThreeFrogLane();
+        return true;
+      }
+      return true;
+    }
+    return false;
   }
   return false;
+}
+
+function levelThreeWalkableSurfaceAllows(actor, x, z, collider) {
+  if (!collider.levelThreeWater) return false;
+  return actor === state.frog && levelThreeFrogLilyPadWalkableAt({ x, z }, actor.radius);
 }
 
 function levelTwoWalkableSurfaceAllows(actor, x, z, collider) {
@@ -3329,6 +3525,40 @@ function levelTwoTileBounds(tiles, padding = 0) {
 
 function pointInLevelTwoTiles(point, tiles, padding = 0) {
   return pointInBounds(point, levelTwoTileBounds(tiles, padding));
+}
+
+function levelThreeFrogLilyPadWalkableAt(point, actorRadius = 0) {
+  return LEVEL_THREE_LILY_PAD_PLACEHOLDERS.some((pad) =>
+    distance2D(point, pad.position) <= pad.radius + Math.min(actorRadius, 0.35) + LEVEL_THREE_FROG_LILY_PAD_SURFACE_PADDING
+  );
+}
+
+function resetLevelThreeFrogLane() {
+  if (state.scene.id !== SCENES.LEVEL_THREE) return;
+  if (state.elapsed - state.levelThree.lastFrogLaneResetAt < LEVEL_THREE_FROG_LANE_RESET_COOLDOWN) return;
+  state.levelThree.lastFrogLaneResetAt = state.elapsed;
+  state.levelThree.frogLaneResetCount += 1;
+  state.levelThree.frogLaneSurfaceId = null;
+  state.frog.x = LEVEL_THREE_FROG_LANE_RESET_POINT.x;
+  state.frog.z = LEVEL_THREE_FROG_LANE_RESET_POINT.z;
+  state.frog.facing = { ...LEVEL_THREE_FROG_LANE_RESET_POINT.facing };
+  state.frogJump = null;
+  state.frogMoveHop = 0;
+  state.frogAi.timer = 0;
+  state.frogAi.target = { x: state.frog.x, z: state.frog.z };
+  state.frogAi.currentSide = frogCurrentSide();
+  showPrompt("Splash. Frog pops back to the lane start.", 1.8);
+  showSpeech("frog", "Back to the start leaf.", 1.5);
+  spawnRevealSparkles(particleContext, state.frog.x, state.frog.z, 0xaee8ff, 10);
+}
+
+function currentLevelThreeTotemRaftPosition() {
+  const marker = LEVEL_THREE_RAFT_MARKERS[clamp(
+    Math.round(state.levelThree?.totemRaftState ?? 0),
+    0,
+    LEVEL_THREE_RAFT_MARKERS.length - 1
+  )] || LEVEL_THREE_RAFT_MARKERS[0];
+  return marker.position;
 }
 
 function pointInLevelTwoRamp(point) {
@@ -4003,6 +4233,12 @@ function syncMarkers() {
     buttonPoint,
     syncButtonTopVisual,
     clamp
+  });
+  Object.entries(levelThreeInteractiveMeshes.greenButtonTops || {}).forEach(([id, buttonTop]) => {
+    const pressed = id === "level3TotemGreenButton"
+      ? Boolean(state.levelThree.totemGreenButtonPressed)
+      : false;
+    syncButtonTopVisual(buttonTop, pressed, BUTTON_TOP_REST_Y, BUTTON_TOP_PRESSED_Y);
   });
 }
 
@@ -4719,6 +4955,15 @@ function getSpeechAnchorPoint(anchor) {
   if (anchor === "frogTotem") return { x: FROG_TOTEM.x, y: SURFACE_Y + 2.0, z: FROG_TOTEM.z };
   if (anchor === "elephantEcho") return { x: LEVEL_TWO_POINTS.elephantEcho.x, y: (LEVEL_TWO_POINTS.elephantEcho.y ?? SURFACE_Y) + 2.0, z: LEVEL_TWO_POINTS.elephantEcho.z };
   if (anchor === "elephantTotem") return { x: LEVEL_TWO_POINTS.elephantTotem.x, y: LEVEL_TWO_ELEPHANT_TOTEM_HILL.topY + 1.4, z: LEVEL_TWO_POINTS.elephantTotem.z };
+  if (anchor === "level3CrocodileEcho") return { x: LEVEL_THREE_CROCODILE_ECHO.position.x, y: SURFACE_Y + 1.6, z: LEVEL_THREE_CROCODILE_ECHO.position.z };
+  if (anchor === "level3TotemGreenButton") {
+    const button = LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS.find((item) => item.id === "level3TotemGreenButton") || LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS[0];
+    return { x: button.position.x, y: SURFACE_Y + 1.05, z: button.position.z };
+  }
+  if (anchor === "level3TotemRaft") {
+    const raftPosition = currentLevelThreeTotemRaftPosition();
+    return { x: raftPosition.x, y: SURFACE_Y + 1.35, z: raftPosition.z };
+  }
   if (anchor === "button") {
     const button = buttonPoint();
     return { x: button.x, y: SURFACE_Y + 1.05, z: button.z };
@@ -4914,6 +5159,8 @@ function currentVisibleAssets() {
 }
 
 function renderGameToText() {
+  const levelThreeTotemButton = LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS.find((button) => button.id === "level3TotemGreenButton");
+  const levelThreeRaftPosition = currentLevelThreeTotemRaftPosition();
   return JSON.stringify({
   title: "Lumina3D",
   ready: state.ready,
@@ -4989,6 +5236,15 @@ function renderGameToText() {
       spawned: Boolean(state.cubelings.elephant?.spawned),
       speed: LEVEL_TWO_ELEPHANT_SPEED,
       behavior: "slow grounded actor after Totem unlock; stationary when unpossessed; heavy enough for red buttons"
+    },
+    crocodile: {
+      name: "Crocodile Cubeling",
+      unlocked: Boolean(state.cubelings.crocodile?.unlocked),
+      unlockedPending: Boolean(state.cubelings.crocodile?.unlockedPending),
+      active: false,
+      spawned: false,
+      controllable: false,
+      behavior: "found through Level Three Totem in Phase 2A; control waits for Phase 3"
     }
   },
   persistentUnlocks: {
@@ -5645,7 +5901,15 @@ function renderGameToText() {
     },
     waterTileCount: LEVEL_THREE_WATER_TILES.length,
     landTileCount: LEVEL_THREE_LAND_TILES.length,
+    pathTileCount: LEVEL_THREE_PATH_TILES.length,
     mostlyWater: LEVEL_THREE_WATER_TILES.length > LEVEL_THREE_LAND_TILES.length,
+    startIslandEdgeConnection: {
+      connectedToLeftEdge: LEVEL_THREE_START_EDGE_CONNECTION_TILES.some((tile) => tile.x === 0) &&
+        LEVEL_THREE_ISLANDS.some((island) => island.id === "level3StartIsland" && LEVEL_THREE_START_EDGE_CONNECTION_TILES.every((tile) =>
+          island.tiles.some((islandTile) => islandTile.x === tile.x && islandTile.y === tile.y)
+        )),
+      tiles: LEVEL_THREE_START_EDGE_CONNECTION_TILES.map((tile) => ({ x: tile.x, y: tile.y }))
+    },
     islandCount: LEVEL_THREE_ISLANDS.length,
     islands: LEVEL_THREE_ISLANDS.map((island) => ({
       id: island.id,
@@ -5679,17 +5943,42 @@ function renderGameToText() {
       level3TotemRaftDocked: Boolean(state.levelThree.totemRaftDocked),
       level3CrocodileUnlocked: Boolean(state.levelThree.crocodileUnlocked),
       level3BridgeState: state.levelThree.bridgeState ?? 0,
-      level3OpeningGreenPressCount: state.levelThree.openingGreenPressCount ?? 0
+      level3OpeningGreenPressCount: state.levelThree.openingGreenPressCount ?? 0,
+      level3CrocodileControlAvailable: Boolean(state.levelThree.crocodileControlAvailable)
+    },
+    phase2AState: {
+      implemented: true,
+      movingLilyPadTimingDeferred: true,
+      humanVisualReviewPending: true,
+      totemRaftState: state.levelThree.totemRaftState ?? 0,
+      totemRaftDocked: Boolean(state.levelThree.totemRaftDocked),
+      crocodileTotemCollected: Boolean(state.levelThree.crocodileTotemCollected),
+      crocodileEchoAwake: Boolean(state.levelThree.crocodileEchoAwake),
+      crocodileUnlocked: Boolean(state.levelThree.crocodileUnlocked),
+      crocodileControlAvailable: Boolean(state.levelThree.crocodileControlAvailable),
+      frogLaneResetCount: state.levelThree.frogLaneResetCount ?? 0,
+      frogLaneSurfaceId: state.levelThree.frogLaneSurfaceId || "",
+      totemGreenButtonPresses: state.levelThree.totemGreenButtonPresses ?? 0,
+      totemGreenButtonPressed: Boolean(state.levelThree.totemGreenButtonPressed),
+      totemGreenButtonHeldActor: state.levelThree.totemGreenButtonHeldActor || ""
     },
     lilyPadLane: LEVEL_THREE_LILY_PAD_PLACEHOLDERS.map((pad) => ({
       id: pad.id,
       name: pad.name,
       x: Number(pad.position.x.toFixed(2)),
       z: Number(pad.position.z.toFixed(2)),
+      tileX: pad.tile?.x ?? null,
+      tileY: pad.tile?.y ?? null,
+      centerTileIsWater: Boolean(pad.tile && LEVEL_THREE_WATER_TILES.some((tile) => tile.x === pad.tile.x && tile.y === pad.tile.y)),
+      visualAsset: "generated-level-one-lily-pad-shared-visual",
       radius: pad.radius,
-      staticPhaseOne: true,
+      staticPhaseOne: false,
+      staticPhase2A: true,
       movementImplemented: false,
-      splashResetImplemented: false,
+      splashResetImplemented: true,
+      frogWalkable: true,
+      frogJumpSurface: true,
+      movingTimingDeferred: true,
       humanUsable: false
     })),
     greenButtons: LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS.map((button) => ({
@@ -5700,29 +5989,41 @@ function renderGameToText() {
       x: Number(button.position.x.toFixed(2)),
       z: Number(button.position.z.toFixed(2)),
       color: "green",
+      visualAsset: "kaykit-platformer-button-green-material-variant",
       repeatableFutureButton: true,
-      behaviorImplemented: false
+      behaviorImplemented: button.id === "level3TotemGreenButton",
+      pressCount: button.id === "level3TotemGreenButton" ? state.levelThree.totemGreenButtonPresses ?? 0 : 0,
+      pressed: button.id === "level3TotemGreenButton" ? Boolean(state.levelThree.totemGreenButtonPressed) : false,
+      heldActor: button.id === "level3TotemGreenButton" ? state.levelThree.totemGreenButtonHeldActor || "" : "",
+      reachableByFrog: button.id === "level3TotemGreenButton",
+      linkedMechanismActive: button.id === "level3TotemGreenButton"
     })),
     crocodileEcho: {
       id: LEVEL_THREE_CROCODILE_ECHO.id,
       name: LEVEL_THREE_CROCODILE_ECHO.name,
       visible: state.scene.id === SCENES.LEVEL_THREE,
-      active: false,
+      active: Boolean(state.levelThree.crocodileEchoAwake),
+      awake: Boolean(state.levelThree.crocodileEchoAwake),
       solid: false,
       x: Number(LEVEL_THREE_CROCODILE_ECHO.position.x.toFixed(2)),
       z: Number(LEVEL_THREE_CROCODILE_ECHO.position.z.toFixed(2)),
       radius: LEVEL_THREE_CROCODILE_ECHO.radius,
-      unlockImplemented: false,
+      unlockImplemented: true,
       possessionImplemented: false,
       waterMovementImplemented: false
     },
     totemRaft: {
       id: LEVEL_THREE_TOTEM_RAFT.id,
       name: LEVEL_THREE_TOTEM_RAFT.name,
-      x: Number(LEVEL_THREE_TOTEM_RAFT.position.x.toFixed(2)),
-      z: Number(LEVEL_THREE_TOTEM_RAFT.position.z.toFixed(2)),
-      collectable: false,
-      movementImplemented: false,
+      x: Number(levelThreeRaftPosition.x.toFixed(2)),
+      z: Number(levelThreeRaftPosition.z.toFixed(2)),
+      stateIndex: state.levelThree.totemRaftState ?? 0,
+      docked: Boolean(state.levelThree.totemRaftDocked),
+      collectable: Boolean(state.levelThree.totemRaftDocked && !state.levelThree.crocodileTotemCollected),
+      collected: Boolean(state.levelThree.crocodileTotemCollected),
+      movementImplemented: true,
+      movementStyle: "stepped-snap-phase-2a",
+      collectionRadius: LEVEL_THREE_TOTEM_COLLECTION_RADIUS,
       markers: LEVEL_THREE_RAFT_MARKERS.map((marker) => ({
         id: marker.id,
         name: marker.name,
@@ -5730,6 +6031,13 @@ function renderGameToText() {
         x: Number(marker.position.x.toFixed(2)),
         z: Number(marker.position.z.toFixed(2))
       }))
+    },
+    totemGreenButtonReachability: {
+      id: levelThreeTotemButton?.id || "level3TotemGreenButton",
+      frogDistance: levelThreeTotemButton ? Number(distance2D(state.frog, levelThreeTotemButton.position).toFixed(2)) : null,
+      radius: LEVEL_THREE_TOTEM_GREEN_BUTTON_RADIUS,
+      reachableByFrog: Boolean(levelThreeTotemButton),
+      bridgeGreenButtonSeparate: LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS.some((button) => button.id === "level3BridgeGreenButton")
     },
     bridgePlaceholders: {
       cycleImplemented: false,
@@ -5750,6 +6058,7 @@ function renderGameToText() {
       futureRequirement: button.futureRequirement,
       x: Number(button.position.x.toFixed(2)),
       z: Number(button.position.z.toFixed(2)),
+      visualAsset: "kaykit-platformer-button-red-placeholder",
       behaviorImplemented: false
     })),
     anchorStones: LEVEL_THREE_ANCHOR_STONES.map((stone) => ({
@@ -5776,13 +6085,9 @@ function renderGameToText() {
       completionImplemented: false
     },
     inactiveMechanics: {
-      crocodileUnlock: false,
       crocodilePossession: false,
       crocodileCargo: false,
       movingLilyPads: false,
-      frogSplashReset: false,
-      greenButtons: false,
-      totemRaftMovement: false,
       centralBridgeCycle: false,
       redButtons: false,
       movingPlatforms: false,
@@ -5796,7 +6101,7 @@ function renderGameToText() {
       z: Number(zone.position.z.toFixed(2)),
       radius: zone.radius
     })),
-    authoringContract: "shell only; no final route, no new Cubeling, no complex mechanisms",
+    authoringContract: "Phase 2A opening Totem puzzle only; no Crocodile control, no central bridge, no cargo, no final route; human visual review pending",
     colliderLabels: sceneObjectColliders
       .filter((collider) => collider.scene === SCENES.LEVEL_THREE)
       .map((collider) => collider.label)
@@ -5877,11 +6182,16 @@ installTestHooks({
   renderFrame,
   startLevelOne,
   startLevelTwo,
+  startLevelThree,
   tutorialButton: TUTORIAL_BUTTON,
   tutorialStart: START,
   spellbook: SPELLBOOK,
   levelOneButton: LEVEL_ONE_BUTTON,
   levelOneLoveLetterPoint: LEVEL_ONE_LOVE_LETTER_POINT,
+  levelThreePoints: LEVEL_THREE_POINTS,
+  levelThreeGreenButtons: LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS,
+  levelThreeRaftMarkers: LEVEL_THREE_RAFT_MARKERS,
+  levelThreeFrogLaneResetPoint: LEVEL_THREE_FROG_LANE_RESET_POINT,
   levelTwoRedPlatforms: LEVEL_TWO_RED_PLATFORMS,
   levelTwoRedButtonSurfaceY,
   updateLevelTwoSurfaceState,

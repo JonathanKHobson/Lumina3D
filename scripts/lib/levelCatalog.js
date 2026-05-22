@@ -29,6 +29,8 @@ import {
   LEVEL_THREE_BOUNDS,
   LEVEL_THREE_BRIDGE_DESTINATION_MARKERS,
   LEVEL_THREE_CROCODILE_ECHO,
+  LEVEL_THREE_FROG_LANE_JUMPS,
+  LEVEL_THREE_FROG_LANE_RESET_POINT,
   LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS,
   LEVEL_THREE_HEIGHT,
   LEVEL_THREE_ISLAND_MARKERS,
@@ -45,6 +47,9 @@ import {
   LEVEL_THREE_RED_BUTTON_PLACEHOLDERS,
   LEVEL_THREE_RESERVED_ZONES,
   LEVEL_THREE_RESET_PERCH_PLACEHOLDERS,
+  LEVEL_THREE_START_EDGE_CONNECTION_TILES,
+  LEVEL_THREE_TOTEM_COLLECTION_RADIUS,
+  LEVEL_THREE_TOTEM_GREEN_BUTTON_RADIUS,
   LEVEL_THREE_TOTEM_RAFT,
   LEVEL_THREE_WATER_TILES,
   LEVEL_THREE_WIDTH
@@ -220,15 +225,24 @@ function makeTerrainExpectation(id, name, prefix, count, sourceY = SURFACE_Y, no
   });
 }
 
-function makeLevelThreeGeneratedObject({ id, name, category, position, mechanismLink }) {
+function makeLevelThreeGeneratedObject({
+  id,
+  name,
+  category,
+  position,
+  mechanismLink,
+  assetKey = "generated-level-three-placeholder",
+  assetPath = "/generated/level-three-placeholder",
+  fingerprint = "Phase 1 visual placeholder only; behavior inactive."
+}) {
   return makeObject({
     id,
     name,
     type: "phase-one-placeholder",
     category,
     asset: {
-      key: "generated-level-three-placeholder",
-      path: "/generated/level-three-placeholder",
+      key: assetKey,
+      path: assetPath,
       scale: 1
     },
     position: {
@@ -241,7 +255,7 @@ function makeLevelThreeGeneratedObject({ id, name, category, position, mechanism
     expectedColliderCount: 0,
     mechanismLink,
     runtimeProbe: `levelThree.placeholders.${id}`,
-    fingerprint: "Phase 1 visual placeholder only; behavior inactive."
+    fingerprint
   });
 }
 
@@ -842,30 +856,38 @@ function makeLevelMetadata() {
     ...LEVEL_THREE_LILY_PAD_PLACEHOLDERS.map((pad) => makeLevelThreeGeneratedObject({
       id: pad.id,
       name: pad.name,
-      category: "moving-lily-pad-placeholder",
+      category: "frog-lily-pad-walkable-surface",
       position: pad.position,
-      mechanismLink: "future-frog-timing-lane-static"
+      mechanismLink: "phase-2a-static-frog-jump-lane",
+      assetKey: "generated-level-one-lily-pad-shared-visual",
+      assetPath: "/generated/shared/lily-pad",
+      fingerprint: `Phase 2A static Frog-valid lily pad using shared Level One visual; moving timing deferred; center tile=${pad.tile?.x},${pad.tile?.y}.`
     })),
     ...LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS.map((button) => makeLevelThreeGeneratedObject({
       id: button.id,
       name: button.name,
       category: "green-button-placeholder",
       position: button.position,
-      mechanismLink: button.futureMechanism
+      mechanismLink: button.futureMechanism,
+      assetKey: "kaykit-platformer-button-green-material-variant",
+      assetPath: "/generated/material-variant/button-green-from-kaykit-button-blue",
+      fingerprint: button.id === "level3TotemGreenButton"
+        ? "KayKit two-part button geometry with green material variant; repeatable Phase 2A Totem raft winch button."
+        : "KayKit two-part button geometry with green material variant; bridge-control behavior remains inactive."
     })),
     makeLevelThreeGeneratedObject({
       id: LEVEL_THREE_CROCODILE_ECHO.id,
       name: LEVEL_THREE_CROCODILE_ECHO.name,
       category: "crocodile-echo-placeholder",
       position: LEVEL_THREE_CROCODILE_ECHO.position,
-      mechanismLink: "dormant-noninteractive"
+      mechanismLink: "wakes-after-human-totem-collection"
     }),
     makeLevelThreeGeneratedObject({
       id: LEVEL_THREE_TOTEM_RAFT.id,
       name: LEVEL_THREE_TOTEM_RAFT.name,
       category: "totem-raft-placeholder",
       position: LEVEL_THREE_TOTEM_RAFT.position,
-      mechanismLink: "future-winch-raft-static"
+      mechanismLink: "phase-2a-repeatable-green-button-winch"
     }),
     ...LEVEL_THREE_RAFT_MARKERS.map((marker) => makeLevelThreeGeneratedObject({
       id: marker.id,
@@ -886,7 +908,10 @@ function makeLevelMetadata() {
       name: button.name,
       category: "red-button-placeholder",
       position: button.position,
-      mechanismLink: button.futureRequirement
+      mechanismLink: button.futureRequirement,
+      assetKey: "buttonBaseRed/buttonTopRed",
+      assetPath: "/assets/kaykit/platformer/button-red/",
+      fingerprint: "KayKit two-part red button geometry placeholder; weight behavior inactive."
     })),
     ...LEVEL_THREE_ANCHOR_STONES.map((stone) => makeLevelThreeGeneratedObject({
       id: stone.id,
@@ -1148,8 +1173,11 @@ function makeLevelMetadata() {
       levelDataFile: "/src/levels/levelThree.js",
       sceneAssets: [
         "groundTile",
-        "pathTile",
         "waterTile",
+        "buttonBaseBlue",
+        "buttonTopBlue",
+        "buttonBaseRed",
+        "buttonTopRed",
         "forestTreeA",
         "forestTreeB",
         "forestBush",
@@ -1200,7 +1228,11 @@ function makeLevelMetadata() {
       objects: levelThreeObjects,
       fixtures: {
         implemented: [
-          fixtureImplemented("level_three_start", "Jump directly to the Level Three shell and wait for play state.")
+          fixtureImplemented("level_three_start", "Jump directly to Level Three and wait for play state."),
+          fixtureImplemented(
+            "level_three_crocodile_totem_opening",
+            "Seed the Phase 2A opening route, verify Frog repeat-presses the Totem green button, the raft docks, Frog cannot collect the Totem, Human collects it, the Crocodile Echo wakes, and Crocodile control remains unavailable."
+          )
         ],
         planned: []
       },
@@ -1213,13 +1245,23 @@ function makeLevelMetadata() {
         landTileCount: LEVEL_THREE_LAND_TILES.length,
         pathTileCount: LEVEL_THREE_PATH_TILES.length,
         mostlyWater: LEVEL_THREE_WATER_TILES.length > LEVEL_THREE_LAND_TILES.length,
+        startEdgeConnectionTiles: LEVEL_THREE_START_EDGE_CONNECTION_TILES,
+        phase2A: {
+          status: "implemented-automated-verification-only",
+          humanVisualReviewPending: true,
+          movingLilyPadTimingDeferred: true,
+          frogLaneJumpCount: LEVEL_THREE_FROG_LANE_JUMPS.length,
+          frogLaneResetPoint: LEVEL_THREE_FROG_LANE_RESET_POINT,
+          totemGreenButtonRadius: LEVEL_THREE_TOTEM_GREEN_BUTTON_RADIUS,
+          totemCollectionRadius: LEVEL_THREE_TOTEM_COLLECTION_RADIUS
+        },
         islands: LEVEL_THREE_ISLANDS.map((island) => island.id),
         islandMarkers: LEVEL_THREE_ISLAND_MARKERS.map((marker) => marker.objectId || marker.id),
         placeholders: LEVEL_THREE_PLACEHOLDER_IDS,
         greenButtons: LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS.map((button) => button.id),
         raftMarkers: LEVEL_THREE_RAFT_MARKERS.map((marker) => marker.id),
         reservedZones: LEVEL_THREE_RESERVED_ZONES.map((zone) => zone.id),
-        authoringContract: "shell only; no final route, no new Cubeling, no complex mechanisms"
+        authoringContract: "Phase 2A opening Totem puzzle only; no Crocodile control, no central bridge, no cargo, no final route; human visual review pending"
       }
     }
   };

@@ -27,7 +27,15 @@ Phase 1 shipped a `26x22` mostly-water shell with:
 - Elephant, Red Button A, Platform Dock, Weight Cache, Red Button B, and Love Letter Cliff zones.
 - visible, non-collectable Love Letter placeholder on the raised cliff.
 
-All Level Three mechanics remain inactive after Phase 1.
+The shell contract repair after Phase 1.5 tightened the visual language before mechanics:
+
+- Start Island now has a visible left-edge grass/shore connection for honest arrival.
+- random sand/path marker tiles were removed from the Level Three shell.
+- the Frog lily-pad lane now has a clearer water gap toward Totem Winch Island.
+- all three lily pad centers are authored on water tiles and use the shared Level One lily pad visual.
+- Level Three green/red button placeholders use the established KayKit two-part button geometry family; green is a material variant because no green KayKit button asset is present.
+
+After Phase 2A, the opening Crocodile Totem puzzle is active under automated coverage only. Human visual review is still pending, so do not treat the shell or Phase 2A as visually accepted yet.
 
 ## Design Locks
 
@@ -53,17 +61,25 @@ Rewrite Level Three as a mostly-water island map with named zones and visible pl
 
 ### Phase 1.5 - Documentation And Editor Prep
 
-Status: current maintenance slice.
+Status: implemented.
 
 Update living docs, progress tracking, render/debug output, and editor metadata so future Level Three passes can stay small and source-backed.
 
-### Phase 2 - Crocodile Totem Opening Puzzle
+### Phase 1.6 - Shell Contract Repair
+
+Status: implemented.
+
+Correct the Phase 1 shell visual contract before mechanics: connect Start Island to the left edge, remove unmotivated sand markers, move the Frog lane/Totem Winch spacing apart, put lily pads over water, reuse the established lily pad visual, and replace generated button cylinders with the KayKit button visual family. Keep all future mechanics inactive.
+
+### Phase 2A - Crocodile Totem Opening Puzzle
+
+Status: implemented with automated verification; human visual review pending.
 
 Build only the opening puzzle:
 
-- Frog crosses a short moving-lily-pad timing lane.
-- If Frog misses during this intended lane, Frog splash-resets to the Frog Lane Start Perch.
-- Splash reset is Level Three lane-specific and must not globally change Frog water behavior.
+- Frog crosses a short static lily-pad jump lane.
+- If controlled Frog enters the intended lane water while off a lily-pad surface, Frog splash-resets to the Frog Lane Start Perch.
+- Splash reset is Level Three lane-specific and does not globally change Frog water behavior.
 - Frog reaches Totem Winch Island.
 - Frog repeatedly presses `level3TotemGreenButton`.
 - Each green press winches `level3TotemRaft` one state closer to Start Island.
@@ -71,6 +87,12 @@ Build only the opening puzzle:
 - Human collects the Crocodile Totem.
 - `level3CrocodileEcho` wakes.
 - Crocodile control remains out of scope until Phase 3.
+
+The static lily-pad lane is deliberate for Phase 2A. Moving lily-pad timing is deferred to Phase 2B unless review decides the static route is sufficient for this opening lesson.
+
+### Phase 2B - Optional Moving Lily Timing Polish
+
+Add deterministic small lily-pad motion and tune splash-reset feel if the opening route needs more timing texture after human review. Keep it lane-specific and cozy. Do not add Crocodile control, central bridge cycling, cargo, red buttons, elevators, or the final Love Letter route.
 
 ### Phase 3 - Crocodile Actor
 
@@ -105,7 +127,7 @@ Tune readability, Crocodile idle/patrol, hints, camera framing, screenshot cover
 
 ## Opening Totem Puzzle Notes
 
-The opening puzzle should teach green repeatability without asking the player to understand the whole lake system. Frog should see the lane, hop through a tiny timing route, reach the winch island, and press the button enough times to bring the raft home.
+The opening puzzle should teach green repeatability without asking the player to understand the whole lake system. Frog should see the lane, hop through a tiny water crossing, reach the winch island, and press the button enough times to bring the raft home.
 
 Splash reset should feel cozy and specific, not like death or punishment. A miss means Frog pops or splashes back to the Frog Lane Start Perch, ready to try again. Do not make global Frog water behavior harsher to support this one lane.
 

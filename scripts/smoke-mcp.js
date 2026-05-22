@@ -13,7 +13,8 @@ const EXPECTED_TOOLS = [
   "lumina_explain_editor_patch",
   "lumina_get_current_editor_state",
   "lumina_list_archetypes",
-  "lumina_get_archetype_contract"
+  "lumina_get_archetype_contract",
+  "lumina_publish_current_branch"
 ];
 
 const FORBIDDEN_TOOL_PATTERNS = [/apply/i, /dry.*run/i, /scaffold/i, /write/i, /run.*any.*command/i];
@@ -82,6 +83,13 @@ async function main() {
 
     const editorState = await callJsonTool(client, "lumina_get_current_editor_state");
     assert(editorState.ok === false && editorState.status === "missing", "missing editor-state fallback failed.");
+
+    const publishRefusal = await callJsonTool(client, "lumina_publish_current_branch", {
+      message: "Smoke should not publish",
+      branch: "smoke",
+      confirm: false
+    });
+    assert(publishRefusal.ok === false && publishRefusal.requiredInput === "confirm", "publish confirmation refusal failed.");
 
     console.log(`[OK] Lumina MCP smoke passed with ${listedNames.length} tools.`);
   } finally {

@@ -1,8 +1,8 @@
 # Lumina3D MCP MVP
 
-The Lumina3D MCP is a local stdio server for giving Codex compact project context, level data, editor-state snapshots, allowlisted validation wrappers, and gameplay archetype contracts.
+The Lumina3D MCP is a local stdio server for giving Codex compact project context, level data, editor-state snapshots, allowlisted validation wrappers, gameplay archetype contracts, and a guarded current-branch publish helper.
 
-This first pass is intentionally read-only plus validation. It does not apply patches, scaffold objects, mutate source files, expose arbitrary shell commands, or run an HTTP editor bridge.
+The normal surface is read-only plus validation. It does not apply patches, scaffold objects, mutate source files, expose arbitrary shell commands, or run an HTTP editor bridge. The only write/open-world tool is the guarded Git publish helper, which requires explicit confirmation and runs the project publish checklist before pushing.
 
 ## Tools
 
@@ -19,6 +19,7 @@ This first pass is intentionally read-only plus validation. It does not apply pa
 | `lumina_run_build` | validation | Run the allowlisted `npm run build` wrapper. |
 | `lumina_run_level_validation_suite` | validation | Run `basic`, `collider`, `editor_patch`, or `full` validation suites. |
 | `lumina_explain_editor_patch` | validation/read-only | Explain an editor patch from inline JSON or a project-root JSON path. |
+| `lumina_publish_current_branch` | git publish | Guarded wrapper that runs status, `git diff --check`, build, stage, commit, push, and final status/log for the current branch. Requires `confirm: true`. |
 
 ## Safety Model
 
@@ -31,6 +32,7 @@ This first pass is intentionally read-only plus validation. It does not apply pa
 - Inline editor patches for explanation are written under ignored `tmp/lumina-mcp/patches/`.
 - Validation wrappers do not start or own a Vite dev server. Browser-dependent checks use `LUMINA3D_URL` or `http://127.0.0.1:5178/`.
 - No MCP tool writes source files in this MVP.
+- `lumina_publish_current_branch` is intentionally the one remote-mutating exception. It does not run arbitrary shell commands; it calls the allowlisted `tools:publish-current-branch` script, requires `confirm: true`, refuses branch mismatches, and runs `npm run build` before commit/push.
 
 ## Codex Config
 
@@ -56,7 +58,30 @@ Use the smoke client to verify the tool surface without adding the server to Cod
 npm run mcp:smoke
 ```
 
-The smoke check starts the stdio server through an MCP client, lists the exact expected tools, confirms no write/apply/scaffold tools are exposed, calls health, levels, the Level Two manifest, archetype discovery/contract, and the missing editor-state fallback.
+The smoke check starts the stdio server through an MCP client, lists the exact expected tools, confirms no source-write/apply/scaffold tools are exposed, calls health, levels, the Level Two manifest, archetype discovery/contract, the missing editor-state fallback, and the publish tool's `confirm: false` refusal path.
+
+## Publishing
+
+For the current Lumina3D branch, agents can use either the npm script directly:
+
+```bash
+npm run tools:publish-current-branch -- --message "Update Lumina3D Level 3 and editor prep" --branch codex/lumina3d-level-editor-mvp --yes --pretty
+```
+
+or the MCP tool:
+
+```json
+{
+  "tool": "lumina_publish_current_branch",
+  "arguments": {
+    "message": "Update Lumina3D Level 3 and editor prep",
+    "branch": "codex/lumina3d-level-editor-mvp",
+    "confirm": true
+  }
+}
+```
+
+The helper is for publishing an already-reviewed current branch. It does not open or merge PRs.
 
 ## Validation Suites
 

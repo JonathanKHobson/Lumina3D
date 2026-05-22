@@ -53,7 +53,8 @@ export function startLevelThreeScene(context, options = {}) {
   saveCubelingUnlocks();
   state.cubelings = {
     frog: { unlocked: true, unlockedThisTutorial: false },
-    elephant: { unlocked: false, unlockedPending: false, active: false, spawned: false }
+    elephant: { unlocked: false, unlockedPending: false, active: false, spawned: false },
+    crocodile: { unlocked: false, unlockedPending: false, active: false, spawned: false, controllable: false }
   };
   state.reveals = { rightFloor: true, frogEcho: false, frogTotem: false, frog: true, barrier: false, button: false, spellbook: false };
   state.frogTotem.collected = false;
@@ -125,7 +126,7 @@ function beginLevelThreePlay({ state, showPrompt, playHumanAnimation }) {
   state.scene.titleCardVisible = false;
   state.scene.titleCardText = "";
   state.inputMoving = false;
-  showPrompt("Level Three shell: explore the lake island layout.", 2.4);
+  showPrompt("The lake is wide, but Frog can try the floating leaves.", 2.8);
   playHumanAnimation("Idle");
 }
 

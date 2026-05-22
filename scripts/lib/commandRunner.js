@@ -75,6 +75,17 @@ const COMMAND_BUILDERS = {
       args: ["run", "tools:explain-editor-patch", "--", relative],
       display: `npm run tools:explain-editor-patch -- ${relative}`
     };
+  },
+  publishCurrentBranch: ({ message, branch = "", remote = "origin" }) => {
+    const args = ["run", "tools:publish-current-branch", "--", "--message", String(message || ""), "--remote", String(remote || "origin"), "--yes"];
+    if (branch) args.push("--branch", String(branch));
+    args.push("--pretty");
+    return {
+      command: "npm",
+      args,
+      display: `npm run tools:publish-current-branch -- --message "${String(message || "").replaceAll('"', '\\"')}" --remote ${remote || "origin"} --yes${branch ? ` --branch ${branch}` : ""} --pretty`,
+      timeoutMs: 300000
+    };
   }
 };
 

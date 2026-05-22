@@ -147,7 +147,13 @@ export function getHudPrompt(state, stepId, { sceneIds, tutorialSteps, freePlayP
   }
   if (state.scene.id === sceneIds.LEVEL_THREE) {
     if (state.levelThree.phase === "arrival") return "";
-    return state.overridePrompt?.text || "Explore the lake island shell.";
+    if (state.levelThree.crocodileTotemCollected) {
+      return state.overridePrompt?.text || "The Crocodile Echo is awake. Future lake routes wait.";
+    }
+    if (state.levelThree.totemRaftDocked) {
+      return state.overridePrompt?.text || "Return as the Human and collect the Crocodile Totem.";
+    }
+    return state.overridePrompt?.text || "Use Frog to cross the floating leaves and press the green button.";
   }
   if (state.celebration.active) return "Love Letter found.";
   if (state.celebration.modalVisible) return "Tutorial Complete.";
@@ -176,7 +182,9 @@ export function getHudGoalLabel(state, sceneIds) {
   }
   if (state.scene.id === sceneIds.LEVEL_THREE) {
     if (state.levelThree.phase === "arrival") return "Level Three";
-    return "Lake shell";
+    if (state.levelThree.crocodileTotemCollected) return "Echo awake";
+    if (state.levelThree.totemRaftDocked) return "Collect Totem";
+    return "Winch Totem";
   }
   return state.tutorialComplete ? "Complete" : state.doorwayOpen ? "Door open" : state.cubelings.frog.unlocked ? "Frog unlocked" : "Learn controls";
 }

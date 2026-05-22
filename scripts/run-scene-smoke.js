@@ -104,6 +104,18 @@ function buildInvariantChecks(state, targetLevel) {
       details: `mapShape=${state?.levelThree?.mapShape || "missing"}, water=${state?.levelThree?.waterTileCount || 0}, land=${state?.levelThree?.landTileCount || 0}`
     });
     checks.push({
+      name: "level_three_start_island_edge_connected",
+      pass: state?.levelThree?.startIslandEdgeConnection?.connectedToLeftEdge === true,
+      details: `edgeTiles=${(state?.levelThree?.startIslandEdgeConnection?.tiles || []).map((tile) => `${tile.x},${tile.y}`).join(";")}`
+    });
+    checks.push({
+      name: "level_three_lily_pad_centers_on_water",
+      pass: Array.isArray(state?.levelThree?.lilyPadLane) &&
+        state.levelThree.lilyPadLane.length === 3 &&
+        state.levelThree.lilyPadLane.every((pad) => pad.centerTileIsWater === true),
+      details: `lilyPadTiles=${(state?.levelThree?.lilyPadLane || []).map((pad) => `${pad.id}:${pad.tileX},${pad.tileY}:${pad.centerTileIsWater}`).join(",")}`
+    });
+    checks.push({
       name: "level_three_phase_one_placeholders_present",
       pass: Array.isArray(state?.levelThree?.placeholders) &&
         ["level3StartIsland", "level3TotemGreenButton", "level3BridgeGreenButton", "level3TotemRaft", "level3CrocodileEcho", "level3LoveLetterCliff"].every((id) =>
@@ -113,11 +125,29 @@ function buildInvariantChecks(state, targetLevel) {
       details: `placeholderCount=${state?.levelThree?.placeholders?.length || 0}, islandCount=${state?.levelThree?.islandCount || 0}`
     });
     checks.push({
-      name: "level_three_green_buttons_distinct_inactive",
+      name: "level_three_green_buttons_distinct_phase_2a",
       pass: Array.isArray(state?.levelThree?.greenButtons) &&
-        state.levelThree.greenButtons.some((button) => button.id === "level3TotemGreenButton" && button.behaviorImplemented === false) &&
+        state.levelThree.greenButtons.some((button) => button.id === "level3TotemGreenButton" && button.behaviorImplemented === true) &&
         state.levelThree.greenButtons.some((button) => button.id === "level3BridgeGreenButton" && button.behaviorImplemented === false),
-      details: `greenButtons=${(state?.levelThree?.greenButtons || []).map((button) => button.id).join(",")}`
+      details: `greenButtons=${(state?.levelThree?.greenButtons || []).map((button) => `${button.id}:${button.behaviorImplemented}`).join(",")}`
+    });
+    checks.push({
+      name: "level_three_crocodile_control_unavailable_phase_2a",
+      pass: state?.levelThree?.phase2AState?.implemented === true &&
+        state?.levelThree?.phase2AState?.crocodileControlAvailable === false &&
+        state?.cubelings?.crocodile?.controllable === false,
+      details: JSON.stringify({
+        phase2A: state?.levelThree?.phase2AState || {},
+        crocodile: state?.cubelings?.crocodile || {}
+      })
+    });
+    checks.push({
+      name: "level_three_buttons_use_established_visual_family",
+      pass: Array.isArray(state?.levelThree?.greenButtons) &&
+        state.levelThree.greenButtons.every((button) => button.visualAsset === "kaykit-platformer-button-green-material-variant") &&
+        Array.isArray(state?.levelThree?.redButtonPlaceholders) &&
+        state.levelThree.redButtonPlaceholders.every((button) => button.visualAsset === "kaykit-platformer-button-red-placeholder"),
+      details: `greenAssets=${(state?.levelThree?.greenButtons || []).map((button) => button.visualAsset).join(",")}; redAssets=${(state?.levelThree?.redButtonPlaceholders || []).map((button) => button.visualAsset).join(",")}`
     });
     checks.push({
       name: "level_three_editor_marker_debug_output",

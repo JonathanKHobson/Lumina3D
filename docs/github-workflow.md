@@ -21,6 +21,16 @@ Normal workflow:
 3. Commit locally.
 4. Push to GitHub.
 
+For routine current-branch publishing, use the guarded helper instead of rebuilding the checklist from memory:
+
+```bash
+npm run tools:publish-current-branch -- --message "Update Lumina3D Level 3 and editor prep" --branch codex/lumina3d-level-editor-mvp --yes --pretty
+```
+
+The helper runs `git status -sb`, `git diff --check`, `npm run build`, `git add -A`, `git commit -m`, `git push`, final `git status -sb`, and final `git log --oneline -1 --decorate`. It refuses to publish without `--yes` and refuses if the current branch does not match the requested `--branch`.
+
+The Lumina3D MCP also exposes this same flow as `lumina_publish_current_branch` with `confirm: true` for agents that have the project MCP enabled.
+
 Direct GitHub web edits should be limited to tiny documentation corrections.
 
 ## Branching

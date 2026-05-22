@@ -9,9 +9,13 @@ export const LEVEL_THREE_HEIGHT = 22;
 export const LEVEL_THREE_BOUNDS = boundsForGrid(LEVEL_THREE_WIDTH, LEVEL_THREE_HEIGHT, TILE);
 export const LEVEL_THREE_TITLE_SECONDS = 1.65;
 export const LEVEL_THREE_CINEMATIC_SPEED = 2.0;
-export const LEVEL_THREE_MAP_SHAPE = "mostly-water-lake-islands-phase-1-shell";
+export const LEVEL_THREE_MAP_SHAPE = "mostly-water-lake-islands-phase-2a-opening-totem";
 export const LEVEL_THREE_PLACEHOLDER_LOVE_LETTER_Y = SURFACE_Y + 2.15;
 export const LEVEL_THREE_CLIFF_TOP_Y = SURFACE_Y + 1.42;
+export const LEVEL_THREE_TOTEM_GREEN_BUTTON_RADIUS = 1.05;
+export const LEVEL_THREE_TOTEM_COLLECTION_RADIUS = 1.1;
+export const LEVEL_THREE_FROG_LILY_PAD_SURFACE_PADDING = 0.34;
+export const LEVEL_THREE_FROG_LANE_RESET_COOLDOWN = 0.45;
 
 export const LEVEL_THREE_POINTS = {
   entry: {
@@ -31,6 +35,13 @@ export const LEVEL_THREE_POINTS = {
   futureWaterCubelingReserve: point(18.8, 6.0)
 };
 
+export const LEVEL_THREE_START_EDGE_CONNECTION_TILES = uniqueTiles([
+  tile(0, 10),
+  tile(0, 11),
+  tile(1, 10),
+  tile(1, 11)
+]);
+
 export const LEVEL_THREE_ISLANDS = [
   {
     id: "level3StartIsland",
@@ -38,6 +49,7 @@ export const LEVEL_THREE_ISLANDS = [
     purpose: "Human spawn, Frog start, Crocodile Echo tease, and future Crocodile Totem dock.",
     role: "start",
     tiles: uniqueTiles([
+      ...LEVEL_THREE_START_EDGE_CONNECTION_TILES,
       ...rectTiles(1, 5, 8, 13),
       ...rectTiles(2, 4, 7, 7),
       tile(6, 10),
@@ -60,8 +72,8 @@ export const LEVEL_THREE_ISLANDS = [
     purpose: "Future Frog-reachable island with the opening green button for the Crocodile Totem raft.",
     role: "opening-green-button",
     tiles: uniqueTiles([
-      ...rectTiles(6, 8, 3, 5),
-      tile(7, 6)
+      ...rectTiles(10, 12, 2, 4),
+      tile(9, 3)
     ])
   },
   {
@@ -169,48 +181,35 @@ export const LEVEL_THREE_ISLAND_MARKERS = LEVEL_THREE_ISLANDS.map((island) => ({
 }));
 
 export const LEVEL_THREE_LAND_TILES = uniqueTiles(LEVEL_THREE_ISLANDS.flatMap((island) => island.tiles));
-export const LEVEL_THREE_PATH_TILES = uniqueTiles([
-  ...rectTiles(2, 5, 10, 10),
-  tile(3, 11),
-  tile(5, 7),
-  tile(6, 7),
-  tile(7, 4),
-  ...rectTiles(12, 14, 10, 10),
-  tile(13, 8),
-  tile(13, 12),
-  tile(19, 6),
-  tile(12, 3),
-  tile(19, 11),
-  tile(14, 17),
-  tile(5, 17),
-  tile(22, 17),
-  tile(23, 3)
-]);
+export const LEVEL_THREE_PATH_TILES = uniqueTiles([]);
 export const LEVEL_THREE_WATER_TILES = allWaterTiles(LEVEL_THREE_LAND_TILES);
 
 export const LEVEL_THREE_LILY_PAD_PLACEHOLDERS = [
   {
     id: "level3MovingLilyPad1",
     name: "Moving Lily Pad 1",
-    position: point(6.75, 6.55),
-    trackStart: point(6.35, 6.55),
-    trackEnd: point(7.15, 6.55),
+    tile: tile(7, 6),
+    position: point(7, 6),
+    trackStart: point(6.55, 6),
+    trackEnd: point(7.45, 6),
     radius: 0.48
   },
   {
     id: "level3MovingLilyPad2",
     name: "Moving Lily Pad 2",
-    position: point(7.0, 5.9),
-    trackStart: point(6.45, 5.9),
-    trackEnd: point(7.55, 5.9),
+    tile: tile(8, 5),
+    position: point(8, 5),
+    trackStart: point(7.5, 5),
+    trackEnd: point(8.5, 5),
     radius: 0.46
   },
   {
     id: "level3MovingLilyPad3",
     name: "Moving Lily Pad 3",
-    position: point(7.25, 5.25),
-    trackStart: point(6.75, 5.25),
-    trackEnd: point(7.75, 5.25),
+    tile: tile(9, 4),
+    position: point(9, 4),
+    trackStart: point(8.5, 4),
+    trackEnd: point(9.5, 4),
     radius: 0.44
   }
 ];
@@ -220,7 +219,7 @@ export const LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS = [
     id: "level3TotemGreenButton",
     name: "Opening Totem Green Button",
     purpose: "Future repeatable button that winches the Crocodile Totem raft toward Start Island.",
-    position: point(7.35, 4.2),
+    position: point(10.7, 3.2),
     islandId: "level3TotemWinchIsland",
     futureMechanism: "crocodile-totem-raft-winch"
   },
@@ -348,15 +347,70 @@ export const LEVEL_THREE_RESET_PERCH_PLACEHOLDERS = [
   {
     id: "level3TotemWinchResetPerch",
     name: "Totem Winch Reset Rock",
-    position: point(8.05, 5.45)
+    position: point(11.8, 4.2)
+  }
+];
+
+export const LEVEL_THREE_FROG_LANE_RESET_POINT = {
+  ...point(6, 7),
+  facing: { x: 1, z: -0.2, name: "east" }
+};
+
+export const LEVEL_THREE_FROG_LANE_WATER_RESET_ZONE = {
+  minX: point(6, 7).x - 0.4,
+  maxX: point(10, 4).x + 0.8,
+  minZ: point(9, 4).z - 1.2,
+  maxZ: point(6, 7).z + 0.8
+};
+
+export const LEVEL_THREE_FROG_LANE_JUMPS = [
+  {
+    id: "level3JumpFrogLaneStartToPad1",
+    fromId: "level3FrogLaneStart",
+    toId: "level3MovingLilyPad1",
+    from: LEVEL_THREE_FROG_LANE_RESET_POINT,
+    to: LEVEL_THREE_LILY_PAD_PLACEHOLDERS[0].position,
+    fromRadius: 2.35,
+    destinationSurface: "level3MovingLilyPad1",
+    overWater: true
+  },
+  {
+    id: "level3JumpPad1ToPad2",
+    fromId: "level3MovingLilyPad1",
+    toId: "level3MovingLilyPad2",
+    from: LEVEL_THREE_LILY_PAD_PLACEHOLDERS[0].position,
+    to: LEVEL_THREE_LILY_PAD_PLACEHOLDERS[1].position,
+    fromRadius: 1.35,
+    destinationSurface: "level3MovingLilyPad2",
+    overWater: true
+  },
+  {
+    id: "level3JumpPad2ToPad3",
+    fromId: "level3MovingLilyPad2",
+    toId: "level3MovingLilyPad3",
+    from: LEVEL_THREE_LILY_PAD_PLACEHOLDERS[1].position,
+    to: LEVEL_THREE_LILY_PAD_PLACEHOLDERS[2].position,
+    fromRadius: 1.35,
+    destinationSurface: "level3MovingLilyPad3",
+    overWater: true
+  },
+  {
+    id: "level3JumpPad3ToTotemWinchIsland",
+    fromId: "level3MovingLilyPad3",
+    toId: "level3TotemWinchIsland",
+    from: LEVEL_THREE_LILY_PAD_PLACEHOLDERS[2].position,
+    to: point(9, 3),
+    fromRadius: 1.35,
+    destinationSurface: "level3TotemWinchIsland",
+    overWater: true
   }
 ];
 
 export const LEVEL_THREE_PROPS = [
   ["forestTreeA", 1.2, 8.15, 0.7],
   ["forestBush", 4.65, 13.15, 0.7],
-  ["forestRock", 5.85, 7.4, 0.56],
-  ["forestGrass", 6.4, 3.5, 0.55],
+  ["forestRock", 4.4, 8.45, 0.56],
+  ["forestGrass", 11.55, 2.75, 0.55],
   ["forestRock", 14.8, 8.2, 0.62],
   ["forestGrass", 11.5, 12.15, 0.52],
   ["forestTreeB", 11.2, 2.35, 0.68],

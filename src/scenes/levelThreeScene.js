@@ -2,11 +2,13 @@ import * as THREE from "three";
 
 import { SCENES } from "../config/scenes.js";
 import {
+  BUTTON_TOP_REST_Y,
   FLOOR_TARGET,
   SURFACE_Y,
   TILE
 } from "../config/constants.js";
 import { sceneGridPoint } from "../core/grid.js";
+import { createLilyPadGroup } from "../core/lilyPad.js";
 import {
   LEVEL_THREE_ANCHOR_STONES,
   LEVEL_THREE_BRIDGE_DESTINATION_MARKERS,
@@ -34,6 +36,7 @@ export function buildLevelThreeScene({
   cloneAsset,
   levelThreeMeshes,
   levelThreeGoalMeshes,
+  levelThreeInteractiveMeshes = {},
   addSceneCollider,
   colliderForProp
 }) {
@@ -69,7 +72,7 @@ export function buildLevelThreeScene({
     }
   }
 
-  addLevelThreePlaceholders(sceneGroups.levelThree, levelThreeMeshes, addSceneCollider);
+  addLevelThreePlaceholders(sceneGroups.levelThree, levelThreeMeshes, cloneAsset, addSceneCollider, levelThreeInteractiveMeshes);
 
   const loveLetter = cloneAsset("spellbookClosed");
   loveLetter.position.set(
@@ -106,7 +109,10 @@ export function buildLevelThreeScene({
   sceneGroups.levelThree.visible = false;
 }
 
-function addLevelThreePlaceholders(group, levelThreeMeshes, addSceneCollider) {
+function addLevelThreePlaceholders(group, levelThreeMeshes, cloneAsset, addSceneCollider, levelThreeInteractiveMeshes = {}) {
+  levelThreeInteractiveMeshes.greenButtons = levelThreeInteractiveMeshes.greenButtons || {};
+  levelThreeInteractiveMeshes.greenButtonTops = levelThreeInteractiveMeshes.greenButtonTops || {};
+
   LEVEL_THREE_ISLAND_MARKERS.forEach((marker) => {
     addGenerated(group, levelThreeMeshes, createIslandMarker(marker), marker.objectId || marker.id, "island_zone_marker", {
       name: marker.name,
@@ -132,12 +138,12 @@ function addLevelThreePlaceholders(group, levelThreeMeshes, addSceneCollider) {
     { levelThreePlaceholder: "level3LoveLetterCliff", visualOnlyCliff: true }
   );
 
-  addGenerated(group, levelThreeMeshes, createCrocodileEcho(), LEVEL_THREE_CROCODILE_ECHO.id, "crocodile_echo_placeholder", {
+  levelThreeInteractiveMeshes.crocodileEcho = addGenerated(group, levelThreeMeshes, createCrocodileEcho(), LEVEL_THREE_CROCODILE_ECHO.id, "crocodile_echo_placeholder", {
     name: LEVEL_THREE_CROCODILE_ECHO.name,
     displayName: LEVEL_THREE_CROCODILE_ECHO.name,
     sourceExport: "LEVEL_THREE_CROCODILE_ECHO"
   });
-  addGenerated(group, levelThreeMeshes, createTotemRaft(), LEVEL_THREE_TOTEM_RAFT.id, "totem_raft_placeholder", {
+  levelThreeInteractiveMeshes.totemRaft = addGenerated(group, levelThreeMeshes, createTotemRaft(), LEVEL_THREE_TOTEM_RAFT.id, "totem_raft_placeholder", {
     name: LEVEL_THREE_TOTEM_RAFT.name,
     displayName: LEVEL_THREE_TOTEM_RAFT.name,
     sourceExport: "LEVEL_THREE_TOTEM_RAFT"
@@ -155,7 +161,9 @@ function addLevelThreePlaceholders(group, levelThreeMeshes, addSceneCollider) {
     addGenerated(group, levelThreeMeshes, createLilyPadPlaceholder(pad), pad.id, "moving_lily_pad_placeholder", {
       name: pad.name,
       displayName: pad.name,
-      sourceExport: "LEVEL_THREE_LILY_PAD_PLACEHOLDERS"
+      sourceExport: "LEVEL_THREE_LILY_PAD_PLACEHOLDERS",
+      editorAsset: "generated-level-one-lily-pad-shared-visual",
+      editorAssetPath: "/generated/shared/lily-pad"
     });
     addGenerated(group, levelThreeMeshes, createTrackMarker(pad), `${pad.id}Track`, "moving_lily_pad_track_marker", {
       name: `${pad.name} Track`,
@@ -165,12 +173,25 @@ function addLevelThreePlaceholders(group, levelThreeMeshes, addSceneCollider) {
   });
 
   LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS.forEach((button) => {
-    addGenerated(group, levelThreeMeshes, createButtonPlaceholder(button, 0x52b96a), button.id, "green_button_placeholder", {
+    const buttonMesh = addGenerated(group, levelThreeMeshes, createButtonAssetPlaceholder(button, {
+      cloneAsset,
+      baseAsset: "buttonBaseBlue",
+      topAsset: "buttonTopBlue",
+      baseColor: 0x7b756c,
+      topColor: 0x52b96a,
+      topEmissive: 0x2f7f47
+    }), button.id, "green_button_placeholder", {
       name: button.name,
       displayName: button.name,
       sourceExport: "LEVEL_THREE_GREEN_BUTTON_PLACEHOLDERS",
-      role: button.futureMechanism
+      role: button.futureMechanism,
+      editorAsset: "kaykit-platformer-button-green-material-variant",
+      editorAssetPath: "/generated/material-variant/button-green-from-kaykit-button-blue"
     });
+    levelThreeInteractiveMeshes.greenButtons[button.id] = buttonMesh;
+    if (buttonMesh.levelThreeButtonTop) {
+      levelThreeInteractiveMeshes.greenButtonTops[button.id] = buttonMesh.levelThreeButtonTop;
+    }
   });
 
   LEVEL_THREE_BRIDGE_DESTINATION_MARKERS.forEach((marker) => {
@@ -182,11 +203,17 @@ function addLevelThreePlaceholders(group, levelThreeMeshes, addSceneCollider) {
   });
 
   LEVEL_THREE_RED_BUTTON_PLACEHOLDERS.forEach((button) => {
-    addGenerated(group, levelThreeMeshes, createButtonPlaceholder(button, 0xd94848), button.id, "red_button_placeholder", {
+    addGenerated(group, levelThreeMeshes, createButtonAssetPlaceholder(button, {
+      cloneAsset,
+      baseAsset: "buttonBaseRed",
+      topAsset: "buttonTopRed"
+    }), button.id, "red_button_placeholder", {
       name: button.name,
       displayName: button.name,
       sourceExport: "LEVEL_THREE_RED_BUTTON_PLACEHOLDERS",
-      role: button.futureRequirement
+      role: button.futureRequirement,
+      editorAsset: "kaykit-platformer-button-red-placeholder",
+      editorAssetPath: "/assets/kaykit/platformer/button-red/"
     });
     if (button.id === "level3RedButtonB") {
       addGenerated(group, levelThreeMeshes, createStoneSockets(button.position), "level3RedButtonBStoneSockets", "red_button_b_stone_sockets", {
@@ -218,14 +245,15 @@ function addGenerated(group, levelThreeMeshes, object, id, category, options = {
   object.userData.levelThreeAsset = id;
   object.userData.devEditorId = `level_three.${id}`;
   object.userData.devEditorCategory = category;
-  object.userData.devEditorAsset = "generated-level-three-placeholder";
-  object.userData.devEditorAssetPath = "/generated/level-three-placeholder";
+  object.userData.devEditorAsset = options.editorAsset || "generated-level-three-placeholder";
+  object.userData.devEditorAssetPath = options.editorAssetPath || "/generated/level-three-placeholder";
   object.userData.devEditorName = options.name || object.name || id;
   object.userData.devEditorDisplayName = options.displayName || options.name || object.name || id;
   object.userData.devEditorSource = "src/scenes/levelThreeScene.js or src/levels/levelThree.js";
   object.userData.devEditorCollisionExpected = Boolean(options.collisionExpected);
   object.userData.levelThreeSourceExport = options.sourceExport || "";
-  object.userData.levelThreePhase = "phase-1-shell";
+  object.userData.levelThreeVisualAsset = options.editorAsset || "generated-level-three-placeholder";
+  object.userData.levelThreePhase = "phase-2a-opening-shell";
   object.userData.levelThreeRole = options.role || "";
   group.add(object);
   levelThreeMeshes.push(object);
@@ -259,42 +287,10 @@ function createIslandMarker(marker) {
 }
 
 function createLilyPadPlaceholder(pad) {
-  const lilyPad = new THREE.Group();
-  lilyPad.name = pad.id;
-  const radius = pad.radius || 0.46;
-  const shape = new THREE.Shape();
-  const notchHalfAngle = 0.32;
-  const segments = 44;
-  for (let index = 0; index <= segments; index += 1) {
-    const t = notchHalfAngle + ((Math.PI * 2 - notchHalfAngle * 2) * index) / segments;
-    const ripple = 1 + Math.sin(index * 1.8) * 0.02;
-    const x = Math.cos(t) * radius * ripple;
-    const y = Math.sin(t) * radius * 0.86 * ripple;
-    if (index === 0) shape.moveTo(x, y);
-    else shape.lineTo(x, y);
-  }
-  shape.lineTo(radius * 0.18, 0);
-  shape.closePath();
-
-  const top = new THREE.Mesh(
-    new THREE.ShapeGeometry(shape, 36),
-    new THREE.MeshStandardMaterial({ color: 0x4a9b4d, roughness: 0.72, metalness: 0.02 })
-  );
-  top.rotation.x = -Math.PI / 2;
-  top.position.y = 0.08;
-  top.castShadow = true;
-  top.receiveShadow = true;
-  lilyPad.add(top);
-
-  const underside = new THREE.Mesh(
-    new THREE.ShapeGeometry(shape, 36),
-    new THREE.MeshStandardMaterial({ color: 0x276c38, roughness: 0.82, metalness: 0 })
-  );
-  underside.rotation.x = -Math.PI / 2;
-  underside.position.y = 0.04;
-  underside.receiveShadow = true;
-  lilyPad.add(underside);
-
+  const lilyPad = createLilyPadGroup({
+    name: pad.id,
+    radius: pad.radius || 0.46
+  });
   lilyPad.position.set(pad.position.x, SURFACE_Y + 0.13, pad.position.z);
   lilyPad.rotation.y = Math.PI * 0.08;
   return lilyPad;
@@ -330,32 +326,56 @@ function createTrackMarker(pad) {
   return track;
 }
 
-function createButtonPlaceholder(button, color) {
+function createButtonAssetPlaceholder(button, {
+  cloneAsset,
+  baseAsset,
+  topAsset,
+  baseColor = null,
+  topColor = null,
+  topEmissive = null
+}) {
   const group = new THREE.Group();
   group.name = button.id;
-  const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.58, 0.66, 0.2, 32),
-    new THREE.MeshStandardMaterial({ color: 0x7b756c, roughness: 0.72, metalness: 0.02 })
-  );
-  base.position.y = 0.1;
-  base.castShadow = true;
-  base.receiveShadow = true;
-  const top = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.42, 0.46, 0.14, 32),
-    new THREE.MeshStandardMaterial({
-      color,
-      emissive: color,
-      emissiveIntensity: 0.08,
-      roughness: 0.58,
-      metalness: 0.03
-    })
-  );
-  top.position.y = 0.28;
-  top.castShadow = true;
-  top.receiveShadow = true;
-  group.add(base, top);
+  const base = cloneAsset(baseAsset);
+  const top = cloneAsset(topAsset);
+
+  if (base) {
+    if (baseColor !== null) applyMaterialVariant(base, { color: baseColor });
+    base.position.y = 0;
+    group.add(base);
+  }
+  if (top) {
+    if (topColor !== null) {
+      applyMaterialVariant(top, {
+        color: topColor,
+        emissive: topEmissive ?? topColor,
+        emissiveIntensity: 0.08
+      });
+    }
+    top.position.y = BUTTON_TOP_REST_Y;
+    top.name = `${button.id}-top`;
+    group.levelThreeButtonTop = top;
+    group.add(top);
+  }
   group.position.set(button.position.x, SURFACE_Y + 0.02, button.position.z);
   return group;
+}
+
+function applyMaterialVariant(root, { color, emissive = null, emissiveIntensity = null }) {
+  root.traverse((child) => {
+    if (!child.isMesh || !child.material) return;
+    child.material = Array.isArray(child.material)
+      ? child.material.map((material) => cloneTintedMaterial(material, { color, emissive, emissiveIntensity }))
+      : cloneTintedMaterial(child.material, { color, emissive, emissiveIntensity });
+  });
+}
+
+function cloneTintedMaterial(material, { color, emissive, emissiveIntensity }) {
+  const next = material.clone();
+  if (next.color) next.color.setHex(color);
+  if (next.emissive && emissive !== null) next.emissive.setHex(emissive);
+  if (emissiveIntensity !== null && "emissiveIntensity" in next) next.emissiveIntensity = emissiveIntensity;
+  return next;
 }
 
 function createCrocodileEcho() {
@@ -373,12 +393,16 @@ function createCrocodileEcho() {
       depthWrite: false
     })
   );
+  body.name = "level3CrocodileEchoBody";
+  body.userData.levelThreeEchoPart = "body";
   body.scale.set(1.55, 0.28, 0.55);
   body.position.y = 0.35;
   const snout = new THREE.Mesh(
     new THREE.BoxGeometry(0.8, 0.18, 0.42),
     body.material
   );
+  snout.name = "level3CrocodileEchoSnout";
+  snout.userData.levelThreeEchoPart = "body";
   snout.position.set(0.72, 0.35, 0);
   const ring = new THREE.Mesh(
     new THREE.TorusGeometry(0.92, 0.035, 10, 48),
@@ -391,6 +415,8 @@ function createCrocodileEcho() {
       depthWrite: false
     })
   );
+  ring.name = "level3CrocodileEchoRing";
+  ring.userData.levelThreeEchoPart = "ring";
   ring.rotation.x = Math.PI / 2;
   ring.position.y = 0.04;
   group.add(body, snout, ring);
@@ -421,6 +447,8 @@ function createTotemRaft() {
       metalness: 0.05
     })
   );
+  totem.name = "level3CrocodileTotemVisual";
+  totem.userData.levelThreeRaftTotem = true;
   totem.position.y = 0.55;
   totem.castShadow = true;
   group.add(totem);

@@ -1,12 +1,14 @@
 export const BUTTON_COLORS = {
   BLUE: "blue",
   RED: "red",
+  GREEN: "green",
   YELLOW: "yellow"
 };
 
 export const BUTTON_ACTIVATION_TYPES = {
   PERSISTENT: "persistent",
   HELD_WEIGHT: "held-weight",
+  REPEATABLE_CYCLE: "repeatable-cycle",
   TIMED_OR_POWERED: "timed-or-powered"
 };
 

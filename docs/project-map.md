@@ -42,7 +42,7 @@ Use the current structure this way:
 | `src/debug/` | Dev editor, AI context capture, dev entity registry, debug shortcuts, render-text/test hooks, visible asset summaries | Player-facing gameplay logic |
 | `src/editor/` | Separate browser level-editor app, level adapters, asset catalog including generated external reference records and editor-only procedural assets, draft placement/replacement-intent helpers, collider diagnostics, note intent/reference helpers, transform patch/state export, AI prompt handoff, editor-only metadata | Gameplay orchestration or direct source-file writes |
 | `src/editor/timeline/` | Inactive editor timeline/scrubber data-model prep for future solution previews | Playable runtime simulation or behavior source of truth |
-| `mcp/` | Local stdio MCP server and AI-facing tool registration for read-only context and allowlisted validation | Gameplay behavior, browser editor UI, arbitrary shell tools, source-writing patch application |
+| `mcp/` | Local stdio MCP server and AI-facing tool registration for read-only context, allowlisted validation, archetype contracts, editor context, and the guarded current-branch publish helper | Gameplay behavior, browser editor UI, arbitrary shell tools, source-writing patch application |
 | `.codex/` | Project-scoped Codex hook registration for Lumina3D sessions | MCP server definitions or gameplay/tooling source |
 | `scripts/` | Deterministic CLI checks and level inspection tooling | Runtime gameplay code |
 | `scripts/codex/` | Lightweight project-local Codex hook helpers, including closeout reminders | Auto-mutating project docs or broad session automation |
@@ -166,6 +166,14 @@ npm run tools:list-levels -- --pretty
 npm run tools:validate-level-registry -- --pretty
 npm run tools:run-scene-smoke -- level_two --pretty
 ```
+
+Current-branch publish after checks:
+
+```bash
+npm run tools:publish-current-branch -- --message "Update Lumina3D Level 3 and editor prep" --branch codex/lumina3d-level-editor-mvp --yes --pretty
+```
+
+This publish helper runs `git diff --check` and `npm run build` before staging, committing, and pushing. It is also exposed through the Lumina3D MCP as `lumina_publish_current_branch` with `confirm: true`.
 
 Runtime Dev Editor or AI-context debug change:
 

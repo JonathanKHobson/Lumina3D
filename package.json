@@ -23,7 +23,8 @@
     "tools:run-fixture": "node scripts/run-fixture.js",
     "tools:validate-missing-colliders": "node scripts/validate-missing-colliders.js",
     "tools:validate-float-colliders": "node scripts/validate-float-colliders.js",
-    "tools:validate-editor-sync": "node scripts/validate-editor-sync.js"
+    "tools:validate-editor-sync": "node scripts/validate-editor-sync.js",
+    "tools:publish-current-branch": "node scripts/publish-current-branch.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
