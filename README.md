@@ -66,7 +66,7 @@ More detail: `docs/github-workflow.md`.
 2. Add build logic in `src/scenes/newLevelScene.js`.
 3. Add a scene ID in `src/config/scenes.js`.
 4. Wire the new scene through `src/main.js`.
-5. Add smoke coverage under `test-output/`.
+5. Use the scene smoke and fixture scripts in `scripts/` for focused checks. `test-output/` is ignored local QA output and may be absent in a fresh clone.
 
 Before adding Level Two or any later level, read `docs/game-design-handbook/00_overview.md` and the level-specific planning docs in that folder.
 
