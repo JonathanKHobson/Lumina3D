@@ -72,7 +72,7 @@ More detail: `docs/github-workflow.md`.
 5. Add catalog/tooling coverage in `scripts/lib/levelCatalog.js`.
 6. Add editor adapter support in `src/editor/levels/` when the level should be inspectable.
 7. Wire only the smallest needed runtime handoff through `src/main.js`.
-8. Add scene smoke coverage, then run `npm run tools:validate-level-registry -- --pretty`.
+8. Add scene smoke coverage, then run `npm run tools:validate-level-registry -- --pretty`. Use the scene smoke and fixture scripts in `scripts/` for focused checks; `test-output/` is ignored local QA output and may be absent in a fresh clone.
 
 Before adding Level Two or any later level, read `docs/game-design-handbook/00_overview.md` and the level-specific planning docs in that folder. Level Three currently exists as a Phase 1 lake/island shell only; do not treat it as a finished route. Its working design plan is `docs/game-design-handbook/15_level_three_crocodile_lake_plan.md`.
 

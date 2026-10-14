@@ -1,5 +1,10 @@
 # Lumina3D Agent Guide
 
+Lumina3D is a local-first Three.js/Vite game prototype. The public repository
+records source and progress; the README does not promise a released playable
+site. Preserve asset attribution and existing saved-state behavior, and review
+rendered gameplay when changing scenes, layout, or controls.
+
 ## First Read
 
 Start here before making project changes:
@@ -38,6 +43,10 @@ lanes:
 - `src/state/` for state factories and persistence.
 - `src/ui/` for DOM/HUD wiring.
 - `src/debug/` for dev tools and test hooks.
+
+`src/config/assets.js` is the canonical asset registry; raw asset files live
+under `public/assets/`. `test-output/` is local ignored QA output, not
+committed test source.
 
 ## Coordination Rules
 
