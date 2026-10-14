@@ -1,0 +1,6 @@
+interface:
+  display_name: "Lumina3D Spatial Prompt Workflow"
+  short_description: "Local workflow for Lumina3D spatial bugs: collision, ramps, walkable surfaces, orientation, positioning, triggers, and scene context."
+  default_prompt: "Use the Lumina3D spatial prompt workflow. Work from local files, require structured context, classify the spatial issue, and do not merge/push/commit unless explicitly asked."
+policy:
+  allow_implicit_invocation: true

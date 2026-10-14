@@ -43,6 +43,7 @@ function getObservedColliderLabels(state, levelId) {
   if (!state) return [];
   if (levelId === "home_intro") return (state.home?.houseColliders || []).map((entry) => entry.label).filter(Boolean);
   if (levelId === "level_two") return state.levelTwo?.colliderLabels || [];
+  if (levelId === "level_three") return state.levelThree?.colliderLabels || [];
   return [];
 }
 
@@ -82,7 +83,7 @@ function validateObjectElevation(object, tolerance = 0.45) {
 }
 
 function isTelemetryLevel(levelId) {
-  return levelId === "home_intro" || levelId === "level_two";
+  return levelId === "home_intro" || levelId === "level_two" || levelId === "level_three";
 }
 
 async function run() {

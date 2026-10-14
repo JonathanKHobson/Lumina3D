@@ -2,7 +2,7 @@
 
 ## One-Sentence Concept
 
-Level Two introduces Elephant Cubeling, red weight buttons, elevation, and Cubeling Recall through a small vertical forest puzzle where Frog helps the main character unlock Elephant, and Elephant's weight helps create the route to an elevated Love Letter.
+Level Two introduces Elephant Cubeling, red weight buttons, elevation, and a future Cubeling Recall hook through a small vertical forest puzzle where Frog helps the main character unlock Elephant, and Elephant's weight helps create the route to an elevated Love Letter.
 
 ## Design Promise
 
@@ -11,7 +11,8 @@ Level Two should feel like:
 - "I already understand Frog, but now height matters."
 - "This new Echo needs a Totem."
 - "Elephant is not just another animal; weight changes mechanisms."
-- "Recall lets me recover Cubelings without resetting the level."
+- "Elephant can solve a route for the main character from somewhere else."
+- Future: "Recall lets me recover Cubelings without resetting the level."
 
 ## Setting
 
@@ -49,9 +50,12 @@ Level Two should include:
 - Elephant Cubeling;
 - red weight buttons;
 - elevator/platform components;
-- Cubeling Recall with `C`;
 - elevated Love Letter;
 - Love Letter message and completion flow.
+
+Future required object:
+
+- Cubeling Recall with `C`.
 
 ## Intended Player Flow
 
@@ -68,14 +72,20 @@ Level Two should include:
 11. Show: "Elephant Cubeling Found!"
 12. Elephant Echo becomes the real Elephant Cubeling.
 13. Player transfers into Elephant when nearby.
-14. Elephant uses red weight buttons.
-15. Red buttons move platforms/elevators.
-16. `C` recalls active Cubelings to their Echoes.
-17. Elephant helps create or align a route for the main character.
-18. Main character reaches the elevated Love Letter.
-19. Main character collects the Love Letter.
-20. Love Letter message appears.
-21. Level Two completion menu appears.
+14. Elephant uses Red Button A / Elevator A to reach the tier-3 Elephant route.
+15. Elephant crosses to Red Button B on the existing west-side tier-3 mountain grass.
+16. Main character stands on Red Elevator B at the ground dock.
+17. Elephant holds Red Button B.
+18. Red Elevator B cycles upward while Button B is held.
+19. Main character rides Red Elevator B to the Love Letter route.
+20. Main character reaches the elevated Love Letter.
+21. Main character collects the Love Letter.
+22. Level Two Love Letter message appears.
+23. Level Two completion menu appears.
+
+Future flow addition:
+
+- `C` recalls active Cubelings to their Echoes once recall is in scope.
 
 ## Frog Section
 
@@ -102,9 +112,11 @@ Purpose:
 
 Keep it readable:
 
-- one primary red button/platform relationship at first;
-- slow return behavior if the button releases;
-- short route from Elephant unlock to useful red button.
+- Elevator A is Elephant's elevator and teaches red continuous cycling.
+- Red Button B is reached by Elephant on the existing tier-3 route, without a separate button-only terrace.
+- Elevator B is the main character/human elevator.
+- Elevator B cycles while Red Button B is held and carries the main character from restored ground to the straight Love Letter route.
+- Human and Frog do not activate red buttons.
 
 ## Optional Frog Blocker
 
@@ -128,4 +140,3 @@ Do not implement this unless the simpler route is too flat.
 - Full mechanism refactor.
 - Retrofitting tutorial/Level One visuals to the color system.
 - Complex multi-stage recall puzzles.
-

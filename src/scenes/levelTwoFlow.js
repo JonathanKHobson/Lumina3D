@@ -1,16 +1,20 @@
 import { SCENES } from "../config/scenes.js";
+import { LEVEL_TWO_LOVE_LETTER_ID } from "../content/loveLetters.js";
 import { clearParticles } from "../systems/particleSystem.js";
 import {
   createActorState,
   createCelebrationState,
   createHomeState,
   createLevelOneState,
+  createLevelThreeState,
   createLevelTwoState,
   createLoveLetterAttentionState,
   createLoveLetterMessageState
 } from "../state/gameState.js";
 import {
   LEVEL_TWO_CINEMATIC_SPEED,
+  LEVEL_TWO_ELEPHANT_RADIUS,
+  LEVEL_TWO_ELEPHANT_SPEED,
   LEVEL_TWO_POINTS,
   LEVEL_TWO_TITLE_SECONDS
 } from "../levels/levelTwo.js";
@@ -22,6 +26,7 @@ export function startLevelTwoScene(context, options = {}) {
     particleContext,
     saveCubelingUnlocks,
     resetFrogAiForScene,
+    resetLevelTwoRedMechanismState,
     clearSpeechQueue,
     playHumanAnimation,
     syncAll,
@@ -33,7 +38,7 @@ export function startLevelTwoScene(context, options = {}) {
   input.keys.clear();
   state.scene = {
     id: SCENES.LEVEL_TWO,
-    phase: showTitle ? "title" : "arrival",
+    phase: "arrival",
     titleCardVisible: showTitle,
     titleCardText: showTitle ? "Level Two" : "",
     fadeVisible: false,
@@ -41,17 +46,23 @@ export function startLevelTwoScene(context, options = {}) {
   };
   state.home = createHomeState("inactive");
   state.levelOne = createLevelOneState("inactive");
-  state.levelTwo = createLevelTwoState(showTitle ? "title" : "arrival");
+  state.levelTwo = createLevelTwoState("arrival");
+  state.levelThree = createLevelThreeState("inactive");
+  resetLevelTwoRedMechanismState?.();
   state.active = "human";
   state.cameraYaw = 0;
   state.targetCameraYaw = 0;
   state.human = createActorState(LEVEL_TWO_POINTS.entry, 0.45, 4.2);
   state.frog = createActorState(LEVEL_TWO_POINTS.frogStart, 0.53, 3.45);
+  state.elephant = createActorState({
+    ...LEVEL_TWO_POINTS.elephantEcho,
+    facing: { x: 0, z: 1, name: "south" }
+  }, LEVEL_TWO_ELEPHANT_RADIUS, LEVEL_TWO_ELEPHANT_SPEED);
   state.unlocks.frogCubeling = true;
   saveCubelingUnlocks();
   state.cubelings = {
     frog: { unlocked: true, unlockedThisTutorial: false },
-    elephant: { unlocked: false, unlockedPending: false, active: false }
+    elephant: { unlocked: false, unlockedPending: false, active: false, spawned: false }
   };
   state.reveals = { rightFloor: true, frogEcho: false, frogTotem: false, frog: true, barrier: false, button: false, spellbook: false };
   state.frogTotem.collected = false;
@@ -71,13 +82,13 @@ export function startLevelTwoScene(context, options = {}) {
   };
   state.loveLetterAttention = createLoveLetterAttentionState();
   state.loveLetterReveal = { active: false, elapsed: 0 };
-  state.loveLetterMessage = createLoveLetterMessageState();
+  state.loveLetterMessage = createLoveLetterMessageState(LEVEL_TWO_LOVE_LETTER_ID);
   resetFrogAiForScene();
   clearParticles(particleContext);
   clearSpeechQueue();
   state.speech = { text: "", anchor: "human", until: 0 };
   state.secondarySpeech = { text: "", anchor: "", until: 0 };
-  playHumanAnimation(showTitle ? "Idle" : "Walk");
+  playHumanAnimation("Walk");
   syncAll();
   updateCamera(1);
   updateHud();
@@ -93,19 +104,8 @@ export function updateLevelTwoSceneFlow(context, dt) {
     updateLevelTwoInteractions
   } = context;
 
-  if (state.levelTwo.phase === "title") {
-    state.levelTwo.titleElapsed += dt;
-    if (state.levelTwo.titleElapsed >= LEVEL_TWO_TITLE_SECONDS) {
-      state.levelTwo.phase = "arrival";
-      state.scene.phase = "arrival";
-      state.scene.titleCardVisible = false;
-      state.scene.titleCardText = "";
-      playHumanAnimation("Walk");
-    }
-    return;
-  }
-
   if (state.levelTwo.phase === "arrival") {
+    updateTitleCardTimer(state, dt);
     state.levelTwo.arrivalElapsed += dt;
     const dx = LEVEL_TWO_POINTS.humanStart.x - state.human.x;
     const dz = LEVEL_TWO_POINTS.humanStart.z - state.human.z;
@@ -126,7 +126,7 @@ export function updateLevelTwoSceneFlow(context, dt) {
   }
 
   if (state.levelTwo.phase !== "play") return;
-  updateLevelTwoInteractions();
+  updateLevelTwoInteractions(0);
 }
 
 export function resetLevelTwoSceneFlow(context) {
@@ -136,7 +136,17 @@ export function resetLevelTwoSceneFlow(context) {
 function beginLevelTwoPlay({ state, showPrompt, playHumanAnimation }) {
   state.levelTwo.phase = "play";
   state.scene.phase = "play";
+  state.scene.titleCardVisible = false;
+  state.scene.titleCardText = "";
   state.inputMoving = false;
   showPrompt("Find the Frog Cubeling and look for the high Love Letter.", 2.4);
   playHumanAnimation("Idle");
+}
+
+function updateTitleCardTimer(state, dt) {
+  if (!state.scene.titleCardVisible) return;
+  state.levelTwo.titleElapsed += dt;
+  if (state.levelTwo.titleElapsed < LEVEL_TWO_TITLE_SECONDS) return;
+  state.scene.titleCardVisible = false;
+  state.scene.titleCardText = "";
 }

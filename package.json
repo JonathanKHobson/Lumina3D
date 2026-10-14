@@ -6,19 +6,31 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "dev:test": "vite --host 127.0.0.1 --port 5178",
+    "editor": "vite --host 127.0.0.1 --open /editor/",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
+    "mcp:stdio": "node mcp/server.js",
+    "mcp:smoke": "node scripts/smoke-mcp.js",
     "tools:list-levels": "node scripts/list-levels.js",
     "tools:get-level-manifest": "node scripts/get-level-manifest.js",
+    "tools:validate-level-registry": "node scripts/validate-level-registry.js",
     "tools:list-level-objects": "node scripts/list-level-objects.js",
+    "tools:build-external-asset-index": "node scripts/build-external-asset-index.js",
+    "tools:explain-editor-patch": "node scripts/explain-editor-patch.js",
     "tools:run-scene-smoke": "node scripts/run-scene-smoke.js",
+    "tools:run-dev-editor-selectability-smoke": "node scripts/run-dev-editor-selectability-smoke.js",
+    "tools:run-editor-smoke": "node scripts/run-editor-smoke.js",
     "tools:run-fixture": "node scripts/run-fixture.js",
     "tools:validate-missing-colliders": "node scripts/validate-missing-colliders.js",
-    "tools:validate-float-colliders": "node scripts/validate-float-colliders.js"
+    "tools:validate-float-colliders": "node scripts/validate-float-colliders.js",
+    "tools:validate-editor-sync": "node scripts/validate-editor-sync.js",
+    "tools:publish-current-branch": "node scripts/publish-current-branch.js"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "three": "^0.176.0",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "playwright": "^1.60.0"

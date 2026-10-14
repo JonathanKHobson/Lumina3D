@@ -12,6 +12,7 @@ import {
   createCelebrationState,
   createHomeState,
   createLevelOneState,
+  createLevelThreeState,
   createLevelTwoState,
   createLoveLetterMessageState
 } from "../state/gameState.js";
@@ -43,6 +44,7 @@ export function startHomeIntroScene(context, event = null, options = {}) {
   state.home = createHomeState("arrival");
   state.levelOne = createLevelOneState("inactive");
   state.levelTwo = createLevelTwoState("inactive");
+  state.levelThree = createLevelThreeState("inactive");
   state.active = "human";
   state.cameraYaw = 0;
   state.targetCameraYaw = 0;

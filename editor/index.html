@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lumina3D Level Editor</title>
+  </head>
+  <body>
+    <div id="editorApp" class="editor-app">
+      <header class="editor-topbar">
+        <div class="editor-brand">
+          <span class="editor-eyebrow">Lumina3D</span>
+          <h1>Level Editor</h1>
+        </div>
+        <div class="editor-topbar-actions">
+          <label class="editor-field editor-field-inline" for="levelSelect">
+            <span>Level</span>
+            <select id="levelSelect"></select>
+          </label>
+          <button id="playInGame" type="button" class="editor-button" title="Open the selected source-backed level in the playable game">Play in game</button>
+          <span id="editorStatus" class="editor-status">Loading</span>
+        </div>
+      </header>
+
+      <main class="editor-shell">
+        <aside class="editor-panel editor-panel-left" aria-label="Editor object and asset tools">
+          <div class="editor-panel-tabs" role="tablist" aria-label="Left panel tools">
+            <button id="objectsTab" type="button" class="editor-panel-tab is-active" role="tab" aria-selected="true" aria-controls="objectsPane">Objects</button>
+            <button id="assetsTab" type="button" class="editor-panel-tab" role="tab" aria-selected="false" aria-controls="assetsPane">Assets</button>
+          </div>
+          <section id="objectsPane" class="editor-section" role="tabpanel" aria-labelledby="objectsTab">
+            <div class="editor-section-heading">
+              <h2>Objects</h2>
+              <span id="objectCount" class="editor-count">0</span>
+            </div>
+            <label class="editor-field editor-object-search" for="objectSearch">
+              <span>Search</span>
+              <input id="objectSearch" type="search" placeholder="id, name, tag, type:tile">
+            </label>
+            <details id="objectFilterDisclosure" class="editor-filter-disclosure">
+              <summary>
+                <span>Filters</span>
+                <span id="objectFilterSummary" class="editor-filter-summary">All + Hide base ground</span>
+              </summary>
+              <div class="editor-filter-panel">
+                <div id="objectQuickFilters" class="object-filter-chips" role="toolbar" aria-label="Object quick filters"></div>
+                <label class="editor-check editor-check-compact">
+                  <input id="hideBaseGround" type="checkbox" checked>
+                  <span>Hide base ground</span>
+                </label>
+              </div>
+            </details>
+            <div id="objectFilterNotice" class="object-filter-notice" hidden>
+              <span>Selected object is hidden by filters.</span>
+              <button id="revealSelectedObject" type="button" class="editor-button">Show Selected</button>
+              <button id="clearObjectFilters" type="button" class="editor-button">Clear Filters</button>
+            </div>
+            <div id="objectList" class="editor-object-list"></div>
+          </section>
+          <section id="assetsPane" class="editor-section" role="tabpanel" aria-labelledby="assetsTab" hidden>
+            <div class="editor-section-heading">
+              <h2>Assets</h2>
+              <span id="assetCount" class="editor-count">0</span>
+            </div>
+            <label class="editor-field editor-object-search" for="assetSearch">
+              <span>Search</span>
+              <input id="assetSearch" type="search" placeholder="asset, path, type, category">
+            </label>
+            <details id="assetFilterDisclosure" class="editor-filter-disclosure">
+              <summary>
+                <span>Filters</span>
+                <span id="assetFilterSummary" class="editor-filter-summary">All assets</span>
+              </summary>
+              <div class="editor-filter-panel">
+                <label class="editor-field editor-filter-field" for="assetSourceScope">
+                  <span>Source</span>
+                  <select id="assetSourceScope"></select>
+                </label>
+                <label class="editor-field editor-filter-field" for="assetPackFilter">
+                  <span>Pack</span>
+                  <select id="assetPackFilter"></select>
+                </label>
+                <label class="editor-field editor-filter-field" for="assetFolderFilter">
+                  <span>Folder</span>
+                  <select id="assetFolderFilter"></select>
+                </label>
+                <div id="assetQuickFilters" class="object-filter-chips" role="toolbar" aria-label="Asset quick filters"></div>
+              </div>
+            </details>
+            <div id="assetList" class="editor-object-list editor-asset-list"></div>
+            <button id="placeGhost" type="button" class="editor-button editor-button-wide" title="Place an editor-only draft ghost or marker for the selected asset">Place Ghost</button>
+            <div id="assetDetail" class="asset-detail" aria-live="polite"></div>
+          </section>
+        </aside>
+
+        <section class="editor-viewport-card" aria-label="Level editor viewport">
+          <canvas id="editorCanvas" aria-label="Level editor viewport" tabindex="0"></canvas>
+          <div id="viewportBadge" class="viewport-badge">Level Two</div>
+        </section>
+
+        <aside class="editor-panel editor-panel-right" aria-label="Editor inspector">
+          <section id="handoffPanel" class="editor-section editor-handoff-panel" hidden>
+            <div class="editor-section-heading">
+              <h2>Runtime Handoff</h2>
+              <button id="copyHandoff" type="button" class="editor-button" title="Copy the runtime Dev Editor handoff JSON">Copy Handoff</button>
+            </div>
+            <div id="handoffSummary" class="handoff-summary"></div>
+          </section>
+
+          <section class="editor-section">
+            <div class="editor-section-heading">
+              <h2>Transform</h2>
+              <span id="dirtyCount" class="editor-count">0 dirty</span>
+            </div>
+            <div class="editor-toolbar" role="toolbar" aria-label="Transform mode">
+              <button id="translateMode" type="button" class="editor-button is-active" title="Translate selected object">Move</button>
+              <button id="rotateMode" type="button" class="editor-button" title="Rotate selected object">Rotate</button>
+              <button id="scaleMode" type="button" class="editor-button" title="Resize selected object">Resize</button>
+              <button id="frameSelected" type="button" class="editor-button" title="Frame selected object">Frame</button>
+            </div>
+            <div class="editor-section-heading editor-subheading">
+              <h2>Camera</h2>
+              <span id="cameraReadout" class="editor-count editor-count-wide">zoom 1.00 / yaw 0.79</span>
+            </div>
+            <div class="editor-toolbar editor-camera-toolbar" role="toolbar" aria-label="Camera controls">
+              <button id="zoomOutCamera" type="button" class="editor-button" aria-label="Zoom camera out" title="Zoom camera out">-</button>
+              <button id="zoomInCamera" type="button" class="editor-button" aria-label="Zoom camera in" title="Zoom camera in">+</button>
+              <button id="pitchDownCamera" type="button" class="editor-button" title="Tilt camera down">Tilt -</button>
+              <button id="pitchUpCamera" type="button" class="editor-button" title="Tilt camera up">Tilt +</button>
+              <button id="resetCamera" type="button" class="editor-button" title="Reset camera">Reset</button>
+            </div>
+            <div class="editor-toggle-row">
+              <label class="editor-check">
+                <input id="snapToggle" type="checkbox" checked>
+                <span>Snap</span>
+              </label>
+              <label class="editor-check">
+                <input id="showColliders" type="checkbox">
+                <span>Show Colliders</span>
+              </label>
+              <label class="editor-field editor-field-inline editor-collider-view" for="colliderView">
+                <span>Collider View</span>
+                <select id="colliderView">
+                  <option value="off">Off</option>
+                  <option value="all">All</option>
+                  <option value="blocking">Blocking</option>
+                  <option value="walkable">Walkable</option>
+                  <option value="triggers">Triggers</option>
+                  <option value="visual">Visual Bounds</option>
+                  <option value="actor_walkability">Actor Walkability</option>
+                  <option value="problems">Problems Only</option>
+                </select>
+              </label>
+            </div>
+            <div class="editor-state-toolbar" role="toolbar" aria-label="Selected object state">
+              <button id="resetSelected" type="button" class="editor-button" title="Restore selected object to its load-time transform">Reset Selected</button>
+              <button id="markDelete" type="button" class="editor-button" title="Mark selected object for deletion in copied editor state">Mark Delete</button>
+              <button id="markReplace" type="button" class="editor-button" title="Mark selected object for replacement in copied editor state">Mark Replace</button>
+              <button id="useReplacementAsset" type="button" class="editor-button" title="Use the currently selected asset as the replacement candidate for this object">Use Asset</button>
+              <button id="removeDraft" type="button" class="editor-button editor-button-danger" title="Completely remove the selected draft ghost or marker from this editor level">Remove Draft</button>
+              <button id="resetLevel" type="button" class="editor-button" title="Reset current editor level transforms and metadata">Reset Level</button>
+            </div>
+            <label class="editor-field" for="objectNote">
+              <span id="noteLabel">Object Note</span>
+              <span class="editor-note-wrap">
+                <textarea
+                  id="objectNote"
+                  class="object-note"
+                  rows="4"
+                  placeholder="Type @ for intents or # for references"
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-expanded="false"
+                  aria-controls="noteIntentSuggestions"
+                  spellcheck="true"
+                ></textarea>
+                <span id="noteIntentSuggestions" class="note-intent-suggestions" role="listbox" hidden></span>
+              </span>
+            </label>
+            <div class="editor-note-actions" role="toolbar" aria-label="Object note actions">
+              <button id="saveNote" type="button" class="editor-button">Save Note</button>
+              <button id="copyNote" type="button" class="editor-button">Copy Note</button>
+              <button id="clearNote" type="button" class="editor-button">Clear Note</button>
+            </div>
+            <div id="selectionSummary" class="selection-summary">No selection</div>
+            <div id="transformReadout" class="transform-readout"></div>
+            <div class="editor-section-heading editor-subheading">
+              <h2>Collider Preview</h2>
+            </div>
+            <div id="colliderReadout" class="transform-readout collider-readout"></div>
+          </section>
+
+          <section class="editor-section editor-section-fill">
+            <div class="editor-section-heading">
+              <h2>Export</h2>
+              <div class="editor-export-actions">
+                <button
+                  id="copyPatch"
+                  type="button"
+                  class="editor-button"
+                  title="Delta-only transform patch for moved, rotated, or scaled source-backed objects."
+                  data-tooltip="Delta-only transform patch for moved, rotated, or scaled source-backed objects."
+                >Copy Patch JSON</button>
+                <button
+                  id="copyState"
+                  type="button"
+                  class="editor-button"
+                  title="Affected editor state: transforms, notes, marks, references, colliders, and selected object or asset context."
+                  data-tooltip="Affected editor state: transforms, notes, marks, references, colliders, and selected object or asset context."
+                >Copy State JSON</button>
+                <button
+                  id="copyPrompt"
+                  type="button"
+                  class="editor-button editor-button-primary"
+                  title="Markdown prompt for Codex with local-first rules, validation commands, state JSON, intent glossary, and reference glossary."
+                  data-tooltip="Markdown prompt for Codex with local-first rules, validation commands, state JSON, intent glossary, and reference glossary."
+                >Copy AI Prompt</button>
+              </div>
+            </div>
+            <textarea id="patchOutput" class="patch-output" readonly spellcheck="false"></textarea>
+          </section>
+        </aside>
+      </main>
+
+      <div id="editorToast" class="editor-toast" hidden></div>
+    </div>
+    <script type="module" src="/src/editor/main.js"></script>
+  </body>
+</html>

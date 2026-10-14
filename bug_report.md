@@ -61,14 +61,58 @@ Use `progress.md` for session history, `backlog.md` for deferred work, and `docs
 
 ## 2026-05-18 - Scene Title Timing
 
-- Status: fixed for Home -> Level One.
+- Status: fixed for Home -> Level One; superseded by the 2026-05-20 title-card readiness fix for Level One/Level Two timing.
 - Scene: Home, Level One.
 - Symptom: Level One title appeared while still effectively leaving the Home scene.
 - Root cause: title card phase lived in Home instead of Level One.
 - Fix: Home now fades/leaves first, then Level One starts in its own `title` phase.
 - Prevention rule: a title card belongs to the scene it introduces; scene phases should make this explicit.
 - Verification: `test-output/home-level-one/smoke.mjs` checks Home fade before `scene.id === "level_one"` title.
-- Follow-up: Level Two should start with its own `title` phase from the beginning.
+- Follow-up: keep title-card timing covered in scene smokes when new scenes are added.
+
+## 2026-05-20 - Title Card Fallback Flashed Wrong Scene Name
+
+- Status: fixed in the pre-Level-3 readiness checkpoint.
+- Scene: Level Two, Level One, Level Three shell.
+- Symptom: Level Two could flash `Level One` during title-card fade/transition frames after `titleCardText` was cleared.
+- Root cause: the HUD title renderer supplied `"Level One"` as a fallback whenever `state.scene.titleCardText` was empty.
+- Fix: removed the fallback, made empty title text render as an empty string, and changed Level One/Level Two title timing so the card appears during arrival/walk-in instead of before movement.
+- Prevention rule: title text should come from scene state or registry metadata, never from another scene's display name as a UI fallback.
+- Verification: scene smokes assert Level Two never renders `Level One` as title text and that Level One/Level Two title cards clear after the title window.
+- Follow-up: keep player control disabled until arrival completes in every new scene-flow shell.
+
+## 2026-05-22 - Level Three Frog Water Reset Overreach
+
+- Status: fixed in Phase 3A; prevention rule active.
+- Scene: Level Three.
+- Symptom/risk: controlled Frog walking into water in the opening lane triggered the cozy splash reset. That made normal movement mistakes feel like a failed jump/timing miss and weakened the rule that water is a boundary unless Frog intentionally hops to a valid leaf.
+- Root cause: Phase 2A used the lane water collider as both a movement blocker and a future failed-lily timing reset trigger.
+- Fix: ordinary Frog walking into Level Three water now blocks movement and shows a gentle hint. `resetLevelThreeFrogLane()` remains available for future intentional failed moving-lily timing, but walking-water collision no longer calls it. Level Three lily pads were also enlarged so the Frog visibly fits on the landing surface.
+- Prevention rule: separate blocked movement from failed timing. Walking into water should block; missed moving-lily timing may reset only inside a specific authored timing challenge.
+- Verification: Phase 3A fixture coverage passed with `npm run tools:run-fixture -- level_three level_three_crocodile_actor --pretty` and `npm run tools:run-fixture -- level_three level_three_frog_lane_route --pretty`; Frog walking-water blocking does not increment `frogLaneResetCount`, and the manual lily-pad route still works.
+- Follow-up: if Phase 2B adds moving lily pads, wire splash reset to explicit timing-miss detection rather than generic water collision.
+
+## 2026-05-21 - Level Three Placeholder Identity Drift
+
+- Status: fixed for Phase 1.5; prevention rule active.
+- Scene: Level Three.
+- Symptom/risk: generated lake-shell placeholders can look correct in screenshots but drift out of `render_game_to_text()`, the runtime Dev Editor, `/editor/`, level manifests, or smoke fixtures. Moving-looking placeholders such as lily pads, raft markers, and bridge destinations can also imply active collision/mechanics before those systems exist.
+- Root cause: Phase 1 uses generated geometry instead of imported asset packs, so stable names, editor metadata, source references, and inactive-mechanic flags must be applied deliberately.
+- Fix: Phase 1.5 added source-backed island marker data, runtime Dev Editor metadata for generated placeholders, `/editor/` records for Level Three shell objects, manifest/object-list entries, and render-text rows for shell IDs and inactive future state. The Love Letter Cliff zone marker and actual cliff placeholder now use distinct object IDs to avoid duplicate editor records.
+- Prevention rule: every future Level Three placeholder that matters to gameplay planning needs a stable source ID, runtime mesh name, editor/catalog record, render-text row, and explicit inactive/visual-only status until its mechanic is implemented.
+- Verification: Level Three scene smoke, fixture smoke, missing/float collider validators, manifest/object list, editor-sync validation, `/editor/` smoke, a focused Level Three runtime Dev Editor probe, and screenshot QA all identify the key shell objects. Editor-sync still reports non-blocking `LEVEL_THREE_PROPS` array-index source-reference warnings.
+- Follow-up: when Phase 2 turns lily pads, green button presses, or raft states into mechanics, update this metadata rather than replacing it with parallel ad hoc state.
+
+## 2026-05-21 - Level Three Shell Visual Contract Drift
+
+- Status: fixed in the shell contract repair; prevention rule active.
+- Scene: Level Three.
+- Symptom/risk: the Phase 1 shell could teach the wrong spatial language before mechanics existed. Start Island arrival visually crossed water, lily pads read too close to or on land, generated cylinder buttons did not match the established KayKit button family, and sand path tiles looked like accidental or unfinished routes.
+- Root cause: placeholder geometry and path tiles were used as authoring markers, but in-game visuals still communicate rules to the player even when mechanics are inactive.
+- Fix: added a left-edge grass/shore connection to Start Island, removed unmotivated Level Three path tiles, moved the Frog lane/Totem Winch spacing apart, placed all lily pad centers on water tiles, extracted the established Level One lily pad visual for Level Three reuse, and replaced generated button cylinders with KayKit two-part button geometry. Green buttons use the same geometry with a controlled green material variant because no green button OBJ asset is present.
+- Prevention rule: placeholder visuals must use the same visual grammar as implemented mechanics. Do not use sand tiles, generated cylinders, or near-land floating objects as future-mechanism markers if they teach the wrong traversal or interaction contract.
+- Verification: build, Level Three manifest/object listing, scene smoke, fixture, missing/float collider validators, editor-sync validation, Tutorial/Home/Level One/Level Two regression smokes, and screenshot QA in `test-output/level-three-shell-contract-repair/` passed. Editor-sync still reports the known non-blocking `LEVEL_THREE_PROPS` array-index source-reference warnings.
+- Follow-up: Phase 2 can build the opening Crocodile Totem puzzle on this repaired shell, but should keep Crocodile control, central bridge cycling, red-button behavior, cargo, elevators, and final Love Letter routing out of scope.
 
 ## 2026-05-19 - Refactor Lesson: Module Extraction With Pre-Init Call Sites
 
@@ -125,3 +169,25 @@ Use `progress.md` for session history, `backlog.md` for deferred work, and `docs
 - Prevention rule: visual ramp assets need a separate walkable slope contract: bottom contact, top contact, slope height function, side blocking, and actor visual clearance.
 - Verification: inspected ramp screenshots and passed `test-output/level-two-ramp-access/smoke.mjs`.
 - Follow-up: revisit only if human visual review still sees actor/ramp clipping after the next playtest.
+
+## 2026-05-19 - Level Two Red Platform A Elephant Access Trap
+
+- Status: fixed in the 2026-05-19 Red Platform A blocker pass; needs human visual/play review before Elevator B.
+- Scene: Level Two.
+- Symptom: Red Button A was centered on Red Platform A, the human had to approach too close to the middle of the elevator to possess Elephant, Red Platform A behaved like a one-time lowering platform, and Elephant could not reliably leave the platform after possession.
+- Root cause: the first red assembly still used the earlier prototype assumptions: centered button/spawn, one-target held movement, and platform surface transitions that did not explicitly model aligned top/bottom exits.
+- Fix: moved Red Button A and Elephant Echo/spawn toward the side edge of Red Platform A, added red continuous-cycle platform state with endpoint pauses, changed release behavior to finish the current travel direction and stop at the next endpoint, added a side possession lane, and added explicit Elephant platform-exit transition rules.
+- Prevention rule: every dynamic elevator needs a written surface contract: button/spawn position, rider eligibility, top exit, bottom exit, release behavior, and a no-trap smoke test for leaving the platform.
+- Verification: `test-output/level-two-red-prototype/smoke.mjs` now checks edge spawn, human/Frog ineligible activation, held cycling, release-to-endpoint behavior, side possession without human riding Red Platform A, and Elephant walking off the platform. Build, Level Two validators, Level Two Frog/Totem and ramp smokes, and all scene smokes pass.
+- Follow-up: run human visual/play review before implementing Red Button / Elevator B.
+
+## 2026-05-19 - Level Two Red Platform A Actor Grounding And Mountain Collision
+
+- Status: fixed; needs human visual/play review before Elevator B.
+- Scene: Level Two.
+- Symptom: Red Platform A worked for Elephant's weight mechanic, but Human collision/grounding was inconsistent: the platform could pass through or ignore the Human, and the Human could not reliably stand on or ride the platform. Elephant could also enter central mountain cube footprints after leaving Red Platform A.
+- Root cause: Red Platform A was still modeled as Elephant-only walkable terrain, and rider detection used footprint overlap rather than explicit actor surface state. Elephant mountain walkability was also too broad: being inside the elevated route footprint was enough to bypass central mountain colliders, even from ground level.
+- Fix: Red Platform A now allows Human and Elephant rider surface state. Actor lift on Red Platform A only applies when the actor is actually attached to that moving platform surface. The platform shaft blocks entry while raised unless the actor already has a valid platform/top-route transition. Elephant mountain collider exceptions now require legitimate elevated route access and block higher-tier mountain cube overlaps.
+- Prevention rule: dynamic platforms need explicit rider state, boarding rules, exit rules, and shaft-blocking rules. Raised terrain collider exceptions must check both footprint and current surface/route eligibility.
+- Verification: `test-output/level-two-red-prototype/smoke.mjs` checks Human boarding the lowered platform, Human riding upward, Human exiting at ground alignment, and Elephant being blocked by central mountain cubes from ground level. Build, Level Two validators, Level Two shell/Frog/Totem/ramp smokes, Home/Level One smoke, and all scene smokes pass.
+- Follow-up: human review Red Platform A before starting Elevator B.

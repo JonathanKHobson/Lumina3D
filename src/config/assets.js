@@ -6,6 +6,7 @@ import {
 
 export const ASSETS = {
   frog: { type: "obj", base: "/assets/voxel/frog/", stem: "frog.vox", targetFootprint: TILE * 0.62 },
+  elephant: { type: "obj", base: "/assets/voxel/elephant/", stem: "elephant.vox", targetFootprint: TILE * 0.82 },
   groundTile: {
     type: "obj",
     base: "/assets/kaykit/blockbits/ground/",
@@ -79,6 +80,12 @@ export const ASSETS = {
     targetFootprint: TILE * 2.25
   },
   barrier: { type: "obj", base: "/assets/kaykit/dungeon/barrier/", stem: "barrier", targetFootprint: TILE * 1.04 },
+  tutorialBarrierBlue: {
+    type: "obj",
+    base: "/assets/kaykit/platformer/barrier-blue-1x1x1/",
+    stem: "barrier_1x1x1_blue",
+    targetFootprint: TILE * 1.04
+  },
   barrierHalf: {
     type: "obj",
     base: "/assets/kaykit/dungeon/barrier_half/",
@@ -115,11 +122,29 @@ export const ASSETS = {
     stem: "button_base_blue_button_blue",
     targetFootprint: 0.92
   },
+  buttonBaseRed: {
+    type: "obj",
+    base: "/assets/kaykit/platformer/button-red/",
+    stem: "button_base_red",
+    targetFootprint: 1.22
+  },
+  buttonTopRed: {
+    type: "obj",
+    base: "/assets/kaykit/platformer/button-red/",
+    stem: "button_base_red_button_red",
+    targetFootprint: 0.92
+  },
   blueRamp: {
     type: "obj",
     base: "/assets/kaykit/platformer/blue-ramp/",
     stem: "platform_slope_6x6x4_blue",
     targetFootprint: TILE * 3.0
+  },
+  redPlatform4x4: {
+    type: "obj",
+    base: "/assets/kaykit/platformer/red-platform/",
+    stem: "platform_4x4x1_red",
+    targetFootprint: TILE * 2.35
   },
   heartRed: {
     type: "obj",

@@ -1,7 +1,101 @@
-# Agent Guide
+# Lumina3D Agent Guide
 
-Lumina3D is a local-first Three.js/Vite game prototype. The public repository records source and progress; the README does not promise a released playable site.
+Lumina3D is a local-first Three.js/Vite game prototype. The public repository
+records source and progress; the README does not promise a released playable
+site. Preserve asset attribution and existing saved-state behavior, and review
+rendered gameplay when changing scenes, layout, or controls.
 
-- Read `README.md` and `docs/github-workflow.md`. `src/main.js` orchestrates the runtime; `src/scenes/`, `src/levels/`, and `src/systems/` own scene, layout, and behavior; `src/config/assets.js` maps assets in `public/assets/`.
-- Run `npm run build` after installing dependencies. The `tools:*` scripts in `package.json` support focused scene and collider checks. `test-output/` is local ignored QA output, not committed test source.
-- Preserve asset attribution and existing saved-state behavior. Review rendered gameplay when changing scenes, layout, or controls.
+## First Read
+
+Start here before making project changes:
+
+1. `README.md`
+2. `docs/project-map.md`
+3. `docs/refactor-plan.md`
+4. `docs/tooling/overview.md`
+5. `docs/tooling/context.md`
+6. `docs/game-design-handbook/00_overview.md`
+
+For Level Two work, also read:
+
+- `docs/game-design-handbook/05_level_two_design_scope.md`
+- `docs/game-design-handbook/08_level_two_asset_plan.md`
+- `docs/game-design-handbook/09_level_two_smoke_tests.md`
+
+## Current Structure Rule
+
+Lumina3D is an expandable Vite + Three.js browser game, not a one-file
+prototype. The completed refactor pass reduced `src/main.js` substantially, but
+`src/main.js` is still the main bottleneck and remains large. Treat it as legacy
+orchestration and glue, not as the destination for new systems.
+
+Before creating or expanding project files, use the `project-structure-architect`
+skill. Do not add new feature-specific gameplay systems to `src/main.js` unless
+there is no smaller safe boundary for the current slice. Prefer existing module
+lanes:
+
+- `src/config/` for registries, constants, and scene IDs.
+- `src/content/` for story text, Love Letter data, and dialogue.
+- `src/levels/` for level layout data.
+- `src/scenes/` for scene builders and scene-flow shells.
+- `src/systems/` for gameplay systems.
+- `src/core/` for renderer, asset, mesh, grid, and low-level helpers.
+- `src/state/` for state factories and persistence.
+- `src/ui/` for DOM/HUD wiring.
+- `src/debug/` for dev tools and test hooks.
+
+`src/config/assets.js` is the canonical asset registry; raw asset files live
+under `public/assets/`. `test-output/` is local ignored QA output, not
+committed test source.
+
+## Coordination Rules
+
+- Run `git status --short` before editing.
+- If another agent is actively changing source, prefer docs or a narrow
+  non-conflicting file. Do not overwrite live work.
+- Ignore `._*`, `.DS_Store`, `node_modules/`, `dist/`, `test-output/`, and
+  `.git/` as source.
+- Do not combine collision/surface refactors, scene-flow refactors, and active
+  Level Two mechanics in the same pass.
+- Do not change asset paths casually. Vite serves assets from `public/assets/`,
+  and `src/config/assets.js` is the canonical asset registry.
+- Keep generated, cached, and smoke-test output out of source/docs unless the
+  task explicitly asks for an artifact.
+
+## Supporting Skills And Plugins
+
+Use these local skills/plugins as project context, not as extra scope:
+
+- `project-structure-architect`: structure, project maps, staged refactors, and
+  anti-monolith guardrails.
+- `develop-web-game`: browser-game implementation plus Playwright smoke and
+  screenshot review loop.
+- `game-designer`: mechanics, level design, Cubeling abilities, progression,
+  tutorial pacing, and playtest hypotheses.
+- Game Studio plugin: `game-studio`, `web-game-foundations`,
+  `three-webgl-game`, `web-3d-asset-pipeline`, `game-ui-frontend`, and
+  `game-playtest`.
+- `frontend-ux`: HUD, overlays, accessibility, responsive UI, and visual state.
+- `ux-writer`: tutorial hints, button labels, modal copy, and player-facing text.
+- `communication-story-crafter`: public portfolio framing, devlogs, and handoff
+  notes after the playable slice works.
+
+## Verification Defaults
+
+For docs-only changes, verify with:
+
+- `git diff --name-only`
+- targeted `rg` checks for the new guidance terms
+
+For game/code changes, prefer the smallest relevant checks first:
+
+- `npm run build`
+- `npm run tools:list-levels -- --pretty`
+- `npm run tools:get-level-manifest -- level_two --pretty`
+- `npm run tools:run-scene-smoke -- level_two --pretty`
+- `npm run tools:validate-missing-colliders -- level_two --pretty`
+- `npm run tools:validate-float-colliders -- level_two --pretty`
+
+For visual, UI, scene-flow, asset, or interaction changes, also run the
+`develop-web-game` or Game Studio playtest loop and inspect screenshots before
+calling the work done.

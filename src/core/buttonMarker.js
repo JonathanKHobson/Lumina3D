@@ -7,7 +7,8 @@ export function createBlueButtonMarker({ cloneAsset, point, surfaceY, topRestY }
 
   buttonGroup.userData.devEditorCategory = "button";
   buttonGroup.userData.devEditorId = "button";
-  buttonGroup.userData.devEditorName = "Red Button";
+  buttonGroup.userData.devEditorName = "Blue Button";
+  buttonGroup.userData.devEditorDisplayName = "Blue Button";
   buttonGroup.userData.devEditorAsset = "kaykit-platformer-button-blue";
 
   top.position.y = topRestY;

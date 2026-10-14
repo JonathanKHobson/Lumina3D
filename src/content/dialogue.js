@@ -14,3 +14,8 @@ export const FROG_TOTEM_LINES = [
   "Collect me to awaken the Frog Cubeling.",
   "Only your character can collect Cubeling Totems."
 ];
+
+export const ELEPHANT_ECHO_LINES = [
+  "Elephant Echo.",
+  "Find my Cubeling Totem to wake me."
+];

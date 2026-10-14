@@ -3,6 +3,7 @@ dist/
 test-output/
 coverage/
 archive/
+tmp/
 .DS_Store
 ._*
 .env

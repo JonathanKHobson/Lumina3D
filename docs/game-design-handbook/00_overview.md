@@ -10,6 +10,7 @@ This is not a replacement for code, `progress.md`, or `backlog.md`.
 - `backlog.md`: current deferred work and near-term planning queue.
 - `bug_report.md`: recurring bug library and prevention notes.
 - `docs/game-design-handbook/`: slower-moving design system, mechanics, level-planning, and build rules.
+  - `15_prompting_glossary_and_space_language.md`: map vocabulary bridge between plain-language design intent and code-ready wording.
 
 ## Current Game Shape
 
@@ -65,7 +66,7 @@ Level One is the first unguided puzzle. It applies the Frog Cubeling mechanic to
 - The bridge completes.
 - Main character crosses and collects the Love Letter.
 
-### Level Two Planned Direction
+### Level Two Current Direction
 
 Level Two should introduce:
 
@@ -75,6 +76,22 @@ Level Two should introduce:
 - platforms/elevators;
 - elevated Love Letter goal;
 - Cubeling Recall with `C`.
+
+### Level Three Current Direction
+
+Level Three is currently a Phase 1 lake/island shell called `Stillwater Circuit`.
+It should introduce Crocodile after the player solves an opening Frog route:
+
+- the map is mostly water with small named islands;
+- Frog starts available and crosses a short lily-pad timing lane;
+- a repeatable green button winches the Crocodile Totem raft toward Start Island;
+- the main character collects the Crocodile Totem after the raft docks;
+- Crocodile later moves on land and water;
+- later green buttons cycle bridge/mechanism states;
+- Elephant and small weight stones solve later red-button weight systems;
+- the final Love Letter is visible on a raised cliff but remains unreachable until the full route exists.
+
+See `15_level_three_crocodile_lake_plan.md`.
 
 ## Design Philosophy
 
@@ -95,11 +112,10 @@ Good level design here means:
 
 Do not implement a whole new level in one pass.
 
-For Level Two, the smallest safe next implementation slice is:
+For new levels, use the same phased approach. The smallest safe Level Three continuation after the current shell is:
 
-1. Add Level Two scene ID, debug shortcut, and empty scene shell.
-2. Build terrain shell with main character, Frog Cubeling, and placeholder elevated Love Letter.
-3. Verify load, camera, movement, collision bounds, screenshots, and `render_game_to_text()`.
+1. Build only the opening Crocodile Totem puzzle state.
+2. Keep Crocodile control out of scope until after the Totem unlock is readable.
+3. Verify load, camera, water blocking, screenshots, editor selection, and `render_game_to_text()`.
 
-Only after that should Frog ledge jump, Elephant unlock, red buttons, elevators, and recall be layered in.
-
+Only after that should Crocodile movement, central bridge cycling, red buttons, weight stones, elevators, and the final Love Letter route be layered in.

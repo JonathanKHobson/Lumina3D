@@ -6,7 +6,7 @@ import {
   LOVE_LETTER_SPARKLE_INTERVAL
 } from "../config/constants.js";
 import { LOVE_LETTER_MESSAGES, TUTORIAL_LOVE_LETTER_ID } from "../content/loveLetters.js";
-import { LEVEL_ONE_JUMP_ZONE } from "../levels/levelOne.js";
+import { LEVEL_ONE_BLUE_BLOOM_MATS, LEVEL_ONE_JUMP_ZONE, LEVEL_ONE_LILY_PAD } from "../levels/levelOne.js";
 
 export function createActorState(start, radius, speed) {
   return {
@@ -45,6 +45,16 @@ export function createLoveLetterMessageState(id = TUTORIAL_LOVE_LETTER_ID) {
     shown: false,
     dismissed: false,
     inputBufferUntil: 0
+  };
+}
+
+export function createTutorialRecoveryState() {
+  return {
+    stranded: false,
+    startedAt: -Infinity,
+    lastPromptAt: -Infinity,
+    resetPromptShown: false,
+    characterLineShown: false
   };
 }
 
@@ -99,11 +109,23 @@ export function createLevelOneState(phase = "inactive") {
     bridgeComplete: false,
     bridgeRevealActive: false,
     bridgeRevealElapsed: 0,
+    blueBloomReleased: false,
+    blueBloomRevealActive: false,
+    blueBloomRevealElapsed: 0,
+    blueBloomDocked: false,
+    loveLetterSurfaced: false,
+    blueBloomMats: {
+      left: { id: LEVEL_ONE_BLUE_BLOOM_MATS.left.id, walkable: false },
+      right: { id: LEVEL_ONE_BLUE_BLOOM_MATS.right.id, walkable: false }
+    },
+    lilyPadSurfaceId: LEVEL_ONE_LILY_PAD.id,
+    lilyPadPromptShown: false,
+    crossingReadyPromptShown: false,
     hintTimer: 0,
     hintStage: "",
     complete: false,
     waterBlocked: true,
-    bridgeAsset: "partial-bridge",
+    bridgeAsset: "blue-bloom-crossing-held",
     frogJumpZone: LEVEL_ONE_JUMP_ZONE,
     titleElapsed: 0,
     frogWaterBlockedCount: 0,
@@ -123,14 +145,79 @@ export function createLevelTwoState(phase = "inactive") {
     humanSurfaceId: null,
     blueButtonPressed: false,
     blueRampActive: false,
+    blueRampRevealActive: false,
+    blueRampRevealElapsed: 0,
+    elephantEchoVisible: phase !== "inactive",
+    elephantEchoPromptIndex: 0,
+    lastElephantEchoPromptAt: -Infinity,
+    elephantEchoSparkleTimer: 0.7,
     elephantTotemVisible: phase !== "inactive",
     elephantTotemCollected: false,
     elephantUnlockPending: false,
+    elephantAwake: false,
+    elephantSpawned: false,
+    elephantSurfaceId: null,
+    elephantRevealActive: false,
+    elephantRevealElapsed: 0,
+    elephantSpawnCount: 0,
+    lastElephantTransferPromptAt: -Infinity,
+    redButtons: {},
+    redPlatforms: {},
+    redElevatorAStartGate: {
+      released: true,
+      delayRemaining: 0,
+      waitingReason: "grounded-start"
+    },
+    lastRedButtonInvalidPromptAt: -Infinity,
     lastFrogJumpResult: "none",
     lastFrogJumpReason: "",
     lastFrogJumpAt: -Infinity,
     frogTooHighPromptCount: 0,
     lastTotemPromptAt: -Infinity,
+    complete: false
+  };
+}
+
+export function createLevelThreeState(phase = "inactive") {
+  return {
+    phase,
+    titleElapsed: 0,
+    arrivalElapsed: 0,
+    placeholderLoveLetterVisible: phase !== "inactive",
+    placeholderLoveLetterCollectable: false,
+    frogAvailableFromStart: phase !== "inactive",
+    reservedWaterCubelingSpaceVisible: phase !== "inactive",
+    frogLaneSurfaceId: null,
+    frogLaneResetCount: 0,
+    frogWaterBlockedCount: 0,
+    lastFrogLaneResetAt: -Infinity,
+    frogLanePromptShown: false,
+    totemGreenButtonPresses: 0,
+    totemGreenButtonPressed: false,
+    totemGreenButtonHeld: false,
+    totemGreenButtonWasHeld: false,
+    totemGreenButtonHeldActor: "",
+    totemGreenButtonPromptShown: false,
+    totemRaftState: 0,
+    totemRaftDocked: false,
+    totemRaftLastMovedAt: -Infinity,
+    totemRaftGateState: 0,
+    totemRaftDrifting: false,
+    totemRaftFromState: 0,
+    totemRaftTargetState: 0,
+    totemRaftDriftProgress: 0,
+    totemRaftOpenedGates: [],
+    crocodileTotemCollected: false,
+    crocodileUnlocked: false,
+    crocodileEchoAwake: false,
+    crocodileSpawned: false,
+    crocodileControlAvailable: false,
+    crocodileSurfaceId: null,
+    lastCrocodileTransferPromptAt: -Infinity,
+    crocodileWaterPromptShown: false,
+    lastFrogWaterBlockAt: -Infinity,
+    bridgeState: 0,
+    openingGreenPressCount: 0,
     complete: false
   };
 }
